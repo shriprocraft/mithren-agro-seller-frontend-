@@ -147,7 +147,7 @@ async function render() {
   const bare = path === '/seller/register';
   app.innerHTML = shell(seller, m?.route.nav, bare).value;
   const main = $('#main')!;
-  document.title = `${m?.route.title ?? 'Not found'} · Seller Portal`;
+  document.title = `${m?.route.title ?? 'Not found'} · Mithren Agro Seller Portal`;
 
   const banner = bare || path === '/seller' ? '' : statusBanner(seller);
   if (!m) {

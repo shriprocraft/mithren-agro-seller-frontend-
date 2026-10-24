@@ -1,4 +1,4 @@
-# Organic Marketplace — Seller Portal (frontend prototype)
+# Mithren Agro — Seller Portal (frontend prototype)
 
 A working frontend for the Seller/Vendor Portal described in [`docs/ORGANIC_MARKETPLACE_SELLER_PORTAL_SCOPE.md`](docs/ORGANIC_MARKETPLACE_SELLER_PORTAL_SCOPE.md). It covers all 12 `/seller` routes, uses **clearly labelled fictional demo data**, and runs on a mock API that behaves like the production backend should.
 

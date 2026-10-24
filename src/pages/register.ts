@@ -56,7 +56,7 @@ const page: Page = ({ root }) => {
     root.innerHTML = html`
       <div class="register">
         <header class="register-head">
-          <h1>Sell on Organic Market</h1>
+          <h1>Sell on Mithren Agro</h1>
           <p class="muted">Apply in about 10 minutes. We review every seller before listings go live.</p>
         </header>
         <ol class="wizard-steps" aria-label="Application progress">
