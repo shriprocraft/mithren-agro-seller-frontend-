@@ -2656,3 +2656,180 @@ a.metric:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+
+/* =====================================================================
+   Hover effects
+   Lift and glow only (transform, shadow, colour); no layout changes.
+   ===================================================================== */
+:root {
+  --hover-lift: translateY(-3px);
+  --hover-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --hover-glow: 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+/* Cards and tiles lift with a deeper shadow and a faint green edge.
+   Cards being typed into stay still so forms don't move under the cursor. */
+.metric,
+.card,
+.alert,
+.doc-list li,
+.holiday-list li,
+.staff-list li {
+  transition: transform 0.25s var(--hover-ease), box-shadow 0.25s var(--hover-ease), border-color 0.25s var(--hover-ease), background 0.25s var(--hover-ease);
+}
+.metric:hover,
+.card:not(form):not(:focus-within):hover {
+  transform: var(--hover-lift);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--glass-border));
+  box-shadow: var(--glass-highlight), var(--hover-glow), var(--glass-shadow-hover);
+}
+.card .card:hover,
+.card .metric:hover {
+  transform: translateY(-2px);
+}
+.alert:hover,
+.doc-list li:hover,
+.holiday-list li:hover,
+.staff-list li:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--primary-soft) 45%, var(--surface));
+  box-shadow: var(--glass-highlight), 0 6px 16px -8px rgb(31 42 31 / 0.2);
+}
+
+/* Buttons: small lift on hover, press down on click */
+.btn,
+.icon-btn,
+.link-btn,
+.info-btn,
+.chip-x {
+  transition: transform 0.18s var(--hover-ease), background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border-strong));
+}
+.btn-primary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  border-color: transparent;
+}
+.btn:active:not(:disabled),
+.icon-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+.icon-btn:hover {
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+.link-btn:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.info-btn:hover {
+  color: var(--primary);
+}
+.chip-x:hover {
+  background: var(--red-soft);
+}
+
+/* Sidebar and settings menu links slide slightly toward the content */
+.nav-link .icon,
+.settings-nav a {
+  transition: transform 0.2s var(--hover-ease), background 0.18s ease, color 0.18s ease;
+}
+.nav-link:hover .icon {
+  transform: translateX(2px);
+  color: var(--primary);
+}
+.nav-link:hover {
+  color: var(--primary);
+}
+.settings-nav a:hover {
+  color: var(--primary);
+  transform: translateX(2px);
+}
+
+/* Tabs */
+.tab {
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+.tab:hover:not(.active) {
+  border-bottom-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+/* Table rows: soft green tint, links in the row turn primary */
+.table tbody tr {
+  transition: background 0.15s ease;
+}
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--primary-soft) 55%, transparent);
+}
+.prod-thumb {
+  transition: transform 0.25s var(--hover-ease);
+}
+.prod-cell:hover .prod-thumb {
+  transform: scale(1.08) rotate(-3deg);
+}
+
+/* Chips, radio cards and choice controls */
+.chip span,
+.radio-card {
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s var(--hover-ease);
+}
+.chip:hover span,
+.radio-card:hover {
+  border-color: var(--primary);
+}
+.chip:hover span {
+  transform: translateY(-1px);
+}
+.toggle:hover .toggle-ui {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+/* Inputs hint they're editable */
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:disabled):not([readonly]):hover,
+select:not(:disabled):hover,
+textarea:not(:disabled):not([readonly]):hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border-strong));
+}
+
+/* Notifications and chart */
+.notif-list a {
+  transition: background 0.15s ease, padding-left 0s;
+}
+.notif-list a:hover strong {
+  color: var(--primary);
+}
+.chart .bar {
+  transition: opacity 0.15s ease;
+}
+.chart .bar:has(+ .hit:hover) {
+  opacity: 1;
+  fill: var(--primary-hover);
+}
+
+/* Text links */
+a.link:hover,
+.prod-cell:hover strong,
+td a:hover {
+  color: var(--primary-hover);
+}
+
+/* No movement for people who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .metric:hover,
+  .card:hover,
+  .alert:hover,
+  .doc-list li:hover,
+  .holiday-list li:hover,
+  .staff-list li:hover,
+  .btn:hover,
+  .icon-btn:hover,
+  .chip:hover span,
+  .settings-nav a:hover,
+  .nav-link:hover .icon,
+  .prod-cell:hover .prod-thumb {
+    transform: none;
+  }
+}
