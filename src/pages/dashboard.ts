@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
 import { html, on, type Raw } from '../ui/dom.js';
-import { pageHeader, metric, mockNote, orderBadge, callout, icon, emptyState } from '../ui/components.js';
+import { pageHeader, metric, orderBadge, callout, icon, emptyState } from '../ui/components.js';
 import { salesChart } from '../ui/charts.js';
 import * as api from '../api.js';
 import { money, count, timeAgo } from '../lib.js';
@@ -34,8 +34,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     ${pageHeader(
       `Good ${greeting()}, ${seller.ownerName.split(' ')[0]}`,
       `Here’s how ${seller.shopName} is doing.`,
-      html`${mockNote()}
-        <label class="sr-only" for="range">Date range</label>
+      html`<label class="sr-only" for="range">Date range</label>
         <select id="range" class="select-inline">${RANGES.map(([d, l]) => html`<option value="${d}" ${d === days ? 'selected' : ''}>${l}</option>`)}</select>`,
     )}
     ${seller.status !== 'approved' && seller.status !== 'suspended' ? callout('info', 'Metrics will appear once you start selling', 'Your account isn’t approved yet, so these figures are for illustration only.') : ''}

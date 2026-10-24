@@ -80,7 +80,7 @@ const SHOTS = process.argv[3];
   });
 
   await step('reject requires a reason; Esc closes the dialog', async () => {
-    await page.evaluate(() => document.querySelector('[data-action=proto]').click());
+    await page.keyboard.press('Alt+Shift+KeyP');
     await page.waitForTimeout(300);
     await page.click('[data-p=order]');
     await page.waitForTimeout(1200);
@@ -121,7 +121,7 @@ const SHOTS = process.argv[3];
   });
 
   await step('network failure keeps form data and shows an error', async () => {
-    await page.evaluate(() => document.querySelector('[data-action=proto]').click());
+    await page.keyboard.press('Alt+Shift+KeyP');
     await page.waitForTimeout(300);
     await page.check('#proto-fail');
     await page.click('.modal [data-close]');
@@ -131,7 +131,7 @@ const SHOTS = process.argv[3];
     await page.waitForTimeout(900);
     await expectText('#form-error', /Network error/);
     assert.equal(await page.inputValue('#f_variant_0_price'), '51');
-    await page.evaluate(() => document.querySelector('[data-action=proto]').click());
+    await page.keyboard.press('Alt+Shift+KeyP');
     await page.waitForTimeout(300);
     await page.uncheck('#proto-fail');
     await page.click('.modal [data-close]');
@@ -213,7 +213,7 @@ const SHOTS = process.argv[3];
   });
 
   await step('suspended account is read-only', async () => {
-    await page.evaluate(() => document.querySelector('[data-action=proto]').click());
+    await page.keyboard.press('Alt+Shift+KeyP');
     await page.waitForTimeout(300);
     await page.selectOption('#proto-status', 'suspended');
     await page.waitForTimeout(1500);
@@ -223,7 +223,7 @@ const SHOTS = process.argv[3];
   });
 
   await step('new applicant is sent to registration and can apply', async () => {
-    await page.evaluate(() => document.querySelector('[data-action=proto]').click());
+    await page.keyboard.press('Alt+Shift+KeyP');
     await page.waitForTimeout(300);
     await page.selectOption('#proto-status', 'not_registered');
     await page.waitForTimeout(1500);

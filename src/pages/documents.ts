@@ -2,7 +2,7 @@
 
 import type { Page } from '../router.js';
 import { html, on, formValues } from '../ui/dom.js';
-import { pageHeader, field, select, icon, badge, callout, showFieldErrors, mockNote } from '../ui/components.js';
+import { pageHeader, field, select, icon, badge, callout, showFieldErrors } from '../ui/components.js';
 import { toast, modal } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { fmtDate, validateUpload, UPLOAD_RULES } from '../lib.js';
@@ -32,7 +32,7 @@ const page: Page = async ({ root, seller, refresh }) => {
   const expiring = docs.filter((d) => d.status === 'approved' && d.expiresAt && (new Date(d.expiresAt).getTime() - Date.now()) / 86_400_000 <= 30);
 
   root.innerHTML = html`
-    ${pageHeader('Documents', 'Verification documents for your seller account and organic claims.', html`${mockNote()}${readOnly ? '' : html`<button type="button" class="btn btn-primary" data-action="upload">${icon('upload', 16)} Upload document</button>`}`)}
+    ${pageHeader('Documents', 'Verification documents for your seller account and organic claims.', html`${readOnly ? '' : html`<button type="button" class="btn btn-primary" data-action="upload">${icon('upload', 16)} Upload document</button>`}`)}
     ${seller.status === 'changes_requested' && seller.reviewMessage ? callout('warn', 'Reviewer requested changes', seller.reviewMessage) : ''}
     ${expiring.map((d) => callout(d.expiresAt! < today() ? 'error' : 'warn', d.expiresAt! < today() ? `${d.certNumber ?? d.fileName} has expired` : `${d.certNumber ?? d.fileName} expires on ${fmtDate(d.expiresAt!)}`, 'Upload the renewed certificate. Organic labels are removed from linked listings when it expires.'))}
     <p class="muted small">${icon('shield', 13)} Files are stored privately. Only you and authorised marketplace reviewers can open them. A document shows as verified only after a reviewer approves it.</p>

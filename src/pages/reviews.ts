@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
 import { html, on } from '../ui/dom.js';
-import { pageHeader, emptyState, stars, mockNote, badge } from '../ui/components.js';
+import { pageHeader, emptyState, stars, badge } from '../ui/components.js';
 import { ratingBars } from '../ui/charts.js';
 import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
@@ -26,7 +26,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const canReply = seller.status === 'approved';
 
   root.innerHTML = html`
-    ${pageHeader('Reviews & performance', 'Only customers who received an order from you can leave a review.', mockNote())}
+    ${pageHeader('Reviews & performance', 'Only customers who received an order from you can leave a review.')}
     <div class="grid-main">
       <section class="card" aria-labelledby="rs-h">
         <h2 id="rs-h" class="card-title">Rating summary</h2>

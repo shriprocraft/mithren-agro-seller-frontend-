@@ -128,10 +128,6 @@ export function loadingState(rows = 4) {
   </div>`;
 }
 
-export function mockNote(text = 'Demo data') {
-  return html`<span class="mock-tag" title="This prototype uses fictional demo data. Production reads live database records.">${icon('flask', 13)} ${text}</span>`;
-}
-
 // ---------- form fields ----------
 interface FieldOpts {
   name: string;

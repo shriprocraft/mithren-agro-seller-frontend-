@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
 import { html, on } from '../ui/dom.js';
-import { pageHeader, orderBadge, emptyState, tabs, icon, mockNote, badge } from '../ui/components.js';
+import { pageHeader, orderBadge, emptyState, tabs, icon, badge } from '../ui/components.js';
 import { toast } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money, timeAgo, fmtDate } from '../lib.js';
@@ -30,7 +30,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const canAct = seller.status === 'approved';
 
   root.innerHTML = html`
-    ${pageHeader('Orders', 'Your part of each customer order. Other sellers’ items in the same checkout are not shown.', mockNote())}
+    ${pageHeader('Orders', 'Your part of each customer order. Other sellers’ items in the same checkout are not shown.')}
     ${tabs(TABS.map(([s, l]) => ({ href: `/seller/orders?status=${s}`, label: l, count: countFor(s), active: s === status })), 'Filter orders')}
     <form class="toolbar" role="search" data-role="filters">
       <div class="search">

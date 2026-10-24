@@ -97,7 +97,6 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean) {
             <div class="shop-meta"><strong>${seller.status === 'not_registered' ? 'New seller' : seller.shopName}</strong>${sellerBadge(seller.status)}</div>
           </div>
           <div class="topbar-actions">
-            <button class="btn btn-ghost btn-sm proto-btn" type="button" data-action="proto" aria-haspopup="dialog">${icon('flask', 16)}<span>Prototype controls</span></button>
             <div class="notif-wrap">
               <button class="icon-btn" type="button" data-action="notifs" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel" aria-label="Notifications">
                 ${icon('bell', 20)}<span class="dot" data-unread hidden></span>
@@ -107,9 +106,6 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean) {
             <span class="avatar" title="${seller.ownerName}" aria-label="Signed in as ${seller.ownerName}" role="img">${initials}</span>
           </div>
         </header>
-        <div class="proto-banner" role="note">
-          ${icon('flask', 14)} Frontend prototype · fictional demo data saved in this browser · no real orders, payments or messages are sent
-        </div>
         <main id="main" tabindex="-1"></main>
       </div>
     </div>`;
@@ -215,7 +211,13 @@ function bindShell() {
     e.preventDefault();
     $('#main')?.focus();
   });
-  on(root, 'click', '[data-action=proto]', () => openPrototypeControls());
+  // Prototype controls have no visible button; open them with Alt+Shift+P.
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.shiftKey && e.code === 'KeyP') {
+      e.preventDefault();
+      openPrototypeControls();
+    }
+  });
   on(root, 'click', '[data-action=notifs]', (_e, btn) => void toggleNotifications(btn));
 }
 

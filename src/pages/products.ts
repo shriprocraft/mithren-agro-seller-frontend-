@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
 import { html, on } from '../ui/dom.js';
-import { pageHeader, productBadge, icon, emptyState, tabs, badge, mockNote } from '../ui/components.js';
+import { pageHeader, productBadge, icon, emptyState, tabs, badge } from '../ui/components.js';
 import { toast, confirmDialog, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money, timeAgo, toCsv } from '../lib.js';
@@ -32,8 +32,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     ${pageHeader(
       'Products',
       'Create and manage your listings. New listings and changes to organic claims go through moderation.',
-      html`${mockNote()}
-        <button class="btn" type="button" data-action="export">${icon('download', 16)} Export CSV</button>
+      html`<button class="btn" type="button" data-action="export">${icon('download', 16)} Export CSV</button>
         ${readOnly ? '' : html`<a class="btn btn-primary" href="#/seller/products/new">${icon('plus', 16)} Add product</a>`}`,
     )}
     ${tabs(STATUS_TABS.map(([s, l]) => ({ href: `/seller/products${s ? `?status=${s}` : ''}`, label: l, count: countFor(s), active: s === status })), 'Filter by status')}

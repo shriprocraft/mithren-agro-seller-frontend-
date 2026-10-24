@@ -2,7 +2,7 @@
 
 import type { Page } from '../router.js';
 import { html, on, $ } from '../ui/dom.js';
-import { pageHeader, emptyState, tabs, icon, badge, mockNote, field, select, textarea, showFieldErrors } from '../ui/components.js';
+import { pageHeader, emptyState, tabs, icon, badge, field, select, textarea, showFieldErrors } from '../ui/components.js';
 import { toast, modal, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { fmtDate, toCsv, validateInventoryCsv, money } from '../lib.js';
@@ -41,8 +41,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     ${pageHeader(
       'Inventory',
       'Every stock change is recorded with who made it and why.',
-      html`${mockNote()}
-        <button type="button" class="btn" data-action="export">${icon('download', 16)} Export CSV</button>
+      html`<button type="button" class="btn" data-action="export">${icon('download', 16)} Export CSV</button>
         ${readOnly ? '' : html`<button type="button" class="btn" data-action="import">${icon('upload', 16)} Import CSV</button>`}`,
     )}
     ${tabs(

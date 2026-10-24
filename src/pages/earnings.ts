@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
 import { html, on } from '../ui/dom.js';
-import { pageHeader, settlementBadge, emptyState, icon, mockNote, callout } from '../ui/components.js';
+import { pageHeader, settlementBadge, emptyState, icon, callout } from '../ui/components.js';
 import { breakdownBars } from '../ui/charts.js';
 import { saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
@@ -32,8 +32,7 @@ const page: Page = async ({ root, query, refresh }) => {
     ${pageHeader(
       'Earnings',
       'How each delivered order turns into your payout. Figures come from the platform’s financial ledger.',
-      html`${mockNote()}
-        <label class="sr-only" for="erange">Period</label>
+      html`<label class="sr-only" for="erange">Period</label>
         <select id="erange" class="select-inline">${RANGES.map(([v, l]) => html`<option value="${v}" ${v === range ? 'selected' : ''}>${l}</option>`)}</select>
         <button type="button" class="btn" data-action="export">${icon('download', 16)} Export CSV</button>`,
     )}

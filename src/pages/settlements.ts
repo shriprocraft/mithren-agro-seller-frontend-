@@ -2,7 +2,7 @@
 
 import type { Page } from '../router.js';
 import { html, raw, on } from '../ui/dom.js';
-import { pageHeader, settlementBadge, emptyState, icon, mockNote, callout, badge, field, showFieldErrors } from '../ui/components.js';
+import { pageHeader, settlementBadge, emptyState, icon, callout, badge, field, showFieldErrors } from '../ui/components.js';
 import { toast, modal } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money2, fmtDate } from '../lib.js';
@@ -22,7 +22,7 @@ const page: Page = async ({ root, seller, refresh }) => {
     ${pageHeader(
       'Settlements',
       'Payouts to your bank account. A settlement is shown as paid only once a transaction reference is recorded.',
-      html`${mockNote()}${seller.payoutRequestsEnabled && seller.status === 'approved' ? html`<button type="button" class="btn btn-primary" data-action="request" ${eligible - openReq >= 500 ? '' : raw('disabled')}>Request payout</button>` : ''}`,
+      html`${seller.payoutRequestsEnabled && seller.status === 'approved' ? html`<button type="button" class="btn btn-primary" data-action="request" ${eligible - openReq >= 500 ? '' : raw('disabled')}>Request payout</button>` : ''}`,
     )}
     ${failed.length ? callout('error', `${failed.length} settlement${failed.length > 1 ? 's' : ''} failed`, failed[0]!.failureReason ?? 'The bank rejected the transfer. The amount has returned to eligible and will be retried.') : ''}
 
