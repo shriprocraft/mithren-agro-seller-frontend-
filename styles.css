@@ -2374,3 +2374,342 @@ input[type='radio'] {
     break-inside: avoid;
   }
 }
+
+/* =====================================================================
+   Liquid glass surface treatment
+   Visual layer only: translucency, blur, borders, highlights and shadows.
+   No layout, spacing, sizing or typography is changed here.
+   ===================================================================== */
+:root {
+  --glass-bg: rgb(255 255 255 / 0.62);
+  --glass-bg-strong: rgb(255 255 255 / 0.78);
+  --glass-bg-soft: rgb(255 255 255 / 0.42);
+  --glass-border: rgb(255 255 255 / 0.75);
+  --glass-edge: rgb(47 125 74 / 0.12);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.85), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+  --glass-shadow: 0 1px 2px rgb(31 42 31 / 0.04), 0 8px 24px -6px rgb(31 42 31 / 0.1);
+  --glass-shadow-hover: 0 2px 4px rgb(31 42 31 / 0.05), 0 14px 32px -8px rgb(31 42 31 / 0.16);
+  --glass-blur: blur(18px) saturate(160%);
+  --glass-blur-soft: blur(10px) saturate(140%);
+  --glass-wash-1: rgb(47 125 74 / 0.14);
+  --glass-wash-2: rgb(196 122 29 / 0.09);
+  --glass-wash-3: rgb(93 187 122 / 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --glass-bg: rgb(27 32 25 / 0.62);
+    --glass-bg-strong: rgb(27 32 25 / 0.82);
+    --glass-bg-soft: rgb(35 42 33 / 0.45);
+    --glass-border: rgb(255 255 255 / 0.09);
+    --glass-edge: rgb(255 255 255 / 0.06);
+    --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(255 255 255 / 0.02);
+    --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -8px rgb(0 0 0 / 0.5);
+    --glass-shadow-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -8px rgb(0 0 0 / 0.6);
+    --glass-wash-1: rgb(93 187 122 / 0.08);
+    --glass-wash-2: rgb(240 180 90 / 0.04);
+    --glass-wash-3: rgb(93 187 122 / 0.05);
+  }
+}
+:root[data-theme='dark'] {
+  --glass-bg: rgb(27 32 25 / 0.62);
+  --glass-bg-strong: rgb(27 32 25 / 0.82);
+  --glass-bg-soft: rgb(35 42 33 / 0.45);
+  --glass-border: rgb(255 255 255 / 0.09);
+  --glass-edge: rgb(255 255 255 / 0.06);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(255 255 255 / 0.02);
+  --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -8px rgb(0 0 0 / 0.5);
+  --glass-shadow-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -8px rgb(0 0 0 / 0.6);
+  --glass-wash-1: rgb(93 187 122 / 0.08);
+  --glass-wash-2: rgb(240 180 90 / 0.04);
+  --glass-wash-3: rgb(93 187 122 / 0.05);
+}
+
+/* Soft backdrop from the existing palette, so the frosted surfaces have something to refract. */
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(60vw 50vh at 8% 0%, var(--glass-wash-1), transparent 70%),
+    radial-gradient(50vw 45vh at 100% 35%, var(--glass-wash-2), transparent 70%),
+    radial-gradient(55vw 50vh at 30% 100%, var(--glass-wash-3), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* Primary glass surfaces */
+.card,
+.metric,
+.table-wrap,
+.empty,
+.notif-panel,
+.modal {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.card,
+.metric,
+.table-wrap {
+  outline: 1px solid var(--glass-edge);
+  outline-offset: -1px;
+}
+.empty {
+  border-color: var(--border-strong);
+}
+.card-accent {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--glass-border));
+}
+.metric-warn {
+  border-color: color-mix(in srgb, var(--amber) 50%, var(--glass-border));
+}
+.modal,
+.notif-panel {
+  background: var(--glass-bg-strong);
+  box-shadow: var(--glass-highlight), var(--shadow-lg);
+}
+.modal-head {
+  background: transparent;
+  border-bottom-color: var(--glass-edge);
+}
+.modal-backdrop {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+/* Glass nested inside glass: keep it light and skip a second blur pass. */
+.card .table-wrap,
+.card .empty,
+.card .metric {
+  background: var(--glass-bg-soft);
+  box-shadow: var(--glass-highlight);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.card .empty {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Chrome: navbar and sidebar */
+.topbar {
+  background: var(--glass-bg);
+  border-bottom-color: var(--glass-border);
+  box-shadow: inset 0 -1px 0 var(--glass-edge), 0 4px 20px -12px rgb(31 42 31 / 0.18);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.sidebar {
+  background: var(--glass-bg);
+  border-right-color: var(--glass-border);
+  box-shadow: inset -1px 0 0 var(--glass-edge), var(--glass-highlight);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.sidebar-foot {
+  border-top-color: var(--glass-edge);
+}
+.proto-banner {
+  background: color-mix(in srgb, var(--amber-soft) 80%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  backdrop-filter: var(--glass-blur-soft);
+}
+.nav-link {
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+.nav-link:hover {
+  background: var(--glass-bg-soft);
+}
+.nav-link.active {
+  background: color-mix(in srgb, var(--primary-soft) 82%, transparent);
+  box-shadow: var(--glass-highlight);
+}
+
+/* Tables: translucent header band, soft row dividers */
+.table thead th {
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+}
+.table th,
+.table td {
+  border-bottom-color: var(--glass-edge);
+}
+
+/* Buttons */
+.btn {
+  background: var(--glass-bg-strong);
+  border-color: color-mix(in srgb, var(--border-strong) 70%, var(--glass-border));
+  box-shadow: var(--glass-highlight), 0 1px 2px rgb(31 42 31 / 0.05);
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--glass-bg);
+  box-shadow: var(--glass-highlight), 0 4px 12px -4px rgb(31 42 31 / 0.18);
+}
+.btn-primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 88%, #fff), var(--primary));
+  border-color: var(--primary);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 4px 14px -6px color-mix(in srgb, var(--primary) 70%, transparent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-hover) 88%, #fff), var(--primary-hover));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 8px 20px -8px color-mix(in srgb, var(--primary) 80%, transparent);
+}
+.btn-danger {
+  background: var(--red);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 4px 14px -6px color-mix(in srgb, var(--red) 70%, transparent);
+}
+.btn-danger-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red-soft) 80%, transparent);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--glass-bg-soft);
+  box-shadow: var(--glass-highlight);
+}
+.icon-btn {
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.icon-btn:hover {
+  background: var(--glass-bg-soft);
+}
+
+/* Form controls */
+input[type='text'],
+input[type='email'],
+input[type='tel'],
+input[type='password'],
+input[type='number'],
+input[type='search'],
+input[type='date'],
+input[type='time'],
+input:not([type]),
+select,
+textarea {
+  background: var(--glass-bg-strong);
+  border-color: color-mix(in srgb, var(--border-strong) 75%, var(--glass-border));
+  box-shadow: inset 0 1px 2px rgb(31 42 31 / 0.05);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  background: var(--surface);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+input[readonly],
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: color-mix(in srgb, var(--surface-2) 75%, transparent);
+}
+.radio-card,
+.chip span {
+  background: var(--glass-bg-soft);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.radio-card:has(input:checked),
+.chip input:checked + span {
+  background: color-mix(in srgb, var(--primary-soft) 85%, transparent);
+}
+.variant {
+  background: var(--glass-bg-soft);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-highlight);
+}
+
+/* Inset panels inside glass cards */
+.alert,
+.proto-iso,
+.holiday-list li,
+.staff-list li,
+.reply,
+.formula {
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  box-shadow: var(--glass-highlight);
+}
+.callout {
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  backdrop-filter: var(--glass-blur-soft);
+  box-shadow: var(--glass-highlight);
+}
+
+/* Smooth hover depth on interactive glass */
+.metric,
+.card {
+  transition: box-shadow 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+}
+a.metric:hover {
+  box-shadow: var(--glass-highlight), var(--glass-shadow-hover);
+}
+
+/* Fallback: browsers without backdrop-filter, or users who reduce transparency, get solid surfaces. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card,
+  .metric,
+  .table-wrap,
+  .empty,
+  .notif-panel,
+  .modal,
+  .sidebar,
+  .topbar,
+  .btn:not(.btn-primary):not(.btn-danger):not(.btn-ghost) {
+    background: var(--surface);
+  }
+  .card .table-wrap,
+  .card .metric,
+  .variant {
+    background: var(--surface);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  body {
+    background-image: none;
+  }
+  .card,
+  .metric,
+  .table-wrap,
+  .empty,
+  .notif-panel,
+  .modal,
+  .sidebar,
+  .topbar,
+  .card .table-wrap,
+  .card .metric,
+  .variant {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media print {
+  body {
+    background-image: none;
+  }
+  .card,
+  .metric,
+  .table-wrap {
+    background: #fff;
+    box-shadow: none;
+    outline: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+/* The notification dropdown sits inside the blurred top bar, where a nested
+   backdrop-filter can't sample the page, so it stays nearly opaque for legibility. */
+.notif-panel {
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+.notif-list li.unread a {
+  background: color-mix(in srgb, var(--primary-soft) 60%, var(--surface));
+}
+
+/* Keep the keyboard focus ring on glass tiles that are links. */
+a.metric:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
