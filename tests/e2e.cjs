@@ -43,6 +43,16 @@ const SHOTS = process.argv[3];
   await page.reload();
   await page.waitForTimeout(1000);
 
+  await step('fresh start shows an empty dashboard', async () => {
+    await expectText('.metrics', /Sales\s*₹0/);
+    await expectText('main', /No orders yet/);
+  });
+
+  // The workflow checks below need the sample dataset.
+  await page.keyboard.press('Alt+Shift+KeyP');
+  await page.click('[data-p=reset]');
+  await page.waitForTimeout(1200);
+
   await step('dashboard range filter updates metrics', async () => {
     const before = await page.textContent('.metric-value');
     await page.selectOption('#range', '7');

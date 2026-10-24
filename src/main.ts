@@ -325,7 +325,8 @@ function openPrototypeControls() {
             </div>
           </div>
           <div class="modal-actions">
-            <button class="btn btn-danger-ghost" type="button" data-p="reset">Reset demo data</button>
+            <button class="btn btn-danger-ghost" type="button" data-p="clear">Clear all data</button>
+            <button class="btn" type="button" data-p="reset">Load sample data</button>
             <button class="btn btn-primary" type="button" data-close>Done</button>
           </div>
         </div>`,
@@ -352,10 +353,18 @@ function openPrototypeControls() {
             toast((err as Error).message, 'error');
           }
         });
+        el.querySelector('[data-p=clear]')!.addEventListener('click', () => {
+          api.clearAllData();
+          api.sim.failWrites = false;
+          toast('All business data cleared', 'info');
+          close();
+          navigate('/seller/dashboard');
+          void render();
+        });
         el.querySelector('[data-p=reset]')!.addEventListener('click', () => {
           api.resetDemoData();
           api.sim.failWrites = false;
-          toast('Demo data reset', 'info');
+          toast('Sample data loaded', 'info');
           close();
           navigate('/seller/dashboard');
           void render();

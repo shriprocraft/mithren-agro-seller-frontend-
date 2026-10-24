@@ -163,3 +163,38 @@ test('Upload and tax-ID validation', () => {
   assert.ok(!GSTIN_RE.test('27ABCDE1234F1X5'));
   assert.ok(PAN_RE.test('ABCDE1234F'));
 });
+
+test('A fresh start has no business data and every metric reads zero or empty', async () => {
+  api.clearAllData();
+  for (const sellerId of [SELLER_A, SELLER_B]) {
+    api._setSessionForTesting(sellerId, 'Seller');
+    assert.equal((await api.listProducts({ includeArchived: true })).length, 0);
+    assert.equal((await api.listOrders()).length, 0);
+    assert.equal((await api.getLedger()).length, 0);
+    assert.equal((await api.listSettlements()).length, 0);
+    assert.equal((await api.listPayoutRequests()).length, 0);
+    assert.equal((await api.listReviews()).length, 0);
+    assert.equal((await api.listAdjustments()).length, 0);
+    assert.equal((await api.listNotifications()).length, 0);
+  }
+  api._setSessionForTesting(SELLER_A, 'Seller A');
+  for (const days of [7, 30, 90]) {
+    const m = await api.getDashboard(days);
+    assert.equal(m.sales, 0);
+    assert.equal(m.orders, 0);
+    assert.equal(m.netEarnings, 0);
+    assert.equal(m.liveProducts, 0);
+    assert.equal(m.totalProducts, 0);
+    assert.equal(m.lowStock.length, 0);
+    assert.equal(m.cancellations, 0);
+    assert.equal(m.cancellationRate, 0);
+    assert.equal(m.returns, 0);
+    assert.equal(m.rating, null, 'no reviews shows “—”');
+    assert.equal(m.awaiting, 0);
+    assert.ok(m.series.every((d) => d.sales === 0 && d.orders === 0));
+  }
+  // Account, settings and platform commission rules survive the reset.
+  const s = await api.getSeller();
+  assert.equal(s.status, 'approved');
+  assert.ok((await api.getCommissionRules()).length > 0);
+});

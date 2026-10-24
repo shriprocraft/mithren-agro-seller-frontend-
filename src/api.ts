@@ -10,7 +10,7 @@
 // its state across reloads. In production this module is replaced by HTTP
 // calls; the UI does not need to change.
 
-import { createSeed, buildLedgerEntry, DB_VERSION, SELLER_A, round2, type DB } from './data/seed.js';
+import { createSeed, createEmptySeed, buildLedgerEntry, DB_VERSION, SELLER_A, round2, type DB } from './data/seed.js';
 import { canSellerTransition, slugify, GSTIN_RE, PAN_RE, SKU_RE, ACTIVE_STATUSES } from './lib.js';
 import type {
   AdjustmentReason,
@@ -54,9 +54,9 @@ function load(): DB {
       }
     }
   } catch {
-    /* storage unavailable or corrupt: fall back to seed */
+    /* storage unavailable or corrupt: fall back to an empty dataset */
   }
-  return createSeed();
+  return createEmptySeed();
 }
 
 let db: DB = load();
@@ -123,6 +123,14 @@ export function _setSessionForTesting(sellerId: string, actorName = 'Test') {
   session = { sellerId, actorName };
 }
 
+/** Clear all business data (products, orders, earnings, reviews, …) for every seller. */
+export function clearAllData() {
+  db = createEmptySeed();
+  session = { sellerId: SELLER_A, actorName: 'Ananya K.' };
+  persist();
+}
+
+/** Load the sample dataset (used by tests and demos). */
 export function resetDemoData() {
   db = createSeed();
   session = { sellerId: SELLER_A, actorName: 'Ananya K.' };

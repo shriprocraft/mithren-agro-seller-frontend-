@@ -35,7 +35,8 @@ export interface DB {
   commissionRules: CommissionRule[];
 }
 
-export const DB_VERSION = 3;
+// Bumped to 4 when the default changed to an empty dataset; older saved data is discarded.
+export const DB_VERSION = 4;
 export const SELLER_A = 's_greenvalley';
 export const SELLER_B = 's_sunrise';
 const DAY = 86_400_000;
@@ -422,6 +423,26 @@ export function createSeed(now = new Date()): DB {
     documents,
     notifications,
     commissionRules: COMMISSION_RULES,
+  };
+}
+
+/**
+ * A fresh start: seller accounts, KYC documents, store settings and platform
+ * commission rules are kept; all business records are empty, so every metric
+ * reads zero or shows its empty state.
+ */
+export function createEmptySeed(now = new Date()): DB {
+  const base = createSeed(now);
+  return {
+    ...base,
+    products: [],
+    adjustments: [],
+    orders: [],
+    ledger: [],
+    settlements: [],
+    payoutRequests: [],
+    reviews: [],
+    notifications: [],
   };
 }
 
