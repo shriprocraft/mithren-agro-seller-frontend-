@@ -1,4 +1,4 @@
-/* Seller Portal — design tokens and components. */
+/* Seller Portal — design tokens and components. Light theme only, by design. */
 :root {
   --bg: #ffffff;
   --bg-end: #ffffff;
@@ -35,66 +35,6 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #131712;
-    --bg-end: #131712;
-    --surface: #1b2019;
-    --surface-2: #232a21;
-    --border: #2f372c;
-    --border-strong: #414b3d;
-    --text: #e8ece4;
-    --text-2: #aab3a5;
-    --text-3: #8a9485;
-    --primary: #5dbb7a;
-    --primary-hover: #74c98e;
-    --primary-soft: #1f3324;
-    --primary-text: #0d1a10;
-    --green: #6cc489;
-    --green-soft: #1d3223;
-    --amber: #f0b45a;
-    --amber-soft: #3a2c14;
-    --red: #f27a6e;
-    --red-soft: #3d1d1a;
-    --blue: #7fb2ef;
-    --blue-soft: #1b2a3d;
-    --purple: #b39cf2;
-    --purple-soft: #2a2340;
-    --focus: #7fb2ef;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
-    color-scheme: dark;
-  }
-}
-:root[data-theme='dark'] {
-  --bg: #131712;
-  --bg-end: #131712;
-  --surface: #1b2019;
-  --surface-2: #232a21;
-  --border: #2f372c;
-  --border-strong: #414b3d;
-  --text: #e8ece4;
-  --text-2: #aab3a5;
-  --text-3: #8a9485;
-  --primary: #5dbb7a;
-  --primary-hover: #74c98e;
-  --primary-soft: #1f3324;
-  --primary-text: #0d1a10;
-  --green: #6cc489;
-  --green-soft: #1d3223;
-  --amber: #f0b45a;
-  --amber-soft: #3a2c14;
-  --red: #f27a6e;
-  --red-soft: #3d1d1a;
-  --blue: #7fb2ef;
-  --blue-soft: #1b2a3d;
-  --purple: #b39cf2;
-  --purple-soft: #2a2340;
-  --focus: #7fb2ef;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
-  color-scheme: dark;
-}
 
 *,
 *::before,
@@ -2423,36 +2363,6 @@ input[type='radio'] {
   --glass-wash-2: transparent;
   --glass-wash-3: transparent;
   --topbar-bg: rgb(255 255 255 / 0.92);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --glass-bg: rgb(27 32 25 / 0.62);
-    --glass-bg-strong: rgb(27 32 25 / 0.82);
-    --glass-bg-soft: rgb(35 42 33 / 0.45);
-    --glass-border: rgb(255 255 255 / 0.09);
-    --glass-edge: rgb(255 255 255 / 0.06);
-    --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(255 255 255 / 0.02);
-    --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -8px rgb(0 0 0 / 0.5);
-    --glass-shadow-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -8px rgb(0 0 0 / 0.6);
-    --glass-wash-1: rgb(93 187 122 / 0.08);
-    --glass-wash-2: rgb(240 180 90 / 0.04);
-    --glass-wash-3: rgb(93 187 122 / 0.05);
-    --topbar-bg: rgb(27 32 25 / 0.62);
-  }
-}
-:root[data-theme='dark'] {
-  --glass-bg: rgb(27 32 25 / 0.62);
-  --glass-bg-strong: rgb(27 32 25 / 0.82);
-  --glass-bg-soft: rgb(35 42 33 / 0.45);
-  --glass-border: rgb(255 255 255 / 0.09);
-  --glass-edge: rgb(255 255 255 / 0.06);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(255 255 255 / 0.02);
-  --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -8px rgb(0 0 0 / 0.5);
-  --glass-shadow-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -8px rgb(0 0 0 / 0.6);
-  --glass-wash-1: rgb(93 187 122 / 0.08);
-  --glass-wash-2: rgb(240 180 90 / 0.04);
-  --glass-wash-3: rgb(93 187 122 / 0.05);
-  --topbar-bg: rgb(27 32 25 / 0.62);
 }
 
 /* Page ground is plain white in light mode.
