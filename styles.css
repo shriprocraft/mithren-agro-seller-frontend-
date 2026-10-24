@@ -2422,7 +2422,7 @@ input[type='radio'] {
   --glass-wash-1: transparent;
   --glass-wash-2: transparent;
   --glass-wash-3: transparent;
-  --topbar-bg: rgb(251 249 245 / 0.92); /* reference header #fbf9f5 */
+  --topbar-bg: rgb(255 255 255 / 0.92);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
