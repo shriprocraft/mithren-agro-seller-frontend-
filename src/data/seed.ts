@@ -35,8 +35,8 @@ export interface DB {
   commissionRules: CommissionRule[];
 }
 
-// Bumped to 4 when the default changed to an empty dataset; older saved data is discarded.
-export const DB_VERSION = 4;
+// 4: empty dataset by default. 5: unified seller status model (v4 data is migrated, not discarded).
+export const DB_VERSION = 5;
 export const SELLER_A = 's_greenvalley';
 export const SELLER_B = 's_sunrise';
 const DAY = 86_400_000;

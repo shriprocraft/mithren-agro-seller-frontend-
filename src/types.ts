@@ -1,14 +1,8 @@
 // Domain types for the Seller Portal. These mirror the entities a production
 // backend would expose; in this phase they are served by the mock API in api.ts.
 
-export type SellerStatus =
-  | 'not_registered'
-  | 'submitted'
-  | 'under_review'
-  | 'changes_requested'
-  | 'approved'
-  | 'rejected'
-  | 'suspended';
+/** Seller account status is the application status: one model, controlled by the server. */
+export type SellerStatus = import('./application.js').ApplicationStatus;
 
 export type Unit = 'g' | 'kg' | 'bunch' | 'piece' | 'box';
 
@@ -255,7 +249,11 @@ export type DocumentType =
   | 'bank_proof'
   | 'address_proof'
   | 'fssai'
-  | 'organic_cert';
+  | 'organic_cert'
+  | 'business_registration'
+  | 'organic_evidence'
+  | 'logo'
+  | 'additional';
 
 export interface SellerDocument {
   id: string;

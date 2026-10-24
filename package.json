@@ -2,13 +2,18 @@
   "name": "organic-seller-portal",
   "version": "0.1.0",
   "private": true,
-  "description": "Seller/Vendor Portal frontend prototype for the Organic Fruits & Vegetables multi-vendor marketplace (mock data phase).",
+  "description": "Mithren Agro Seller Portal: frontend and zero-dependency Node backend (node:sqlite).",
   "type": "module",
   "scripts": {
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
     "watch": "tsc -p . --watch",
-    "serve": "http-server . -p 5173 -c-1",
-    "test": "tsc -p . && node --test tests/*.test.mjs"
+    "start": "node --disable-warning=ExperimentalWarning server/index.mjs",
+    "serve:static": "http-server . -p 5173 -c-1",
+    "test": "tsc -p . && node --disable-warning=ExperimentalWarning --test tests/*.test.mjs",
+    "test:e2e": "node tests/e2e.cjs"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }

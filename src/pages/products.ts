@@ -60,7 +60,9 @@ const page: Page = async ({ root, query, seller, refresh }) => {
         </table></div>`
       : q || category || status
         ? emptyState('No matching products', 'Try a different search, category or status.', html`<a class="btn" href="#/seller/products">Clear filters</a>`)
-        : emptyState('No products yet', 'Add your first product to start selling. You can save it as a draft.', html`<a class="btn btn-primary" href="#/seller/products/new">${icon('plus', 16)} Add product</a>`)}
+        : readOnly
+          ? emptyState('No products', 'Your account is suspended, so products can’t be added right now.')
+          : emptyState('No products yet', 'Add your first product to start selling. You can save it as a draft.', html`<a class="btn btn-primary" href="#/seller/products/new">${icon('plus', 16)} Add product</a>`)}
   `.value;
 
   let t: ReturnType<typeof setTimeout>;

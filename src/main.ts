@@ -6,11 +6,13 @@ import { html, raw, $, on } from './ui/dom.js';
 import { icon, sellerBadge, callout, errorState, loadingState, emptyState } from './ui/components.js';
 import { modal, toast, initTooltips } from './ui/overlay.js';
 import { timeAgo, SELLER_STATUS_LABEL } from './lib.js';
-import type { Seller, SellerStatus } from './types.js';
+import type { Seller } from './types.js';
+import type { AccountView } from './application.js';
 
 // ---------- routes (source: scope doc §9) ----------
 route('/seller', 'Seller portal', async () => (await import('./pages/entry.js')).default);
 route('/seller/register', 'Seller registration', async () => (await import('./pages/register.js')).default);
+route('/seller/sign-in', 'Sign in', async () => (await import('./pages/sign-in.js')).default);
 route('/seller/dashboard', 'Dashboard', async () => (await import('./pages/dashboard.js')).default, 'dashboard');
 route('/seller/products', 'Products', async () => (await import('./pages/products.js')).default, 'products');
 route('/seller/products/new', 'New product', async () => (await import('./pages/product-form.js')).default, 'products');
@@ -59,8 +61,14 @@ const NAV: { group: string; items: { key: string; label: string; icon: string; h
 const app = $('#app')!;
 let renderToken = 0;
 
-function shell(seller: Seller, navKey: string | undefined, bare: boolean) {
-  const initials = seller.ownerName.split(' ').map((p) => p[0]).join('').slice(0, 2);
+/** Pages reachable without signing in. */
+const PUBLIC_PATHS = ['/seller/sign-in', '/seller/register'];
+
+/** Placeholder for the shell while nobody is signed in (no seller data is shown). */
+const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2f7d4a', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
+
+function shell(seller: Seller, navKey: string | undefined, bare: boolean, account: AccountView | null) {
+  const initials = (account?.fullName ?? seller.ownerName).split(' ').map((p) => p[0]).join('').slice(0, 2);
   return html`
     <a class="skip-link" href="#main" data-skip>Skip to content</a>
     <div class="layout ${bare ? 'layout-bare' : ''}">
@@ -92,19 +100,30 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean) {
       <div class="main-col">
         <header class="topbar">
           ${bare ? html`<div class="brand brand-inline"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="40" /><span>Seller Portal</span></div>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
-          <div class="topbar-shop">
-            <span class="shop-avatar" style="background:${seller.brandColor}" aria-hidden="true">${seller.shopName.slice(0, 1)}</span>
-            <div class="shop-meta"><strong>${seller.status === 'not_registered' ? 'New seller' : seller.shopName}</strong>${sellerBadge(seller.status)}</div>
-          </div>
-          <div class="topbar-actions">
-            <div class="notif-wrap">
-              <button class="icon-btn" type="button" data-action="notifs" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel" aria-label="Notifications">
-                ${icon('bell', 20)}<span class="dot" data-unread hidden></span>
-              </button>
-              <div class="notif-panel" id="notif-panel" hidden></div>
-            </div>
-            <span class="avatar" title="${seller.ownerName}" aria-label="Signed in as ${seller.ownerName}" role="img">${initials}</span>
-          </div>
+          ${account
+            ? html`<div class="topbar-shop">
+                <span class="shop-avatar" style="background:${seller.brandColor}" aria-hidden="true">${(seller.shopName || account.fullName).slice(0, 1)}</span>
+                <div class="shop-meta"><strong>${seller.shopName || 'New seller'}</strong>${sellerBadge(seller.status)}</div>
+              </div>
+              <div class="topbar-actions">
+                ${bare
+                  ? ''
+                  : html`<div class="notif-wrap">
+                      <button class="icon-btn" type="button" data-action="notifs" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel" aria-label="Notifications">
+                        ${icon('bell', 20)}<span class="dot" data-unread hidden></span>
+                      </button>
+                      <div class="notif-panel" id="notif-panel" hidden></div>
+                    </div>`}
+                <div class="account-wrap">
+                  <button class="avatar" type="button" data-action="account" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu for ${account.fullName}">${initials}</button>
+                  <div class="account-menu" id="account-menu" hidden>
+                    <p><strong>${account.fullName}</strong><span class="muted small block">${account.email}</span></p>
+                    <a href="#/seller?view=status" class="account-link">Application status</a>
+                    <button type="button" class="account-link" data-action="sign-out">${icon('logout', 16)} Sign out</button>
+                  </div>
+                </div>
+              </div>`
+            : html`<div class="topbar-actions"><a class="btn btn-sm" href="#/seller/sign-in">Sign in</a></div>`}
         </header>
         <main id="main" tabindex="-1"></main>
       </div>
@@ -112,13 +131,15 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean) {
 }
 
 function statusBanner(s: Seller) {
-  if (s.status === 'approved' || s.status === 'not_registered') return '';
+  if (s.status === 'approved') return '';
   if (s.status === 'suspended')
     return callout('error', 'Your account is suspended', s.reviewMessage ?? 'Listings are hidden from customers and the portal is read-only.', html`<a class="btn btn-sm" href="mailto:${s.supportEmail}">Contact support</a>`);
   return callout(
     s.status === 'rejected' ? 'error' : 'warn',
     `Application status: ${SELLER_STATUS_LABEL[s.status]}`,
-    'You can explore the portal and prepare draft listings, but nothing is visible to customers until your account is approved.',
+    s.status === 'incomplete'
+      ? 'Finish your seller application to submit it for review. You can prepare draft listings, but nothing can be published until your account is approved.'
+      : 'You can prepare draft listings, but nothing can be published for sale until your account is approved.',
     html`<a class="btn btn-sm" href="#/seller">View status</a>`,
   );
 }
@@ -127,25 +148,32 @@ async function render() {
   const token = ++renderToken;
   const { path, query } = currentLocation();
   const m = match(path);
-  let seller: Seller;
+  let account: AccountView | null;
+  let seller: Seller = GUEST;
   try {
-    seller = await api.getSeller();
+    account = await api.auth.current();
+    if (account) seller = await api.getSeller();
   } catch (e) {
-    app.innerHTML = errorState((e as Error).message).value;
-    return;
+    if (e instanceof api.ApiError && e.status === 401) account = null;
+    else {
+      app.innerHTML = errorState((e as Error).message).value;
+      app.querySelector('[data-action=retry]')?.addEventListener('click', () => void render());
+      return;
+    }
   }
   if (token !== renderToken) return;
 
-  // Onboarding gate: unregistered sellers can only reach registration.
-  if (seller.status === 'not_registered' && path !== '/seller/register') return navigate('/seller/register', true);
-  if (seller.status !== 'not_registered' && path === '/seller/register') return navigate('/seller', true);
+  // Sign-in gate: every seller page needs an authenticated session (the server enforces this too).
+  const isPublic = PUBLIC_PATHS.includes(path);
+  if (!account && !isPublic) return navigate(`/seller/sign-in${path !== '/seller' ? `?next=${encodeURIComponent(path)}` : ''}`, true);
+  if (account && path === '/seller/sign-in') return navigate('/seller', true);
 
-  const bare = path === '/seller/register';
-  app.innerHTML = shell(seller, m?.route.nav, bare).value;
+  const bare = isPublic;
+  app.innerHTML = shell(seller, m?.route.nav, bare, account).value;
   const main = $('#main')!;
   document.title = `${m?.route.title ?? 'Not found'} · Mithren Agro Seller Portal`;
 
-  const banner = bare || path === '/seller' ? '' : statusBanner(seller);
+  const banner = bare || !account || path === '/seller' ? '' : statusBanner(seller);
   if (!m) {
     main.innerHTML = html`${banner}<div class="page">${emptyState('Page not found', `There is no seller page at ${path}.`, html`<a class="btn btn-primary" href="#/seller/dashboard">Go to dashboard</a>`)}</div>`.value;
     return;
@@ -157,7 +185,7 @@ async function render() {
   if (token !== renderToken) return;
   const container = document.createElement('div');
   container.className = 'page';
-  const ctx: PageContext = { root: container, params: m.params, query, seller, refresh: () => void rerenderPage(), isCurrent: () => token === renderToken };
+  const ctx: PageContext = { root: container, params: m.params, query, seller, account, refresh: () => void rerenderPage(), isCurrent: () => token === renderToken };
 
   async function rerenderPage() {
     // Preserve focus (e.g. a search box) across re-renders.
@@ -166,8 +194,9 @@ async function render() {
     const sel = active && 'selectionStart' in active ? [active.selectionStart, active.selectionEnd] : null;
     const fresh = document.createElement('div');
     fresh.className = 'page';
-    const newSeller = await api.getSeller();
-    const c2: PageContext = { ...ctx, root: fresh, seller: newSeller, query: currentLocation().query };
+    const newAccount = await api.auth.current();
+    const newSeller = newAccount ? await api.getSeller() : GUEST;
+    const c2: PageContext = { ...ctx, root: fresh, seller: newSeller, account: newAccount, query: currentLocation().query };
     try {
       await page(c2);
       if (token !== renderToken) return;
@@ -219,6 +248,30 @@ function bindShell() {
     }
   });
   on(root, 'click', '[data-action=notifs]', (_e, btn) => void toggleNotifications(btn));
+  on(root, 'click', '[data-action=account]', (_e, btn) => {
+    const menu = $('#account-menu');
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    btn.setAttribute('aria-expanded', String(!menu.hidden));
+    if (!menu.hidden) (menu.querySelector('a,button') as HTMLElement | null)?.focus();
+  });
+  on(root, 'click', '[data-action=sign-out]', async () => {
+    try {
+      await api.auth.signOut();
+      toast('You’re signed out');
+      navigate('/seller/sign-in');
+      void render();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    const menu = $('#account-menu');
+    if (menu && !menu.hidden && !(e.target as HTMLElement).closest('.account-wrap')) {
+      menu.hidden = true;
+      $('[data-action=account]')?.setAttribute('aria-expanded', 'false');
+    }
+  });
 }
 
 function setNav(open: boolean, btn?: HTMLElement) {
@@ -234,12 +287,18 @@ function setNav(open: boolean, btn?: HTMLElement) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if ($('#sidebar.open')) setNav(false);
+    const menu = $('#account-menu');
+    if (menu && !menu.hidden) {
+      menu.hidden = true;
+      ($('[data-action=account]') as HTMLElement | null)?.focus();
+    }
     const panel = $('#notif-panel');
     if (panel && !panel.hidden) closeNotifications();
   }
 });
 
 async function updateBadges() {
+  if (!$('[data-action=notifs]')) return;
   try {
     const [orders, notifs] = await Promise.all([api.listOrders({ status: 'awaiting_confirmation' }), api.listNotifications()]);
     const c = $('[data-count=orders]');
@@ -278,7 +337,7 @@ async function toggleNotifications(btn: HTMLElement) {
             <strong>${n.title}</strong><span>${n.body}</span><time datetime="${n.at}">${timeAgo(n.at)}</time></a></li>`,
         )}</ul>`
       : html`<p class="muted pad">You’re all caught up.</p>`}
-    <p class="notif-foot muted">In-app only in this prototype. Email/SMS delivery needs a configured provider.</p>`.value;
+    <p class="notif-foot muted">In-app notifications. Email and SMS delivery need a configured provider.</p>`.value;
   panel.querySelector('[data-action=read-all]')?.addEventListener('click', async () => {
     await api.markNotificationsRead();
     closeNotifications();
@@ -301,76 +360,106 @@ async function toggleNotifications(btn: HTMLElement) {
   });
 }
 
+/**
+ * Hidden controls (Alt+Shift+P) for the preview only. They stand in for the
+ * Super Admin Portal, checkout and delivery, which are outside this portal.
+ * On the server, review actions come from the Super Admin Portal's API calls.
+ */
 function openPrototypeControls() {
-  void api.getSeller().then((s) => {
-    const statuses: SellerStatus[] = ['not_registered', 'submitted', 'under_review', 'changes_requested', 'approved', 'rejected', 'suspended'];
-    modal({
-      title: 'Prototype controls',
-      body: html`
-        <div class="stack">
-          <p class="muted">These controls stand in for systems outside the Seller Portal (Admin review, checkout, delivery, network). They don’t exist in production.</p>
-          <div class="field">
-            <label for="proto-status">Seller account status <span class="muted">(Admin review workflow)</span></label>
-            <select id="proto-status">${statuses.map((st) => html`<option value="${st}" ${st === s.status ? raw('selected') : ''}>${SELLER_STATUS_LABEL[st]}</option>`)}</select>
-          </div>
-          <div class="proto-grid">
-            <button class="btn" type="button" data-p="order">${icon('orders', 16)} Simulate a new customer order</button>
-            <label class="switch"><input type="checkbox" id="proto-fail" ${api.sim.failWrites ? raw('checked') : ''}/> <span>Simulate network failure on save</span></label>
-          </div>
-          <div class="proto-iso">
-            <p><strong>Seller isolation check</strong> — try to open another seller’s records. The API answers “not found”.</p>
-            <div class="row-wrap">
-              <a class="btn btn-sm" href="#/seller/products/p_sr_kale" data-close>Seller B product</a>
-              <a class="btn btn-sm" href="#/seller/orders/SO-48300-SR" data-close>Seller B order</a>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-danger-ghost" type="button" data-p="clear">Clear all data</button>
-            <button class="btn" type="button" data-p="reset">Load sample data</button>
-            <button class="btn btn-primary" type="button" data-close>Done</button>
-          </div>
-        </div>`,
-      onMount(el, close) {
-        el.querySelector('#proto-status')!.addEventListener('change', async (e) => {
-          const st = (e.target as HTMLSelectElement).value as SellerStatus;
-          await api._demoSetSellerStatus(st);
-          toast(`Account status set to “${SELLER_STATUS_LABEL[st]}”`, 'info');
-          close();
-          navigate(st === 'not_registered' ? '/seller/register' : '/seller');
-          void render();
-        });
-        el.querySelector('#proto-fail')!.addEventListener('change', (e) => {
-          api.sim.failWrites = (e.target as HTMLInputElement).checked;
-          toast(api.sim.failWrites ? 'Saves will now fail with a network error' : 'Network restored', 'info');
-        });
-        el.querySelector('[data-p=order]')!.addEventListener('click', async () => {
+  const admin = api.previewAdmin;
+  if (!admin && !api.DEMO_TOOLS) return;
+  modal({
+    title: 'Prototype controls',
+    body: html`
+      <div class="stack">
+        <p class="muted">These stand in for systems outside the Seller Portal. They don’t exist in production.</p>
+        ${admin
+          ? html`<fieldset class="field proto-review">
+              <legend>Super Admin review (preview stand-in)</legend>
+              <label for="proto-msg">Message to the seller</label>
+              <textarea id="proto-msg" rows="2" placeholder="Required for reject, request changes and suspend"></textarea>
+              <label for="proto-items">Requested items (one per line, for “Request changes”)</label>
+              <textarea id="proto-items" rows="2"></textarea>
+              <div class="row-wrap">
+                <button class="btn btn-sm" type="button" data-decide="approve">Approve</button>
+                <button class="btn btn-sm" type="button" data-decide="request_changes">Request changes</button>
+                <button class="btn btn-sm" type="button" data-decide="reject">Reject</button>
+                <button class="btn btn-sm" type="button" data-decide="suspend">Suspend</button>
+                <button class="btn btn-sm" type="button" data-decide="reinstate">Reinstate</button>
+              </div>
+              <div class="row-wrap">
+                <button class="btn btn-sm" type="button" data-organic="verified">Verify organic certificate</button>
+                <button class="btn btn-sm" type="button" data-organic="rejected">Reject organic certificate</button>
+              </div>
+            </fieldset>`
+          : ''}
+        <div class="proto-grid">
+          ${api.DEMO_TOOLS ? html`<button class="btn" type="button" data-p="order">${icon('orders', 16)} Simulate a new customer order</button>` : ''}
+          ${admin ? html`<label class="switch"><input type="checkbox" id="proto-fail" ${api.sim.failWrites ? raw('checked') : ''}/> <span>Simulate network failure on save</span></label>` : ''}
+        </div>
+        <div class="modal-actions">
+          ${admin
+            ? html`<button class="btn btn-danger-ghost" type="button" data-p="clear">Clear all data</button>
+                <button class="btn" type="button" data-p="reset">Load sample data</button>`
+            : ''}
+          <button class="btn btn-primary" type="button" data-close>Done</button>
+        </div>
+      </div>`,
+    onMount(el, close) {
+      const after = (msg: string, to = '/seller') => {
+        toast(msg, 'info');
+        close();
+        navigate(to);
+        void render();
+      };
+      el.querySelectorAll<HTMLButtonElement>('[data-decide]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          const msg = (el.querySelector('#proto-msg') as HTMLTextAreaElement).value;
+          const items = (el.querySelector('#proto-items') as HTMLTextAreaElement).value.split('\n').map((x) => x.trim()).filter(Boolean);
           try {
-            const o = await api._demoSimulateNewOrder();
-            toast(`New order ${o.id} received`, 'info');
-            close();
-            navigate(`/seller/orders/${o.id}`);
+            await admin!.decide(b.dataset.decide as 'approve', msg, items);
+            after(`Reviewer action: ${b.textContent}`);
           } catch (err) {
             toast((err as Error).message, 'error');
           }
-        });
-        el.querySelector('[data-p=clear]')!.addEventListener('click', () => {
-          api.clearAllData();
-          api.sim.failWrites = false;
-          toast('All business data cleared', 'info');
+        }),
+      );
+      el.querySelectorAll<HTMLButtonElement>('[data-organic]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          const msg = (el.querySelector('#proto-msg') as HTMLTextAreaElement).value;
+          try {
+            await admin!.reviewOrganic(b.dataset.organic as 'verified', msg);
+            after(b.dataset.organic === 'verified' ? 'Organic certificate verified' : 'Organic certificate rejected', '/seller/documents');
+          } catch (err) {
+            toast((err as Error).message, 'error');
+          }
+        }),
+      );
+      el.querySelector('#proto-fail')?.addEventListener('change', (e) => {
+        api.sim.failWrites = (e.target as HTMLInputElement).checked;
+        toast(api.sim.failWrites ? 'Saves will now fail with a network error' : 'Network restored', 'info');
+      });
+      el.querySelector('[data-p=order]')?.addEventListener('click', async () => {
+        try {
+          const o = await api._demoSimulateNewOrder();
+          toast(`New order ${o.id} received`, 'info');
           close();
-          navigate('/seller/dashboard');
-          void render();
-        });
-        el.querySelector('[data-p=reset]')!.addEventListener('click', () => {
-          api.resetDemoData();
-          api.sim.failWrites = false;
-          toast('Sample data loaded', 'info');
-          close();
-          navigate('/seller/dashboard');
-          void render();
-        });
-      },
-    });
+          navigate(`/seller/orders/${o.id}`);
+        } catch (err) {
+          toast((err as Error).message, 'error');
+        }
+      });
+      el.querySelector('[data-p=clear]')?.addEventListener('click', () => {
+        api.clearAllData();
+        api.sim.failWrites = false;
+        after('All business data cleared', '/seller/dashboard');
+      });
+      el.querySelector('[data-p=reset]')?.addEventListener('click', () => {
+        api.resetDemoData();
+        api.sim.failWrites = false;
+        after('Sample data loaded', '/seller/dashboard');
+      });
+    },
   });
 }
 

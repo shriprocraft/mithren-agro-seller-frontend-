@@ -56,9 +56,8 @@ const SHOTS = process.argv[3];
   await step('dashboard range filter updates metrics', async () => {
     const before = await page.textContent('.metric-value');
     await page.selectOption('#range', '7');
-    await page.waitForTimeout(700);
+    await page.waitForFunction((b) => document.querySelector('.metric-value')?.textContent !== b, before, { timeout: 6000 });
     assert.ok(page.url().includes('range=7'));
-    assert.notEqual(await page.textContent('.metric-value'), before);
   });
 
   await step('metric definition tooltip is keyboard accessible', async () => {
@@ -85,7 +84,7 @@ const SHOTS = process.argv[3];
     await page.waitForTimeout(900);
     await expectText('.page-header', /Delivered/);
     await go('/seller/earnings?range=30');
-    assert.ok(await page.isVisible(`a[href="#/seller/orders/${id}"]`), 'ledger shows delivered order');
+    await page.waitForSelector(`a[href="#/seller/orders/${id}"]`, { timeout: 6000 }); // ledger shows the delivered order
     await expectText('#bd-h + * + p, .ok-text', /reconcile/);
   });
 
@@ -100,7 +99,7 @@ const SHOTS = process.argv[3];
     await expectText('#f_reason_err', /reason/);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
-    assert.equal(await page.$('.modal'), null);
+    assert.equal(await page.locator('.modal').count(), 0);
     await page.click('[data-to=rejected]');
     await page.fill('#f_reason', 'Harvest damaged by rain');
     await page.click('.modal [type=submit]');
@@ -215,78 +214,86 @@ const SHOTS = process.argv[3];
 
   await step('document upload rejects wrong file type', async () => {
     await go('/seller/documents');
-    await page.click('[data-action=upload][data-type=fssai]');
+    await page.click('[data-action=upload][data-kind=additional]');
     await page.setInputFiles('#f_file', { name: 'malware.exe', mimeType: 'application/x-msdownload', buffer: Buffer.from('x') });
     await page.click('.modal [type=submit]');
-    await expectText('#f_file_err', /not an accepted file type/);
+    await expectText('#f_file_err', /PDF, JPG or PNG/);
     await page.keyboard.press('Escape');
   });
 
-  await step('suspended account is read-only', async () => {
+  await step('suspended account is read-only (preview reviewer stand-in)', async () => {
     await page.keyboard.press('Alt+Shift+KeyP');
-    await page.waitForTimeout(300);
-    await page.selectOption('#proto-status', 'suspended');
-    await page.waitForTimeout(1500);
+    await page.fill('#proto-msg', 'Quality complaints under investigation.');
+    await page.click('[data-decide=suspend]');
+    await page.waitForTimeout(1200);
     await go('/seller/products');
-    assert.equal(await page.$('a[href="#/seller/products/new"].btn-primary'), null);
     await expectText('main', /suspended/i);
+    assert.equal(await page.locator('a[href="#/seller/products/new"].btn-primary').count(), 0);
+    await page.keyboard.press('Alt+Shift+KeyP');
+    await page.click('[data-decide=reinstate]');
+    await page.waitForTimeout(1200);
   });
 
-  await step('new applicant is sent to registration and can apply', async () => {
-    await page.keyboard.press('Alt+Shift+KeyP');
-    await page.waitForTimeout(300);
-    await page.selectOption('#proto-status', 'not_registered');
-    await page.waitForTimeout(1500);
-    await go('/seller/dashboard');
-    await page.waitForTimeout(500);
-    assert.ok(page.url().includes('/seller/register'));
-    // Step 1
-    await page.fill('#f_ownerName', 'Meera Joshi');
+  await step('preview: sign out, register a new seller through all 8 steps and submit', async () => {
+    await page.click('[data-action=account]');
+    await page.click('[data-action=sign-out]');
+    await page.waitForFunction(() => location.hash.startsWith('#/seller/sign-in'));
+    await page.click('a[href="#/seller/register"]');
+    await page.fill('#f_fullName', 'Meera Joshi');
     await page.fill('#f_email', 'meera@farm.example');
-    await page.click('[data-otp-send=email]');
-    await page.fill('#f_emailOtp', '123456');
-    await page.click('[data-otp-verify=email]');
     await page.fill('#f_phone', '9876543210');
-    await page.click('[data-otp-send=phone]');
-    await page.fill('#f_phoneOtp', '000000');
-    await page.click('[data-otp-verify=phone]');
-    await expectText('#f_phoneOtp_err', /incorrect/);
-    await page.fill('#f_phoneOtp', '123456');
-    await page.click('[data-otp-verify=phone]');
     await page.fill('#f_password', 'harvest2026x');
     await page.fill('#f_password2', 'harvest2026x');
-    await page.click('[type=submit]');
-    // Step 2
+    await page.click('form[data-role=step] [type=submit]');
+    await page.waitForSelector('[data-verify=email]');
+    await expectText('#f_emailCode_hint', /your code is \d{6}/);
+    for (const ch of ['email', 'phone']) {
+      const code = (await page.textContent(`#f_${ch}Code_hint`)).match(/(\d{6})/)[1];
+      await page.fill(`#f_${ch}Code`, code);
+      await page.click(`[data-verify=${ch}]`);
+      await page.waitForTimeout(400);
+    }
+    await expectText('form[data-role=step]', /Mobile number verified/);
+    const next = () => page.click('form[data-role=step] [type=submit]').then(() => page.waitForTimeout(500));
+    await next();
     await page.fill('#f_shopName', 'Joshi Family Farm');
     await page.fill('#f_description', 'Small family farm growing leafy greens and herbs near Lonavala.');
-    await page.fill('#f_address', 'Gat 12, Old Highway, Lonavala');
+    await next();
+    await page.fill('#f_addressLine1', 'Gat 12, Old Highway');
+    await page.selectOption('#f_state', 'Maharashtra');
+    await page.fill('#f_district', 'Pune');
+    await page.fill('#f_city', 'Lonavala');
     await page.fill('#f_pincode', '410401');
     await page.fill('#f_serviceAreas', 'Lonavala, Khandala');
+    await next();
     await page.click('label.chip:has-text("Herbs")');
-    await page.click('[type=submit]');
-    // Step 3: bad GSTIN first
+    await next();
+    await page.selectOption('#f_businessType', 'proprietorship');
+    await page.selectOption('#f_gstStatus', 'not_registered');
+    await page.waitForSelector('#f_pan');
     await page.fill('#f_pan', 'ABCDE1234F');
-    await page.check('[name=gstRegistered]');
-    await page.fill('#f_gstin', '27ZZZZZ9999Z1Z5');
-    await page.click('[type=submit]');
-    await expectText('#f_gstin_err', /match the PAN/);
-    await page.fill('#f_gstin', '27ABCDE1234F1Z5');
-    await page.click('[type=submit]');
-    // Step 4
-    await page.fill('#f_bankAccountName', 'Meera Joshi');
-    await page.fill('#f_bankAccountNumber', '123456789012');
-    await page.fill('#f_bankAccountNumber2', '123456789012');
-    await page.fill('#f_ifsc', 'SBIN0001234');
     const pdf = (name) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
-    for (const t of ['pan', 'bank_proof', 'address_proof', 'gst']) await page.setInputFiles(`#doc-${t}`, pdf(`${t}.pdf`));
-    await page.click('[type=submit]');
-    // Step 5
-    await page.click('[type=submit]');
-    assert.ok(await page.isVisible('#f_consent_err'));
+    await page.setInputFiles('[data-upload=address_proof]', pdf('address.pdf'));
+    await expectText('#f_doc_address_proof', /address\.pdf/);
+    await page.setInputFiles('[data-upload=pan]', pdf('pan.pdf'));
+    await expectText('#f_doc_pan', /pan\.pdf/);
+    await next();
+    await page.fill('#f_holderName', 'Meera Joshi');
+    await page.fill('#f_accountNumber', '123456789012');
+    await page.fill('#f_accountNumberConfirm', '123456789012');
+    await page.fill('#f_ifsc', 'SBIN0001234');
+    await page.click('[data-action=save-bank]');
+    await expectText('.bank-saved', /9012/);
+    await page.setInputFiles('[data-upload=bank_proof]', pdf('cheque.pdf'));
+    await expectText('#f_doc_bank_proof', /cheque\.pdf/);
+    await next();
+    await page.check('[name=claimsOrganic][value=no]');
+    await next();
     await page.check('[name=consent]');
-    await page.click('[type=submit]');
-    await page.waitForTimeout(1500);
-    await expectText('main', /Application submitted/);
+    await page.click('form[data-role=step] [type=submit]');
+    await page.waitForFunction(() => location.hash === '#/seller');
+    await expectText('main', /awaiting review/);
+    await expectText('main', /MA-\d{4}-\d{6}/);
     await expectText('.topbar', /Joshi Family Farm/);
   });
 

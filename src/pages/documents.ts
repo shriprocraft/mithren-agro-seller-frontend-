@@ -1,120 +1,142 @@
 // /seller/documents — KYC, business and organic certification documents.
+// Lists the seller's own application documents as stored by the backend.
 
 import type { Page } from '../router.js';
 import { html, on, formValues } from '../ui/dom.js';
 import { pageHeader, field, select, icon, badge, callout, showFieldErrors } from '../ui/components.js';
 import { toast, modal } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { fmtDate, validateUpload, UPLOAD_RULES } from '../lib.js';
-import type { DocumentType, SellerDocument } from '../types.js';
+import { fmtDate, fileSize } from '../lib.js';
+import {
+  CERTIFICATION_STATUS_LABEL,
+  DOC_KIND_LABEL,
+  UPLOAD_LIMITS,
+  canUpload,
+  requiredDocuments,
+  type ApplicationDocKind,
+  type ApplicationDocument,
+  type ApplicationView,
+} from '../application.js';
 
-export const DOC_TYPES: { type: DocumentType; label: string; required: boolean; help: string }[] = [
-  { type: 'pan', label: 'PAN card', required: true, help: 'Business or proprietor PAN.' },
-  { type: 'gst', label: 'GST registration', required: false, help: 'Only if you are GST-registered.' },
-  { type: 'bank_proof', label: 'Bank proof', required: true, help: 'Cancelled cheque or bank statement showing account name and IFSC.' },
-  { type: 'address_proof', label: 'Address proof', required: true, help: 'Utility bill or rental agreement for the pickup address.' },
-  { type: 'fssai', label: 'FSSAI registration', required: false, help: 'Food business registration, where applicable.' },
-  { type: 'organic_cert', label: 'Organic certificate', required: false, help: 'Required only if you label products as organic. Must cover the products and farms you list.' },
-];
+const KIND_HELP: Record<ApplicationDocKind, string> = {
+  pan: 'Business or proprietor PAN card.',
+  gst: 'GST registration certificate. Only if you are GST-registered.',
+  business_registration: 'Registration certificate for your firm, LLP, company, FPO or cooperative.',
+  address_proof: 'Utility bill, rental agreement or property document for your business address.',
+  bank_proof: 'Cancelled cheque or bank statement showing the account name and IFSC.',
+  organic_cert: 'Only if you sell certified organic products. Must cover the farms and products you list.',
+  organic_evidence: 'Optional supporting evidence: inspection reports, farm photos or supplier certificates.',
+  logo: 'Optional store logo, PNG or JPG up to 2 MB.',
+  additional: 'Anything else a reviewer has asked for.',
+};
 
-const today = () => new Date().toISOString().slice(0, 10);
+const ORDER: ApplicationDocKind[] = ['pan', 'gst', 'business_registration', 'address_proof', 'bank_proof', 'organic_cert', 'organic_evidence', 'logo', 'additional'];
 
-function statusBadge(d: SellerDocument) {
-  if (d.status === 'rejected') return badge('Rejected', 'red');
-  if (d.status === 'pending') return badge('Awaiting review', 'amber');
-  if (d.expiresAt && d.expiresAt < today()) return badge('Expired', 'red');
-  return badge('Verified', 'green');
+function docBadge(d: ApplicationDocument) {
+  return d.status === 'verified' ? badge('Verified', 'green') : d.status === 'rejected' ? badge('Rejected', 'red') : badge('Unverified', 'neutral');
 }
 
-const page: Page = async ({ root, seller, refresh }) => {
-  const docs = await api.listDocuments();
-  const readOnly = seller.status === 'suspended';
-  const expiring = docs.filter((d) => d.status === 'approved' && d.expiresAt && (new Date(d.expiresAt).getTime() - Date.now()) / 86_400_000 <= 30);
+const page: Page = async ({ root, refresh }) => {
+  const view = await api.application.get();
+  const required = requiredDocuments(view.data);
+  const shown = ORDER.filter((k) => required.includes(k) || view.documents.some((d) => d.kind === k) || canUpload(view.status, k));
+  const uploadable = ORDER.filter((k) => canUpload(view.status, k));
+  const certStatus = view.organic.status;
 
   root.innerHTML = html`
-    ${pageHeader('Documents', 'Verification documents for your seller account and organic claims.', html`${readOnly ? '' : html`<button type="button" class="btn btn-primary" data-action="upload">${icon('upload', 16)} Upload document</button>`}`)}
-    ${seller.status === 'changes_requested' && seller.reviewMessage ? callout('warn', 'Reviewer requested changes', seller.reviewMessage) : ''}
-    ${expiring.map((d) => callout(d.expiresAt! < today() ? 'error' : 'warn', d.expiresAt! < today() ? `${d.certNumber ?? d.fileName} has expired` : `${d.certNumber ?? d.fileName} expires on ${fmtDate(d.expiresAt!)}`, 'Upload the renewed certificate. Organic labels are removed from linked listings when it expires.'))}
-    <p class="muted small">${icon('shield', 13)} Files are stored privately. Only you and authorised marketplace reviewers can open them. A document shows as verified only after a reviewer approves it.</p>
+    ${pageHeader('Documents', 'Verification documents for your seller account and organic claims.', uploadable.length ? html`<button type="button" class="btn btn-primary" data-action="upload">${icon('upload', 16)} Upload document</button>` : undefined)}
+    ${view.status === 'changes_requested' && (view.reviewerMessage || view.requestedItems.length)
+      ? callout('warn', 'A reviewer has asked for changes', html`${view.reviewerMessage ?? ''}${view.requestedItems.length ? html`<ul class="requested">${view.requestedItems.map((i) => html`<li>${i}</li>`)}</ul>` : ''}`, html`<a class="btn btn-sm" href="#/seller/register">Update application</a>`)
+      : ''}
+    ${view.status === 'pending' ? callout('info', 'Your application is under review', 'Documents are locked while it’s reviewed. You can still add additional documents if a reviewer asks for them.') : ''}
+    ${view.data.claimsOrganic
+      ? html`<section class="card cert-card">
+          <div class="card-head"><h2 class="card-title">Organic certification</h2>${badge(CERTIFICATION_STATUS_LABEL[certStatus], certStatus === 'verified' ? 'green' : certStatus === 'submitted' ? 'amber' : certStatus === 'not_submitted' ? 'neutral' : 'red')}</div>
+          <dl class="kv kv-compact">
+            <div><dt>Issued by</dt><dd>${view.data.certBody || '—'}</dd></div>
+            <div><dt>Certificate no.</dt><dd class="mono">${view.data.certNumber || '—'}</dd></div>
+            <div><dt>Issued</dt><dd>${view.data.certIssueDate ? fmtDate(view.data.certIssueDate) : '—'}</dd></div>
+            <div><dt>Expires</dt><dd>${view.data.certExpiryDate ? fmtDate(view.data.certExpiryDate) : '—'}</dd></div>
+          </dl>
+          <p class="muted small">${certStatus === 'verified' ? 'Verified by an authorised reviewer.' : 'Organic labels stay hidden on your listings until an authorised reviewer verifies this certificate. Uploading a certificate doesn’t verify it.'}</p>
+          ${view.organic.reviewerNote ? html`<p class="small ${certStatus === 'rejected' ? 'error-text' : ''}">Reviewer: ${view.organic.reviewerNote}</p>` : ''}
+        </section>`
+      : ''}
+    <p class="muted small">${icon('shield', 13)} Files are stored privately. Only you and authorised reviewers can open them. A document shows as verified only after a reviewer approves it.</p>
     <div class="doc-grid">
-      ${DOC_TYPES.map((t) => {
-        const list = docs.filter((d) => d.type === t.type);
+      ${shown.map((k) => {
+        const list = view.documents.filter((d) => d.kind === k);
+        const isRequired = required.includes(k);
         return html`<section class="card doc-card">
           <div class="card-head">
-            <h2 class="card-title">${t.label} ${t.required ? html`<span class="muted small">· required</span>` : ''}</h2>
-            ${readOnly ? '' : html`<button type="button" class="btn btn-sm" data-action="upload" data-type="${t.type}">${list.length ? 'Replace / add' : 'Upload'}</button>`}
+            <h2 class="card-title">${DOC_KIND_LABEL[k]} ${isRequired ? html`<span class="muted small">· required</span>` : ''}</h2>
+            ${canUpload(view.status, k) ? html`<button type="button" class="btn btn-sm" data-action="upload" data-kind="${k}">${list.length && !['additional', 'organic_evidence'].includes(k) ? 'Replace' : 'Upload'}</button>` : ''}
           </div>
-          <p class="muted small">${t.help}</p>
+          <p class="muted small">${KIND_HELP[k]}</p>
           ${list.length
-            ? html`<ul class="doc-list">${list.map(
-                (d) => html`<li>
-                  <div class="doc-file">${icon('documents', 18)}<div><strong>${d.fileName}</strong><span class="muted small block">${(d.sizeKb / 1024).toFixed(d.sizeKb > 1024 ? 1 : 2)} MB · uploaded ${fmtDate(d.uploadedAt)}</span></div></div>
-                  ${statusBadge(d)}
-                  ${d.type === 'organic_cert'
-                    ? html`<dl class="kv kv-compact">
-                        <div><dt>Certifying body</dt><dd>${d.certBody ?? '—'}</dd></div>
-                        <div><dt>Certificate no.</dt><dd class="mono">${d.certNumber ?? '—'}</dd></div>
-                        <div><dt>Scope</dt><dd>${d.certScope ?? '—'}</dd></div>
-                        <div><dt>Expires</dt><dd>${d.expiresAt ? fmtDate(d.expiresAt) : '—'}</dd></div>
-                      </dl>`
-                    : ''}
+            ? html`<ul class="doc-list">${list.map((d) => {
+                const url = api.application.fileUrl(d.id);
+                return html`<li>
+                  <div class="doc-file">${icon('documents', 18)}<div><strong>${url ? html`<a href="${url}" target="_blank" rel="noopener">${d.fileName}</a>` : d.fileName}</strong><span class="muted small block">${fileSize(d.sizeBytes)} · uploaded ${fmtDate(d.uploadedAt)}</span></div></div>
+                  ${docBadge(d)}
                   ${d.reviewerNote ? html`<p class="small error-text">Reviewer: ${d.reviewerNote}</p>` : ''}
-                </li>`,
-              )}</ul>`
-            : html`<p class="muted">${t.required ? 'Not uploaded yet.' : 'Not uploaded.'}</p>`}
+                </li>`;
+              })}</ul>`
+            : html`<p class="muted">${isRequired ? 'Not uploaded yet.' : 'Not uploaded.'}</p>`}
         </section>`;
       })}
     </div>`.value;
 
-  on(root, 'click', '[data-action=upload]', (_e, el) => openUpload((el.dataset.type as DocumentType | undefined) ?? 'organic_cert', refresh));
+  on(root, 'click', '[data-action=upload]', (_e, el) => openUpload(view, uploadable, (el.dataset.kind as ApplicationDocKind | undefined) ?? uploadable[0]!, refresh));
 };
 
-function openUpload(initial: DocumentType, refresh: () => void) {
+function openUpload(view: ApplicationView, kinds: ApplicationDocKind[], initial: ApplicationDocKind, refresh: () => void) {
+  const today = new Date().toISOString().slice(0, 10);
   modal({
     title: 'Upload document',
     body: html`<form class="stack" novalidate>
-      ${select({ name: 'type', label: 'Document type', value: initial, options: DOC_TYPES.map((t) => [t.type, t.label] as [string, string]) })}
+      ${select({ name: 'kind', label: 'Document type', value: initial, options: kinds.map((k) => [k, DOC_KIND_LABEL[k]] as [string, string]) })}
       <div class="field">
         <label for="f_file">File<span class="req" aria-hidden="true"> *</span></label>
         <input type="file" id="f_file" name="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required aria-describedby="f_file_hint f_file_err" />
-        <p class="hint" id="f_file_hint">${UPLOAD_RULES.label}.</p>
+        <p class="hint" id="f_file_hint">PDF, JPG or PNG up to 5 MB (logos: PNG or JPG up to 2 MB).</p>
         <p class="field-error" id="f_file_err" hidden></p>
       </div>
       <div id="cert-fields" ${initial === 'organic_cert' ? '' : 'hidden'}>
-        ${field({ name: 'certBody', label: 'Certifying body', required: true, placeholder: 'Name of the accredited certification body' })}
-        ${field({ name: 'certNumber', label: 'Certificate number', required: true })}
-        ${field({ name: 'certScope', label: 'Scope', placeholder: 'Farms and product categories covered' })}
-        ${field({ name: 'expiresAt', label: 'Expiry date', type: 'date', required: true, attrs: `min="${today()}"` })}
+        ${field({ name: 'certBody', label: 'Certification body', value: view.data.certBody, required: true })}
+        ${field({ name: 'certNumber', label: 'Certificate number', value: view.data.certNumber, hint: 'If applicable.' })}
+        <div class="row-2">
+          ${field({ name: 'certIssueDate', label: 'Issue date', type: 'date', value: view.data.certIssueDate, attrs: `max="${today}"` })}
+          ${field({ name: 'certExpiryDate', label: 'Expiry date', type: 'date', value: view.data.certExpiryDate, attrs: `min="${today}"` })}
+        </div>
       </div>
-      <p class="muted small">After upload the document is reviewed by the marketplace team. It won’t be shown as verified, or unlock organic labels, until approved.</p>
+      <p class="muted small">Uploaded documents start as unverified. They don’t verify your account or unlock organic labels until an authorised reviewer approves them.</p>
       <p class="form-error" role="alert" hidden></p>
       <div class="modal-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Upload</button></div>
     </form>`,
     onMount(el, close) {
       const form = el.querySelector('form')!;
       const certFields = el.querySelector('#cert-fields') as HTMLElement;
-      el.querySelector('#f_type')!.addEventListener('change', (e) => (certFields.hidden = (e.target as HTMLSelectElement).value !== 'organic_cert'));
+      el.querySelector('#f_kind')!.addEventListener('change', (e) => (certFields.hidden = (e.target as HTMLSelectElement).value !== 'organic_cert'));
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = formValues(form);
+        const kind = f.kind as ApplicationDocKind;
         const file = (form.querySelector('#f_file') as HTMLInputElement).files?.[0];
         const errBox = form.querySelector('.form-error') as HTMLElement;
         errBox.hidden = true;
         if (!file) return showFieldErrors(form, { file: 'Choose a file to upload.' });
-        const fileErr = validateUpload(file);
-        if (fileErr) return showFieldErrors(form, { file: fileErr });
-        const type = f.type as DocumentType;
+        const isLogo = kind === 'logo';
+        if (!(isLogo ? UPLOAD_LIMITS.logoTypes : UPLOAD_LIMITS.documentTypes).includes(file.type)) return showFieldErrors(form, { file: isLogo ? 'Logos must be PNG or JPG images.' : 'Upload a PDF, JPG or PNG file.' });
+        const max = isLogo ? UPLOAD_LIMITS.logoMaxBytes : UPLOAD_LIMITS.maxBytes;
+        if (file.size > max) return showFieldErrors(form, { file: `Files must be ${max / 1048576} MB or smaller.` });
+        if (kind === 'organic_cert' && (f.certBody ?? '').trim().length < 3) return showFieldErrors(form, { certBody: 'Enter the certification body.' });
         const btn = form.querySelector('[type=submit]') as HTMLButtonElement;
         btn.disabled = true;
         try {
-          await api.uploadDocument({
-            type,
-            fileName: file.name,
-            mimeType: file.type,
-            sizeKb: Math.max(1, Math.round(file.size / 1024)),
-            ...(type === 'organic_cert' ? { certBody: f.certBody ?? '', certNumber: f.certNumber ?? '', certScope: f.certScope ?? '', expiresAt: f.expiresAt ?? '' } : {}),
-          });
-          toast('Uploaded. It will be reviewed shortly.');
+          const cert = kind === 'organic_cert' ? { certBody: f.certBody ?? '', certNumber: f.certNumber ?? '', certIssueDate: f.certIssueDate ?? '', certExpiryDate: f.certExpiryDate ?? '' } : undefined;
+          await api.application.uploadDocument(kind, file, cert);
+          toast('Uploaded. It stays unverified until a reviewer checks it.');
           close();
           refresh();
         } catch (ex) {

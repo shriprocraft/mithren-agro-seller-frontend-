@@ -2,7 +2,7 @@
 // These mirror the scope doc's acceptance criteria (§13) for the frontend phase.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import * as api from '../dist/api.js';
+import * as api from '../dist/api-core.js';
 import { SELLER_A, SELLER_B, round2 } from '../dist/data/seed.js';
 import { validateInventoryCsv, toCsv, parseCsv, canSellerTransition, validateUpload, GSTIN_RE, PAN_RE } from '../dist/lib.js';
 
@@ -45,7 +45,8 @@ test('CSV import only touches the signed-in seller’s SKUs', async () => {
 });
 
 test('Unapproved sellers cannot submit listings or act on orders', async () => {
-  await api._demoSetSellerStatus('under_review');
+  // Status is server-controlled; tests set it through the trusted hook, as the review workflow does.
+  api._internal.findSeller(SELLER_A).status = 'pending';
   const p = await api.getProduct('p_microgreens');
   await assert.rejects(api.saveProduct({ ...p, description: 'Crunchy sunflower microgreens, harvested at 9 days.', origin: 'Pune', storage: 'Refrigerate' }, true), (e) => e.status === 403);
   // Drafts are still allowed

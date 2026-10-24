@@ -66,9 +66,8 @@ const SETTLE_TONE: Record<SettlementState, Tone> = { pending: 'neutral', eligibl
 export const settlementBadge = (s: SettlementState) => badge(SETTLEMENT_LABEL[s], SETTLE_TONE[s]);
 
 const SELLER_TONE: Record<SellerStatus, Tone> = {
-  not_registered: 'neutral',
-  submitted: 'blue',
-  under_review: 'amber',
+  incomplete: 'neutral',
+  pending: 'amber',
   changes_requested: 'amber',
   approved: 'green',
   rejected: 'red',

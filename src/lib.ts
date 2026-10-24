@@ -1,7 +1,7 @@
 // Pure helpers: formatting, validation, CSV and order-flow rules.
 // Kept free of DOM access so they can be unit-tested in Node.
 
-import type { OrderStatus, SettlementState, ProductStatus, SellerStatus, Unit } from './types.js';
+import type { OrderStatus, SettlementState, ProductStatus, Unit } from './types.js';
 
 // ---------- formatting ----------
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2, minimumFractionDigits: 0 });
@@ -32,6 +32,8 @@ export function timeAgo(iso: string, now = Date.now()) {
   const d = Math.round(h / 24);
   return d < 30 ? `${d} d ago` : fmtDate(iso);
 }
+
+export const fileSize = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`);
 
 export function slugify(s: string) {
   return s
@@ -73,15 +75,7 @@ export const SETTLEMENT_LABEL: Record<SettlementState, string> = {
   reversed: 'Reversed',
 };
 
-export const SELLER_STATUS_LABEL: Record<SellerStatus, string> = {
-  not_registered: 'Not registered',
-  submitted: 'Application submitted',
-  under_review: 'Under review',
-  changes_requested: 'Changes requested',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  suspended: 'Suspended',
-};
+export { APPLICATION_STATUS_LABEL as SELLER_STATUS_LABEL } from './application.js';
 
 export const UNIT_LABEL: Record<Unit, string> = { g: 'grams', kg: 'kilograms', bunch: 'bunch', piece: 'piece', box: 'box' };
 

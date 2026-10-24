@@ -1,82 +1,118 @@
-# Mithren Agro — Seller Portal (frontend prototype)
+# Mithren Agro — Seller Portal
 
-A working frontend for the Seller/Vendor Portal described in [`docs/ORGANIC_MARKETPLACE_SELLER_PORTAL_SCOPE.md`](docs/ORGANIC_MARKETPLACE_SELLER_PORTAL_SCOPE.md). It covers all 12 `/seller` routes, uses **clearly labelled fictional demo data**, and runs on a mock API that behaves like the production backend should.
+The Seller/Vendor Portal described in [`docs/ORGANIC_MARKETPLACE_SELLER_PORTAL_SCOPE.md`](docs/ORGANIC_MARKETPLACE_SELLER_PORTAL_SCOPE.md): a TypeScript frontend plus a zero-dependency Node backend (built-in `node:sqlite`, `node:crypto`, `node:http`).
 
-> **Phase note:** This is the frontend-only phase. Production requires a real backend, database, auth and integrations (scope doc §15). That scope hasn't changed.
+- **Server mode** (`npm start`): real accounts, sessions, SQLite persistence, private file storage, encrypted bank details, and server-enforced statuses and permissions.
+- **Preview mode** (any static host, such as the hosted preview link): the same UI and rules run against an in-browser stand-in. Data stays in that browser, uploaded files aren't kept, and verification codes are shown on screen.
 
 ## Run it
 
-Requires Node 18+ and TypeScript (`npm i -g typescript` if `tsc` is missing). There are no runtime dependencies.
+Requires Node 22.13+ and TypeScript (`npm i -g typescript` if `tsc` is missing). There are no npm dependencies.
 
 ```bash
-npm run build                    # tsc → dist/
-npx http-server . -p 5173 -c-1   # or any static server
-# open http://localhost:5173/#/seller
+npm run build      # tsc → dist/
+npm start          # http://127.0.0.1:8787  (data in ./.data)
 ```
 
-Routes use hash URLs (`#/seller/orders`), so the prototype works on any static host without server rewrites. Swap to history routing when a real server exists.
+Server configuration (environment variables, see `server/index.mjs`):
+
+| Variable | Purpose |
+|---|---|
+| `DATA_ENCRYPTION_KEY` | Base64 32-byte key for bank-account encryption and code hashing. **Required in production.** Development generates `.data/dev-encryption.key`. |
+| `DATA_DIR` | Database and private uploads (default `./.data`). Keep it out of any web root. |
+| `COOKIE_SECURE` | `true` behind HTTPS (default on when `NODE_ENV=production`). |
+| `ADMIN_API_TOKENS` | `token:Reviewer Name;…` for the Super Admin Portal. Each token must be at least 32 characters. |
+| `CODE_DELIVERY` | `console` prints verification codes to the server log (development only; refused in production). |
+| `DEMO_TOOLS` | `1` enables the checkout and delivery simulators (refused in production). |
+
+Static preview without the server: `npm run serve:static`, then open `http://localhost:5173/#/seller`. The preview's demo seller is `ananya@greenvalley.example` with password `preview-demo-2026`.
+
+## Seller registration, KYC and approval (scope §3.1–3.2)
+
+1. **Account verification.** Sign up (seller role only), then verify email and mobile with 6-digit codes. Codes are hashed, expire after 10 minutes, allow 5 attempts, and have a 30-second resend cooldown and an hourly cap.
+2. **Shop and owner details**, including an optional logo (PNG/JPG, 2 MB).
+3. **Address and service area.** India only; state is chosen from a list; PIN codes are validated.
+4. **Product categories and pickup location.**
+5. **Business and KYC.** Conditional rules in `src/application.ts` (`kycRules`):
+   - PAN is required unless the seller is an individual farmer who isn't GST-registered.
+   - GSTIN is required only when the seller is GST-registered, and must match the PAN.
+   - A registration number and certificate are required for partnerships, LLPs, companies, FPOs and cooperatives.
+   - An address proof is always required.
+6. **Bank and payout.** Sent only in the authenticated request body, encrypted at rest (AES-256-GCM, bound to the application row) and returned masked (last 4 digits). A cancelled cheque or statement is required.
+7. **Organic certification.** Optional. If claimed: issuing body, certificate number, dates and certificate upload, plus optional evidence. The status is *Not submitted → Submitted for review → Verified / Rejected*, and *Expired* is derived from the expiry date. Uploading never verifies anything.
+8. **Review and submit.** A declaration is required. Submission generates a reference ID (`MA-YYYY-NNNNNN`), records timestamps, and uses an idempotency key so duplicate submissions are impossible.
+
+Progress is saved server-side on every step ("Save draft" and "Next"), so sellers can sign out and resume.
+
+**Statuses** are `incomplete`, `pending`, `changes_requested`, `approved`, `rejected` and `suspended`. They form the single seller status model across the portal, and only the server changes them:
+
+- seller submit: `incomplete` → `pending`, and `changes_requested` → `pending`;
+- Super Admin: `pending` → `approved` / `rejected` / `changes_requested`, `approved` → `suspended`, and `suspended` → (reinstate) the status held before suspension.
+
+The `/seller` status page shows only what the backend returns: reference ID, dates, status, reviewer message, requested corrections, missing documents and the next action.
+
+**Permissions** are enforced on the server for every request:
+- Unapproved sellers can save drafts but can't publish listings, act on orders or request payouts.
+- Suspended sellers are read-only.
+- Sellers can never change their own status.
+- Internal functions are not reachable: `/api/rpc` exposes only the allowlist in `src/rpc.ts`.
+
+## Super Admin Portal integration
+
+The review screens belong to the Super Admin Portal. This backend exposes the API it calls (Bearer token from `ADMIN_API_TOKENS`; the reviewer identity comes from the token, never from the request):
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/admin/applications?status=pending` | Review queue |
+| `GET /api/admin/applications/:id` | Full application, documents (masked bank details) and audit trail |
+| `GET /api/admin/applications/:id/bank` | Full account number for payout processing (audited) |
+| `POST /api/admin/applications/:id/decision` | `{ action: approve \| reject \| request_changes \| suspend \| reinstate, message, requestedItems[] }`. A message is required for reject, request changes and suspend. |
+| `POST /api/admin/documents/:id/review` | `{ decision: verified \| rejected, note }`. Verifying an `organic_cert` verifies the organic certification. |
+| `GET /api/admin/documents/:id/file` | View an uploaded file (audited) |
 
 ## Tests
 
 ```bash
-npm test                                    # 16 business-rule tests (Node test runner)
-node tests/e2e.cjs http://localhost:5173/   # 16 end-to-end workflow steps (needs Playwright + Chromium)
+npm test                                      # 36 tests: business rules + backend integration (Node test runner)
+node tests/e2e-server.cjs                     # 17-step browser test against the real server
+npm run serve:static & node tests/e2e.cjs     # 17-step browser test of the preview
 ```
 
-The unit tests cover scope §13: seller A can't read or edit seller B's data, unapproved sellers can't publish or fulfil, ledger and settlement totals reconcile, refunds and rejections restore stock with audit entries, CSV validation works, uploads are validated and non-editable fields are ignored.
-
-## What's included
-
-| Route | Highlights |
-|---|---|
-| `/seller` | Entry point. Approved sellers are redirected to the dashboard; others see application status, progress and reviewer messages |
-| `/seller/register` | 5-step application: email/phone OTP (demo code `123456`), shop and service area, PAN/GSTIN (cross-checked), bank details (masked), KYC and organic-certificate uploads with type/size checks, consent |
-| `/seller/dashboard` | 8 metrics with definitions (ⓘ), 7/30/90-day range, comparison with the previous period, SVG sales/orders chart, alerts that need action, recent orders |
-| `/seller/products` (+ `/new`, `/:id`) | Status tabs (draft, pending, approved, rejected, inactive, archived), search, availability toggle, archive, CSV export. The form covers variants and pack sizes, grams/kg/bunch/piece/box, MRP, min/max quantity, seasonality, harvest/packed dates, storage, and organic claims tied to a verified, unexpired certificate. Changes to moderated fields trigger re-approval |
-| `/seller/orders` (+ `/:id`) | Own sub-orders only. Accept/reject → packed → ready for pickup; in transit and delivered come from the delivery partner. Reasons are required for reject/cancel; items can be marked unavailable; timestamped history; the address is shown only while the order is being fulfilled; payment status is read-only |
-| `/seller/inventory` | Audited adjustments (reason, note, actor), low/out-of-stock filters, CSV import with a line-by-line error report |
-| `/seller/earnings` | Gross → discounts → commission → delivery adjustments → refunds → holds → net, with a reconciliation check, read-only commission rates and the ledger |
-| `/seller/settlements` | Pending, eligible, processing, paid, failed and reversed. A settlement shows as paid only when a transaction reference exists. Payout requests (when enabled) are capped by a server-computed balance |
-| `/seller/reviews` | Rating distribution, performance, replies, reporting a review to moderation |
-| `/seller/store-settings` | Profile/banner preview, pickup and service areas, hours and holidays, fulfilment, notification matrix, staff invites |
-| `/seller/documents` | KYC and certificate status, expiry warnings, private-storage notice |
-
-**Prototype controls** (flask icon in the top bar) stand in for systems outside the Seller Portal:
-
-- Change the account status (Admin review), which includes switching to "new applicant" to try registration.
-- Simulate a customer order.
-- Simulate network failures.
-- Run the seller-isolation check.
-- Reset the demo data.
+`tests/server.test.mjs` covers the acceptance criteria end to end over HTTP:
+- registration and verification, duplicate accounts, and sign-out/sign-in persistence;
+- conditional tax validation and upload content sniffing;
+- reference IDs and idempotent submission;
+- pending sellers blocked from publishing, and sellers unable to change their own status;
+- changes requested and resubmission, suspension and reinstatement;
+- organic certificates staying unverified until reviewed;
+- bank numbers absent from responses, logs and the database file;
+- cross-seller isolation, CSRF protection, rate limits, and no static file leaks.
 
 ## Architecture
 
 ```
 src/
-  types.ts        domain model (seller, product, sub-order, ledger, settlement, …)
-  api.ts          mock API: async, seller-scoped, whitelisted writes, 404 for others' records
-  data/seed.ts    deterministic demo data + platform-side ledger calculation
-  lib.ts          pure helpers: formatting, validation regexes, CSV, order-flow rules
-  router.ts       hash router
-  main.ts         shell: nav, notifications, onboarding gate, prototype controls
-  ui/             escaped html templating, components, modal/toast/tooltip, SVG charts
-  pages/          one module per route (lazy-loaded)
+  application.ts          application model, shared validation rules, review state machine
+  application-service.ts  registration/application workflow over a storage interface
+  api-core.ts             business rules (catalogue, orders, earnings…) — runs on the server
+  api.ts                  what pages call: HTTPS to the server, or the in-browser stand-in
+  local-backend.ts        in-browser stand-in for the static preview
+  rpc.ts                  allowlist of business functions callable from the browser
+  pages/, ui/, main.ts    frontend (hash router, escaped templates, no framework)
+server/
+  index.mjs               configuration and startup
+  app.mjs                 routes, sessions, CSRF, uploads, admin API, static files, security headers
+  store.mjs               SQLite storage, workspace persistence, field encryption
+  db.mjs                  schema and migrations
+  security.mjs            scrypt, AES-256-GCM, token hashing
 ```
-
-When the backend exists, `api.ts` is the only file that needs replacing. Every page already handles loading, error, empty, 403/404/409/422 and field-level validation responses.
 
 ## Constraints and limitations
 
-- **No npm packages.** The build environment couldn't reach the npm registry, so the prototype is dependency-free TypeScript compiled with `tsc`. Moving to React/Vite later is straightforward because the API layer and domain logic are framework-independent.
-- **Demo state lives in `localStorage`**, for demo continuity only. It isn't a database and bank or identity numbers are never stored there. Reset it from Prototype controls.
-- **Not implemented, or simulated only:**
-  - real authentication and sessions;
-  - server-side enforcement (mirrored in the mock, but the client isn't a security boundary);
-  - file storage (only uploaded file metadata is kept);
-  - image uploads (emoji placeholders);
-  - email/SMS delivery (in-app notifications only; providers must be configured);
-  - payout provider integration;
-  - staff permission enforcement;
-  - support tickets.
-- **Legal and tax fields** (GSTIN, PAN, FSSAI) are format-checked only. The operator must confirm what applies; nothing here claims compliance.
-- **Search indexing:** private routes are marked `noindex` (meta tag and `robots.txt`).
+- **No email/SMS provider is integrated.** Codes go to the server console in development. Production refuses to start until a provider is wired into `codeDelivery()` in `server/index.mjs`.
+- **No password reset or contact-change flow yet.** Changing email, phone or bank details after approval goes through support.
+- **The business workspace (products, orders, ledger) is stored as one JSON document** in SQLite and written in the same transaction as each change. That's fine at this scale; move it to relational tables before high volume.
+- **Single process.** Rate limits and the workspace are in memory per process, so run one instance (or move both to shared storage) until then.
+- **Payouts are not automated**; no payout provider is configured.
+- **Legal and tax rules** (`kycRules`) are an operator-reviewable default. They are not legal advice and don't establish compliance.
+- `node:sqlite` is marked experimental in Node 22; the scripts silence that warning.

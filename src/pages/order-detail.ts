@@ -183,7 +183,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
 };
 
 function actionsCard(o: SubOrder, canAct: boolean, forward: OrderStatus[], negative: OrderStatus[]): Raw {
-  const sim = o.status === 'ready_for_pickup' || o.status === 'in_transit';
+  const sim = api.DEMO_TOOLS && (o.status === 'ready_for_pickup' || o.status === 'in_transit');
   if (!forward.length && !negative.length && !sim) return html``;
   return html`<section class="card card-accent">
     <h2 class="card-title">Next step</h2>

@@ -2,6 +2,7 @@
 // so the prototype works on any static host without server rewrites.
 
 import type { Seller } from './types.js';
+import type { AccountView } from './application.js';
 
 export interface PageContext {
   /** Fresh container for this render; bind listeners here. */
@@ -9,6 +10,8 @@ export interface PageContext {
   params: Record<string, string>;
   query: URLSearchParams;
   seller: Seller;
+  /** The signed-in account, or null on public pages (sign-in, registration). */
+  account: AccountView | null;
   /** Re-run the current route (e.g. after a mutation). */
   refresh: () => void;
   /** Returns false if the user has navigated away since this render began. */
