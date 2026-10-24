@@ -1,7 +1,7 @@
 /* Seller Portal — design tokens and components. */
 :root {
-  --bg: #f9faf7; /* reference page ground */
-  --bg-end: #f5f5f0; /* reference right-edge shade */
+  --bg: #ffffff;
+  --bg-end: #ffffff;
   --surface: #ffffff;
   --surface-2: #f1efe8;
   --border: #e3e0d6;
@@ -2430,7 +2430,7 @@ input[type='radio'] {
   --topbar-bg: rgb(27 32 25 / 0.62);
 }
 
-/* Page ground matched to the reference: #f9faf7 shading to #f5f5f0 at the right edge.
+/* Page ground is plain white in light mode.
    The radial washes are transparent in light mode and only tint the dark theme. */
 body {
   background-color: var(--bg);
