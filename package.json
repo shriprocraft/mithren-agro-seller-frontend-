@@ -1,0 +1,14 @@
+{
+  "name": "organic-seller-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Seller/Vendor Portal frontend prototype for the Organic Fruits & Vegetables multi-vendor marketplace (mock data phase).",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "watch": "tsc -p . --watch",
+    "serve": "http-server . -p 5173 -c-1",
+    "test": "tsc -p . && node --test tests/*.test.mjs"
+  }
+}
