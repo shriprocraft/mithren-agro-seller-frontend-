@@ -67,9 +67,9 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean) {
       ${bare
         ? ''
         : html`<aside class="sidebar" id="sidebar" aria-label="Seller navigation">
-            <div class="brand">
-              <span class="brand-mark" aria-hidden="true">${icon('leaf', 20)}</span>
-              <div><strong>Organic Market</strong><span>Seller Portal</span></div>
+            <div class="brand brand-logo">
+              <img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="168" height="78" />
+              <span>Seller Portal</span>
             </div>
             <nav>
               ${NAV.map(
@@ -91,7 +91,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean) {
           <div class="scrim" data-action="close-nav" hidden></div>`}
       <div class="main-col">
         <header class="topbar">
-          ${bare ? html`<div class="brand brand-inline"><span class="brand-mark" aria-hidden="true">${icon('leaf', 20)}</span><div><strong>Organic Market</strong><span>Seller Portal</span></div></div>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
+          ${bare ? html`<div class="brand brand-inline"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="40" /><span>Seller Portal</span></div>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
           <div class="topbar-shop">
             <span class="shop-avatar" style="background:${seller.brandColor}" aria-hidden="true">${seller.shopName.slice(0, 1)}</span>
             <div class="shop-meta"><strong>${seller.status === 'not_registered' ? 'New seller' : seller.shopName}</strong>${sellerBadge(seller.status)}</div>

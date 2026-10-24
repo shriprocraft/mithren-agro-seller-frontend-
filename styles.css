@@ -266,6 +266,31 @@ code {
 .brand-inline {
   padding: 0;
 }
+.brand img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+.brand-logo {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0 8px 10px;
+}
+.brand-logo span,
+.brand-inline span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.brand-logo span {
+  padding-left: 4px;
+}
+.brand-inline img {
+  width: 86px;
+}
 .nav-group {
   margin-bottom: 8px;
 }
