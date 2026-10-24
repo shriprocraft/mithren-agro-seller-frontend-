@@ -1,6 +1,7 @@
 /* Seller Portal — design tokens and components. */
 :root {
-  --bg: #f6f5f0;
+  --bg: #f9faf7; /* reference page ground */
+  --bg-end: #f5f5f0; /* reference right-edge shade */
   --surface: #ffffff;
   --surface-2: #f1efe8;
   --border: #e3e0d6;
@@ -37,6 +38,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --bg: #131712;
+    --bg-end: #131712;
     --surface: #1b2019;
     --surface-2: #232a21;
     --border: #2f372c;
@@ -66,6 +68,7 @@
 }
 :root[data-theme='dark'] {
   --bg: #131712;
+  --bg-end: #131712;
   --surface: #1b2019;
   --surface-2: #232a21;
   --border: #2f372c;
@@ -2391,9 +2394,10 @@ input[type='radio'] {
   --glass-shadow-hover: 0 2px 4px rgb(31 42 31 / 0.05), 0 14px 32px -8px rgb(31 42 31 / 0.16);
   --glass-blur: blur(18px) saturate(160%);
   --glass-blur-soft: blur(10px) saturate(140%);
-  --glass-wash-1: rgb(47 125 74 / 0.14);
-  --glass-wash-2: rgb(196 122 29 / 0.09);
-  --glass-wash-3: rgb(93 187 122 / 0.12);
+  --glass-wash-1: transparent;
+  --glass-wash-2: transparent;
+  --glass-wash-3: transparent;
+  --topbar-bg: rgb(251 249 245 / 0.92); /* reference header #fbf9f5 */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -2408,6 +2412,7 @@ input[type='radio'] {
     --glass-wash-1: rgb(93 187 122 / 0.08);
     --glass-wash-2: rgb(240 180 90 / 0.04);
     --glass-wash-3: rgb(93 187 122 / 0.05);
+    --topbar-bg: rgb(27 32 25 / 0.62);
   }
 }
 :root[data-theme='dark'] {
@@ -2422,15 +2427,18 @@ input[type='radio'] {
   --glass-wash-1: rgb(93 187 122 / 0.08);
   --glass-wash-2: rgb(240 180 90 / 0.04);
   --glass-wash-3: rgb(93 187 122 / 0.05);
+  --topbar-bg: rgb(27 32 25 / 0.62);
 }
 
-/* Soft backdrop from the existing palette, so the frosted surfaces have something to refract. */
+/* Page ground matched to the reference: #f9faf7 shading to #f5f5f0 at the right edge.
+   The radial washes are transparent in light mode and only tint the dark theme. */
 body {
   background-color: var(--bg);
   background-image:
     radial-gradient(60vw 50vh at 8% 0%, var(--glass-wash-1), transparent 70%),
     radial-gradient(50vw 45vh at 100% 35%, var(--glass-wash-2), transparent 70%),
-    radial-gradient(55vw 50vh at 30% 100%, var(--glass-wash-3), transparent 70%);
+    radial-gradient(55vw 50vh at 30% 100%, var(--glass-wash-3), transparent 70%),
+    linear-gradient(90deg, transparent 40%, var(--bg-end) 100%);
   background-attachment: fixed;
 }
 
@@ -2492,7 +2500,7 @@ body {
 
 /* Chrome: navbar and sidebar */
 .topbar {
-  background: var(--glass-bg);
+  background: var(--topbar-bg);
   border-bottom-color: var(--glass-border);
   box-shadow: inset 0 -1px 0 var(--glass-edge), 0 4px 20px -12px rgb(31 42 31 / 0.18);
   -webkit-backdrop-filter: var(--glass-blur);
