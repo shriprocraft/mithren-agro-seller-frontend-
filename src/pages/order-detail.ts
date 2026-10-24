@@ -1,7 +1,7 @@
 // /seller/orders/:id — fulfil a single sub-order.
 
 import type { Page } from '../router.js';
-import { html, raw, on, type Raw } from '../ui/dom.js';
+import { html, raw, on, EMBEDDED, type Raw } from '../ui/dom.js';
 import { pageHeader, orderBadge, emptyState, icon, callout, badge } from '../ui/components.js';
 import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
@@ -42,7 +42,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
   const minsLeft = Math.round((deadline - Date.now()) / 60_000);
 
   root.innerHTML = html`
-    ${pageHeader(`Order ${o.id}`, `Placed ${fmtDate(o.placedAt, true)} · delivery slot ${o.deliverySlot}`, html`${orderBadge(o.status)}<button type="button" class="btn btn-sm" data-action="print">Print packing slip</button>`, { href: '/seller/orders', label: 'Orders' })}
+    ${pageHeader(`Order ${o.id}`, `Placed ${fmtDate(o.placedAt, true)} · delivery slot ${o.deliverySlot}`, html`${orderBadge(o.status)}${EMBEDDED ? '' : html`<button type="button" class="btn btn-sm" data-action="print">Print packing slip</button>`}`, { href: '/seller/orders', label: 'Orders' })}
     ${o.status === 'awaiting_confirmation'
       ? callout(minsLeft > 0 ? 'warn' : 'error', minsLeft > 0 ? `Confirm within ${minsLeft} min` : 'Confirmation window has passed', minsLeft > 0 ? 'Unconfirmed orders may be auto-cancelled by the platform and count towards your cancellation rate.' : 'The platform may auto-cancel this order. Accept now if you can still fulfil it.')
       : ''}

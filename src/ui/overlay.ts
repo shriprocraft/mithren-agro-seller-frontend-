@@ -1,6 +1,6 @@
 // Toasts, modal dialogs and tooltips.
 
-import { html, raw, type Raw, $, $$ } from './dom.js';
+import { html, raw, type Raw, $, $$, EMBEDDED, download } from './dom.js';
 import { icon } from './components.js';
 
 export function toast(message: string, tone: 'success' | 'error' | 'info' = 'success') {
@@ -128,6 +128,41 @@ export function confirmDialog(o: { title: string; message: string; confirmLabel:
       }
     });
     observer.observe(document.body, { childList: true });
+  });
+}
+
+/** Save a file, or, where downloads are blocked, show the content to copy. */
+export function saveFile(filename: string, content: string) {
+  if (!EMBEDDED) {
+    download(filename, content);
+    toast(`Downloaded ${filename}`);
+    return;
+  }
+  modal({
+    title: `Export ${filename}`,
+    wide: true,
+    body: html`<div class="stack">
+      <p class="muted">Downloads aren’t available in this preview. Copy the CSV below and paste it into a spreadsheet or a .csv file.</p>
+      <label class="sr-only" for="export-text">CSV content</label>
+      <textarea id="export-text" rows="12" readonly class="mono">${content}</textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close>Close</button>
+        <button type="button" class="btn btn-primary" data-copy autofocus>Copy CSV</button>
+      </div>
+    </div>`,
+    onMount(el) {
+      const ta = el.querySelector('#export-text') as HTMLTextAreaElement;
+      el.querySelector('[data-copy]')!.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(content);
+          toast('CSV copied to clipboard');
+        } catch {
+          ta.focus();
+          ta.select();
+          toast('Text selected — press Ctrl+C or ⌘C to copy', 'info');
+        }
+      });
+    },
   });
 }
 

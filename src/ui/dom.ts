@@ -61,6 +61,15 @@ export function formValues(form: HTMLFormElement): Record<string, string> {
   return out;
 }
 
+/** True when running inside an embedding frame (e.g. a hosted preview), where downloads and print are blocked. */
+export const EMBEDDED = (() => {
+  try {
+    return typeof window !== 'undefined' && window.self !== window.top;
+  } catch {
+    return true;
+  }
+})();
+
 export function download(filename: string, content: string, mime = 'text/csv') {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);

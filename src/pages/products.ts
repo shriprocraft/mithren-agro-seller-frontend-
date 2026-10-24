@@ -2,9 +2,9 @@
 
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
-import { html, on, download } from '../ui/dom.js';
+import { html, on } from '../ui/dom.js';
 import { pageHeader, productBadge, icon, emptyState, tabs, badge, mockNote } from '../ui/components.js';
-import { toast, confirmDialog } from '../ui/overlay.js';
+import { toast, confirmDialog, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money, timeAgo, toCsv } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
@@ -111,8 +111,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   on(root, 'click', '[data-action=export]', () => {
     const rows: (string | number)[][] = [['product', 'category', 'status', 'variant', 'sku', 'price', 'mrp', 'stock']];
     for (const p of all) for (const v of p.variants) rows.push([p.name, p.category, p.archived ? 'archived' : p.status, v.label, v.sku, v.price, v.mrp ?? '', v.stock]);
-    download(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
-    toast('Exported products to CSV');
+    saveFile(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
   });
 };
 

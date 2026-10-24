@@ -1,9 +1,9 @@
 // /seller/inventory — stock levels, audited adjustments and CSV bulk updates.
 
 import type { Page } from '../router.js';
-import { html, on, $, download } from '../ui/dom.js';
+import { html, on, $ } from '../ui/dom.js';
 import { pageHeader, emptyState, tabs, icon, badge, mockNote, field, select, textarea, showFieldErrors } from '../ui/components.js';
-import { toast, modal } from '../ui/overlay.js';
+import { toast, modal, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { fmtDate, toCsv, validateInventoryCsv, money } from '../lib.js';
 import type { AdjustmentReason, Product, Variant } from '../types.js';
@@ -98,8 +98,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
 
   on(root, 'click', '[data-action=export]', () => {
     const csv = toCsv([['sku', 'product', 'variant', 'stock', 'price'], ...rows.map(({ p, v }) => [v.sku, p.name, v.label, v.stock, v.price])]);
-    download(`inventory-${new Date().toISOString().slice(0, 10)}.csv`, csv);
-    toast('Exported inventory to CSV');
+    saveFile(`inventory-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   });
 
   on(root, 'click', '[data-action=import]', () => openImport(rows.map((r) => r.v), refresh));
@@ -189,7 +188,7 @@ function openImport(variants: Variant[], refresh: () => void) {
     onMount(el, close) {
       let valid: { sku: string; stock: number; price?: number }[] = [];
       el.querySelector('[data-action=template]')!.addEventListener('click', () => {
-        download('inventory-template.csv', toCsv([['sku', 'stock', 'price'], ...variants.slice(0, 3).map((v) => [v.sku, v.stock, v.price])]));
+        saveFile('inventory-template.csv', toCsv([['sku', 'stock', 'price'], ...variants.slice(0, 3).map((v) => [v.sku, v.stock, v.price])]));
       });
       el.querySelector('#csv-file')!.addEventListener('change', async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];

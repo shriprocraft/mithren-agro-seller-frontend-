@@ -2,10 +2,10 @@
 
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
-import { html, on, download } from '../ui/dom.js';
+import { html, on } from '../ui/dom.js';
 import { pageHeader, settlementBadge, emptyState, icon, mockNote, callout } from '../ui/components.js';
 import { breakdownBars } from '../ui/charts.js';
-import { toast } from '../ui/overlay.js';
+import { saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money2, fmtDate, toCsv } from '../lib.js';
 import { round2 } from '../data/seed.js';
@@ -112,8 +112,7 @@ const page: Page = async ({ root, query, refresh }) => {
   on(root, 'click', '[data-action=export]', () => {
     const rows: (string | number)[][] = [['date', 'sub_order', 'gross', 'discount', 'commission_rate_pct', 'commission', 'delivery_adjustment', 'refund', 'hold', 'net', 'state', 'settlement']];
     for (const l of ledger) rows.push([l.date.slice(0, 10), l.subOrderId, l.gross, l.discount, l.commissionRate, l.commission, l.deliveryAdjustment, l.refund, l.hold, l.net, l.state, l.settlementId ?? '']);
-    download(`earnings-${range}-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
-    toast('Exported ledger to CSV');
+    saveFile(`earnings-${range}-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
   });
 };
 
