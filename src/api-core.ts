@@ -45,22 +45,28 @@ function load(): DB {
     if (typeof localStorage !== 'undefined') {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as DB;
+        let parsed = JSON.parse(raw) as DB;
         if (parsed.version === DB_VERSION) return parsed;
-        if (parsed.version === 4) return migrateV4(parsed);
+        if (parsed.version === 4) parsed = migrateV4(parsed);
+        if (parsed.version === 5) {
+          // v5 → v6: the preview now ships with sample data. Saved data that has
+          // business records is kept as-is; an empty dataset gets the samples.
+          const hasData = parsed.products.length > 0 || parsed.orders.length > 0;
+          if (hasData) return { ...parsed, version: DB_VERSION };
+        }
       }
     }
   } catch {
-    /* storage unavailable or corrupt: fall back to an empty dataset */
+    /* storage unavailable or corrupt: fall back to the sample dataset */
   }
-  return createEmptySeed();
+  return createSeed();
 }
 
 /** v4 → v5: one seller status model (incomplete/pending/…); business data is kept. */
 function migrateV4(old: DB): DB {
   const map: Record<string, SellerStatus> = { not_registered: 'incomplete', submitted: 'pending', under_review: 'pending' };
   for (const s of old.sellers) s.status = map[s.status as string] ?? s.status;
-  old.version = DB_VERSION;
+  old.version = 5;
   return old;
 }
 

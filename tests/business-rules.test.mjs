@@ -31,7 +31,8 @@ test('Seller A cannot read or edit Seller B products, orders or reviews', async 
 test('Seller B sees only their own data', async () => {
   api._setSessionForTesting(SELLER_B, 'Seller B');
   const products = await api.listProducts({ includeArchived: true });
-  assert.deepEqual(products.map((p) => p.id), ['p_sr_kale']);
+  assert.ok(products.length >= 1 && products.every((p) => p.sellerId === SELLER_B));
+  assert.ok(products.some((p) => p.id === 'p_sr_kale'));
   await rejects404(api.getProduct('p_alphonso'));
   assert.equal((await api.getLedger()).length, 0);
 });

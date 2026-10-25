@@ -43,9 +43,10 @@ const SHOTS = process.argv[3];
   await page.reload();
   await page.waitForTimeout(1000);
 
-  await step('fresh start shows an empty dashboard', async () => {
-    await expectText('.metrics', /Sales\s*₹0/);
-    await expectText('main', /No orders yet/);
+  await step('fresh start shows the sample dataset', async () => {
+    await expectText('.metrics', /Sales\s*₹[1-9]/);
+    await expectText('main', /Recent orders/);
+    assert.ok((await page.locator('#recent-h ~ * tbody tr, section:has(#recent-h) tbody tr').count()) > 0);
   });
 
   // The workflow checks below need the sample dataset.

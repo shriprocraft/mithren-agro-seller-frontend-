@@ -11,6 +11,7 @@ Requires Node 22.13+ and TypeScript (`npm i -g typescript` if `tsc` is missing).
 
 ```bash
 npm run build      # tsc → dist/
+npm run seed:dev   # optional: fictional demo sellers (see "Demo data" below)
 npm start          # http://127.0.0.1:8787  (data in ./.data)
 ```
 
@@ -26,6 +27,31 @@ Server configuration (environment variables, see `server/index.mjs`):
 | `DEMO_TOOLS` | `1` enables the checkout and delivery simulators (refused in production). |
 
 Static preview without the server: `npm run serve:static`, then open `http://localhost:5173/#/seller`. The preview's demo seller is `ananya@greenvalley.example` with password `preview-demo-2026`.
+
+## Demo data
+
+All demo data is fictional. Names and businesses are invented, emails use the reserved `.example` domain, and phone numbers, GSTIN/PAN and certificates are format-valid placeholders, not real registrations.
+
+**Preview (static hosting):** opens with a sample dataset for Green Valley Organics (Mulshi, Pune):
+- **29 products** across all six categories, with seasonal, low-stock, out-of-stock, pending, draft, rejected and inactive listings.
+- **About 260 orders** over 90 days, including a live queue (awaiting confirmation, packing, out for delivery), cancellations and returns.
+- **Finances:** ledger entries, 11 weekly settlements (paid, processing and failed) and payout requests.
+- **32 reviews**, with replies to the critical ones.
+- **Operations:** an inventory audit log, notifications, staff accounts and KYC documents.
+
+Use **Alt + Shift + P → Clear all data / Load sample data** to switch between empty and sample data. Saved preview data that already has products or orders is never replaced.
+
+**Server (`npm run seed:dev`):** creates five sellers through the real application service, so validation, encryption, statuses and the audit log all apply. Every seeded account's password is `DemoSeller2026`.
+
+| Email | Status | Notes |
+|---|---|---|
+| `ananya@greenvalley.example` | Approved | Verified documents and organic certificate, plus the full sample catalogue, orders and finances |
+| `kavita@raofarms.example` | Pending review | Individual farmer, GST-exempt, organic certificate awaiting review |
+| `imran@deccanharvest.example` | Changes requested | Private limited company; reviewer message and two requested corrections |
+| `lakshmi@kaverigreens.example` | Incomplete | Draft saved at step 4 |
+| `harpreet@punjabfields.example` | Suspended | FPO; suspension message shown |
+
+The command refuses to run with `NODE_ENV=production`. It's safe to re-run: existing accounts are never changed or deleted.
 
 ## Seller registration, KYC and approval (scope §3.1–3.2)
 
@@ -73,7 +99,7 @@ The review screens belong to the Super Admin Portal. This backend exposes the AP
 ## Tests
 
 ```bash
-npm test                                      # 36 tests: business rules + backend integration (Node test runner)
+npm test                                      # 38 tests: business rules, backend integration, dev seed (Node test runner)
 node tests/e2e-server.cjs                     # 17-step browser test against the real server
 npm run serve:static & node tests/e2e.cjs     # 17-step browser test of the preview
 ```

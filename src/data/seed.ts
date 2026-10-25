@@ -36,7 +36,8 @@ export interface DB {
 }
 
 // 4: empty dataset by default. 5: unified seller status model (v4 data is migrated, not discarded).
-export const DB_VERSION = 5;
+// 6: the preview ships with sample data again (saved data with records is kept).
+export const DB_VERSION = 6;
 export const SELLER_A = 's_greenvalley';
 export const SELLER_B = 's_sunrise';
 const DAY = 86_400_000;
@@ -101,7 +102,7 @@ export function createSeed(now = new Date()): DB {
         'Family-run farm cluster in the Mulshi valley growing seasonal fruits, leafy greens and heirloom vegetables. Harvested to order, packed the same morning.',
       address: 'Survey 42, Mulshi Road, Pirangut, Pune 412115',
       pickupAddress: 'Packhouse 2, Survey 42, Mulshi Road, Pirangut, Pune 412115',
-      serviceAreas: ['Kothrud', 'Baner', 'Aundh', 'Bavdhan', 'Pashan', 'Wakad'],
+      serviceAreas: ['Kothrud', 'Baner', 'Aundh', 'Bavdhan', 'Pashan', 'Wakad', 'Model Colony', 'Deccan Gymkhana', 'Sus', 'Balewadi'],
       productTypes: ['Fruits', 'Vegetables', 'Leafy Greens', 'Herbs'],
       gstin: '27ABCDE1234F1Z5',
       pan: 'ABCDE1234F',
@@ -114,6 +115,8 @@ export function createSeed(now = new Date()): DB {
       notifications: defaultNotifications(),
       staff: [
         { id: 'st1', name: 'Rahul Patil', email: 'rahul@greenvalley.example', role: 'packer', invitedAt: iso(60 * DAY), active: true },
+        { id: 'st2', name: 'Sunita Jadhav', email: 'sunita@greenvalley.example', role: 'manager', invitedAt: iso(150 * DAY), active: true },
+        { id: 'st3', name: 'Ganesh More', email: 'ganesh@greenvalley.example', role: 'packer', invitedAt: iso(200 * DAY), active: false },
       ],
       supportEmail: 'seller-support@marketplace.example',
       payoutRequestsEnabled: true,
@@ -183,15 +186,55 @@ export function createSeed(now = new Date()): DB {
       variants: [v('v1', '500 g', 'GV-BET-500', 500, 'g', 45, 50)] }),
     P({ id: 'p_microgreens', name: 'Sunflower Microgreens', slug: 'sunflower-microgreens', category: 'Leafy Greens', emoji: '🌻', description: 'Draft — description to be written.', origin: '', seasonality: 'year_round', seasonMonths: [], storage: '', organicClaim: 'none', status: 'draft', lowStockThreshold: 5,
       variants: [v('v1', '100 g', 'GV-MCG-100', 100, 'g', 99, 0)] }),
+    P({ id: 'p_orange', name: 'Nagpur Oranges', slug: 'nagpur-oranges', category: 'Fruits', emoji: '🍊', description: 'Juicy, easy-peel Nagpur mandarins with a sweet-tart balance. Hand-picked and sorted by size.', origin: 'Nagpur, Maharashtra', seasonality: 'seasonal', seasonMonths: [11, 12, 1, 2], storage: 'Keep in a cool, airy place for up to a week.', organicClaim: 'none', status: 'approved', lowStockThreshold: 12, harvestDate: dateOnly(-3),
+      variants: [v('v1', '1 kg', 'GV-ORG-1K', 1, 'kg', 119, 74, 140), v('v2', '3 kg box', 'GV-ORG-3K', 3, 'kg', 329, 18, 399)] }),
+    P({ id: 'p_pomegranate', name: 'Bhagwa Pomegranate', slug: 'bhagwa-pomegranate', category: 'Fruits', emoji: '🍎', description: 'Deep-red Bhagwa pomegranates with soft seeds and high juice content.', origin: 'Solapur, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate for up to 2 weeks.', organicClaim: 'in_conversion', status: 'approved', lowStockThreshold: 10,
+      variants: [v('v1', '500 g', 'GV-POM-500', 500, 'g', 99, 46), v('v2', '1 kg', 'GV-POM-1K', 1, 'kg', 189, 28, 210)] }),
+    P({ id: 'p_guava', name: 'Allahabad Safeda Guava', slug: 'allahabad-safeda-guava', category: 'Fruits', emoji: '🍐', description: 'Crisp white-fleshed guavas, picked just before full ripeness.', origin: 'Mulshi, Pune', seasonality: 'seasonal', seasonMonths: [8, 9, 10, 11, 12, 1], storage: 'Room temperature for 2–3 days, then refrigerate.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 10,
+      variants: [v('v1', '1 kg', 'GV-GUA-1K', 1, 'kg', 89, 7)] }),
+    P({ id: 'p_strawberry', name: 'Mahabaleshwar Strawberries', slug: 'mahabaleshwar-strawberries', category: 'Fruits', emoji: '🍓', description: 'Sweet Winter Dawn strawberries from partner growers in Mahabaleshwar, packed in ventilated punnets.', origin: 'Mahabaleshwar, Maharashtra', seasonality: 'seasonal', seasonMonths: [12, 1, 2, 3], storage: 'Refrigerate unwashed. Best within 2 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 8,
+      variants: [v('v1', '200 g punnet', 'GV-STR-200', 200, 'g', 120, 24), v('v2', '2 × 200 g', 'GV-STR-400', 400, 'g', 229, 9, 240)] }),
+    P({ id: 'p_methi', name: 'Fresh Methi', slug: 'fresh-methi', category: 'Leafy Greens', emoji: '🌿', description: 'Tender fenugreek leaves, ideal for thepla, parathas and methi aloo.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate wrapped in paper. Use within 2 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 15,
+      variants: [v('v1', '1 bunch', 'GV-MTH-1B', 1, 'bunch', 30, 42)] }),
+    P({ id: 'p_amaranth', name: 'Red Amaranth (Lal Math)', slug: 'red-amaranth', category: 'Leafy Greens', emoji: '🥬', description: 'Iron-rich red amaranth with tender stems. Great stir-fried with garlic.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate. Best within 2 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 12,
+      variants: [v('v1', '1 bunch', 'GV-AMR-1B', 1, 'bunch', 28, 11)] }),
+    P({ id: 'p_mint', name: 'Mint (Pudina)', slug: 'mint-pudina', category: 'Herbs', emoji: '🌱', description: 'Cool, aromatic mint for chutneys, raita and chaas.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Stems in water, refrigerated.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 20,
+      variants: [v('v1', '1 bunch', 'GV-MNT-1B', 1, 'bunch', 20, 65)] }),
+    P({ id: 'p_curry', name: 'Curry Leaves', slug: 'curry-leaves', category: 'Herbs', emoji: '🍃', description: 'Glossy, fragrant curry leaves picked on the stem.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate in a zip bag for up to 10 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 15,
+      variants: [v('v1', '100 g', 'GV-CUR-100', 100, 'g', 25, 38)] }),
+    P({ id: 'p_bottlegourd', name: 'Bottle Gourd (Dudhi)', slug: 'bottle-gourd', category: 'Vegetables', emoji: '🥒', description: 'Young, pale-green bottle gourd with soft skin and few seeds.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Room temperature for 3 days or refrigerate for a week.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 8,
+      variants: [v('v1', '1 piece (~800 g)', 'GV-BTG-1P', 1, 'piece', 45, 30)] }),
+    P({ id: 'p_brinjal', name: 'Bharta Brinjal', slug: 'bharta-brinjal', category: 'Vegetables', emoji: '🍆', description: 'Large, glossy brinjals with few seeds, ideal for roasting.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Cool, dry place. Use within 4 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 10,
+      variants: [v('v1', '500 g', 'GV-BRJ-500', 500, 'g', 45, 52), v('v2', '1 kg', 'GV-BRJ-1K', 1, 'kg', 85, 20)] }),
+    P({ id: 'p_cauliflower', name: 'Cauliflower', slug: 'cauliflower', category: 'Vegetables', emoji: '🥦', description: 'Tight, creamy-white heads with fresh green jackets.', origin: 'Junnar, Pune', seasonality: 'seasonal', seasonMonths: [10, 11, 12, 1, 2, 3], storage: 'Refrigerate in a perforated bag for up to 5 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 8,
+      variants: [v('v1', '1 head (~600 g)', 'GV-CAU-1P', 1, 'piece', 55, 33)] }),
+    P({ id: 'p_drumstick', name: 'Drumsticks (Shevga)', slug: 'drumsticks', category: 'Vegetables', emoji: '🫛', description: 'Long, tender moringa pods for sambar and curries.', origin: 'Baramati, Pune', seasonality: 'seasonal', seasonMonths: [2, 3, 4, 5, 6], storage: 'Refrigerate. Use within 5 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 10,
+      variants: [v('v1', '250 g', 'GV-DRM-250', 250, 'g', 40, 0)] }),
+    P({ id: 'p_sweetpotato', name: 'Sweet Potato', slug: 'sweet-potato', category: 'Root Vegetables', emoji: '🍠', description: 'Purple-skinned sweet potatoes with creamy white flesh. Roast, steam or bake.', origin: 'Mulshi, Pune', seasonality: 'seasonal', seasonMonths: [10, 11, 12, 1, 2], storage: 'Cool, dark and dry. Don’t refrigerate.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 10,
+      variants: [v('v1', '1 kg', 'GV-SWP-1K', 1, 'kg', 79, 41)] }),
+    P({ id: 'p_broccoli', name: 'Broccoli', slug: 'broccoli', category: 'Exotic', emoji: '🥦', description: 'Compact, deep-green broccoli crowns from partner polyhouses.', origin: 'Nashik, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate. Best within 4 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 6,
+      variants: [v('v1', '250 g', 'GV-BRC-250', 250, 'g', 79, 19), v('v2', '500 g', 'GV-BRC-500', 500, 'g', 149, 5)] }),
+    P({ id: 'p_cherrytomato', name: 'Cherry Tomatoes', slug: 'cherry-tomatoes', category: 'Exotic', emoji: '🍅', description: 'Sweet red cherry tomatoes, great for salads and snacking.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Room temperature, out of sunlight.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 8,
+      variants: [v('v1', '250 g', 'GV-CHT-250', 250, 'g', 69, 27)] }),
+    P({ id: 'p_zucchini', name: 'Green Zucchini', slug: 'green-zucchini', category: 'Exotic', emoji: '🥒', description: 'Firm, glossy zucchini. Pending listing review.', origin: 'Nashik, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate for up to a week.', organicClaim: 'none', status: 'pending', lowStockThreshold: 6,
+      variants: [v('v1', '500 g', 'GV-ZUC-500', 500, 'g', 89, 22)] }),
+    P({ id: 'p_seasonalbox', name: 'Weekly Seasonal Veg Box', slug: 'weekly-seasonal-veg-box', category: 'Vegetables', emoji: '🧺', description: 'Draft: 5–6 kg of this week’s harvest for a family of four.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'See individual items.', organicClaim: 'none', status: 'draft', lowStockThreshold: 3,
+      variants: [v('v1', '1 box', 'GV-BOX-WK', 1, 'box', 699, 0)] }),
     // Seller B products, used to verify isolation
     { id: 'p_sr_kale', sellerId: SELLER_B, name: 'Curly Kale', slug: 'curly-kale', category: 'Exotic', emoji: '🥬', description: 'Hydroponic curly kale.', origin: 'Hinjewadi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate.', organicClaim: 'none', status: 'approved', available: true, minQty: 1, maxQty: 5, lowStockThreshold: 5, archived: false, updatedAt: iso(2 * DAY),
       variants: [v('v1', '200 g', 'SR-KAL-200', 200, 'g', 120, 30)] },
+    { id: 'p_sr_lettuce', sellerId: SELLER_B, name: 'Iceberg Lettuce', slug: 'iceberg-lettuce', category: 'Exotic', emoji: '🥬', description: 'Crisp hydroponic iceberg lettuce.', origin: 'Hinjewadi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate.', organicClaim: 'none', status: 'approved', available: true, minQty: 1, maxQty: 5, lowStockThreshold: 5, archived: false, updatedAt: iso(3 * DAY),
+      variants: [v('v1', '1 head', 'SR-LET-1H', 1, 'piece', 90, 24)] },
+    { id: 'p_sr_microgreens', sellerId: SELLER_B, name: 'Radish Microgreens', slug: 'radish-microgreens', category: 'Leafy Greens', emoji: '🌱', description: 'Peppery radish microgreens.', origin: 'Hinjewadi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate.', organicClaim: 'none', status: 'approved', available: true, minQty: 1, maxQty: 5, lowStockThreshold: 5, archived: false, updatedAt: iso(5 * DAY),
+      variants: [v('v1', '50 g', 'SR-MCG-50', 50, 'g', 80, 40)] },
   ];
 
   // ---- Orders ----
   const r = rng(20261024);
-  const firstNames = ['Priya', 'Arjun', 'Meera', 'Karan', 'Sneha', 'Rohan', 'Isha', 'Aditya', 'Neha', 'Siddharth', 'Pooja', 'Varun', 'Tanvi', 'Nikhil'];
+  const firstNames = ['Priya', 'Arjun', 'Meera', 'Karan', 'Sneha', 'Rohan', 'Isha', 'Aditya', 'Neha', 'Siddharth', 'Pooja', 'Varun', 'Tanvi', 'Nikhil',
+    'Ananya', 'Rahul', 'Kavya', 'Vikram', 'Shruti', 'Aniket', 'Gauri', 'Omkar', 'Farah', 'Joseph', 'Harpreet', 'Lakshmi', 'Imran', 'Rutuja', 'Devika', 'Sameer'];
   const areas = sellers[0]!.serviceAreas;
+  // Out-of-season or out-of-stock items still appear in older orders.
   const sellable = products.filter((p) => p.sellerId === SELLER_A && ['approved'].includes(p.status) && p.id !== 'p_papaya');
   const orders: SubOrder[] = [];
   const pick = <T,>(arr: T[]) => arr[Math.floor(r() * arr.length)]!;
@@ -200,8 +243,11 @@ export function createSeed(now = new Date()): DB {
   const actorFor = (s: OrderStatus) =>
     s === 'awaiting_confirmation' ? 'Customer checkout' : s === 'in_transit' || s === 'delivered' ? 'Delivery partner' : 'Ananya K. (seller)';
 
-  for (let i = 0; i < 132; i++) {
-    const ageMs = Math.floor(Math.pow(r(), 1.25) * 88 * DAY) + 20 * 60_000;
+  for (let i = 0; i < 260; i++) {
+    // The newest few orders are pinned so there is always a live queue to work through.
+    const recentMins = [18, 52, 150, 290, 470, 1050];
+    const randomAge = Math.floor(Math.pow(r(), 1.25) * 88 * DAY) + 20 * 60_000;
+    const ageMs = i < recentMins.length ? recentMins[i]! * 60_000 : randomAge;
     const placed = t - ageMs;
     const nItems = 1 + Math.floor(r() * 3);
     const items: OrderItem[] = [];
@@ -266,8 +312,8 @@ export function createSeed(now = new Date()): DB {
         firstName: pick(firstNames),
         area: pick(areas),
         phoneMasked: `+91 •••••• ${Math.floor(1000 + r() * 8999)}`,
-        address: `Flat ${Math.floor(101 + r() * 900)}, ${pick(['Sai Residency', 'Green Meadows', 'Lotus Towers', 'Palm Grove'])}`,
-        ...(r() < 0.3 ? { instructions: pick(['Leave with security', 'Call on arrival', 'No plastic bags please']) } : {}),
+        address: `Flat ${Math.floor(101 + r() * 900)}, ${pick(['Sai Residency', 'Green Meadows', 'Lotus Towers', 'Palm Grove', 'Kumar Pebble Park', 'Nyati Elysia', 'Rohan Mithila', 'Paranjape Gulmohar', 'Kalpataru Splendour', 'Sukhwani Coronet'])}`,
+        ...(r() < 0.3 ? { instructions: pick(['Leave with security', 'Call on arrival', 'No plastic bags please', 'Ring the bell twice', 'Deliver after 6 PM', 'Don’t call, use the intercom']) } : {}),
       },
       items,
       discountAllocation: discount,
@@ -346,38 +392,80 @@ export function createSeed(now = new Date()): DB {
   }
 
   const payoutRequests: PayoutRequest[] = [
-    { id: 'PR-0007', sellerId: SELLER_A, amount: 4200, requestedAt: iso(26 * DAY), state: 'paid', note: 'Included in STL settlement' },
+    { id: 'PR-0007', sellerId: SELLER_A, amount: 4200, requestedAt: iso(26 * DAY), state: 'paid', note: 'Included in the weekly settlement' },
+    { id: 'PR-0005', sellerId: SELLER_A, amount: 2500, requestedAt: iso(48 * DAY), state: 'paid', note: 'Paid early for seed purchase' },
+    { id: 'PR-0003', sellerId: SELLER_A, amount: 9800, requestedAt: iso(70 * DAY), state: 'rejected', note: 'Exceeded eligible balance at review time' },
   ];
 
   // ---- Reviews ----
-  const reviewTexts: [number, string, string][] = [
-    [5, 'Best mangoes this season', 'Sweet, fragrant and perfectly ripe. Packed beautifully.'],
-    [5, 'Super fresh spinach', 'Lasted almost a week in the fridge. No yellow leaves.'],
-    [4, 'Good tomatoes', 'Great flavour, a couple were slightly soft.'],
-    [5, 'Coriander smells amazing', 'You can tell it was picked the same day.'],
-    [3, 'Bananas were unripe', 'Took 4 days to ripen. Taste was fine eventually.'],
-    [5, 'Reliable every week', 'Have ordered 10+ times. Always on time.'],
-    [2, 'Okra was fibrous', 'Half the okra was too mature to cook.'],
-    [4, 'Nice carrots', 'Sweet and crunchy, would buy again.'],
-    [5, 'Basil for pesto', 'Very aromatic, made great pesto.'],
-    [4, 'Fresh but small bunch', 'Quality is good, quantity could be better.'],
-    [1, 'Late delivery', 'Arrived 2 hours after slot. Greens had wilted.'],
-    [5, 'Lovely heirloom mix', 'The colours and flavours are fantastic.'],
+  // [rating, title, body, product the review is about (null: whatever the order contained)]
+  const reviewTexts: [number, string, string, string | null][] = [
+    [5, 'Oranges were juicy', 'Sweet and easy to peel. My kids finished the box in two days.', 'p_orange'],
+    [4, 'Good pomegranates', 'Seeds were deep red and sweet. One fruit was slightly dry inside.', 'p_pomegranate'],
+    [5, 'Methi was spotless', 'No mud, no yellow leaves. Made lovely theplas.', 'p_methi'],
+    [5, 'Fragrant curry leaves', 'Still fresh after a week in the fridge.', 'p_curry'],
+    [3, 'Broccoli was small', 'Tasted fine but the 250 g pack had small florets.', 'p_broccoli'],
+    [5, 'Strawberries!', 'Sweetest strawberries we’ve had this season. Not a single squashed one.', 'p_strawberry'],
+    [4, 'Nice cauliflower', 'Clean and fresh. Would love a smaller size option.', 'p_cauliflower'],
+    [2, 'Mint wilted quickly', 'It was limp by the next morning even though I refrigerated it.', 'p_mint'],
+    [5, 'Consistent quality', 'Third month ordering weekly. Packaging is always neat and plastic-free.', null],
+    [4, 'Sweet potatoes', 'Creamy and sweet when roasted. A couple were small.', 'p_sweetpotato'],
+    [5, 'Great for sambar', 'Drumsticks were tender and long. Exactly what I wanted.', 'p_drumstick'],
+    [1, 'Wrong item delivered', 'Received bottle gourd instead of brinjal. Support resolved it the same day though.', 'p_brinjal'],
+    [5, 'Cherry tomatoes are addictive', 'Sweet and firm. Half the box was gone before dinner.', 'p_cherrytomato'],
+    [4, 'Fresh amaranth', 'Lovely colour, a little sand on the roots.', 'p_amaranth'],
+    [5, 'Guava with crunch', 'Just the way I like them — crisp, not overripe.', 'p_guava'],
+    [3, 'Delivery slot missed', 'Arrived 40 minutes late, but the produce itself was excellent.', null],
+    [5, 'Loved the packaging', 'Paper bags and cloth ties. Zero plastic. Thank you!', null],
+    [4, 'Bharta brinjals', 'Big and smoky after roasting. Good value.', 'p_brinjal'],
+    [5, 'Organic and tasty', 'You can taste the difference in the heirloom tomatoes.', 'p_tomato'],
+    [4, 'Good bottle gourd', 'Tender with very few seeds.', 'p_bottlegourd'],
+    [5, 'Best mangoes this season', 'Sweet, fragrant and perfectly ripe. Packed beautifully.', 'p_alphonso'],
+    [5, 'Super fresh spinach', 'Lasted almost a week in the fridge. No yellow leaves.', 'p_spinach'],
+    [4, 'Good tomatoes', 'Great flavour, a couple were slightly soft.', 'p_tomato'],
+    [5, 'Coriander smells amazing', 'You can tell it was picked the same day.', 'p_coriander'],
+    [3, 'Bananas were unripe', 'Took 4 days to ripen. Taste was fine eventually.', 'p_banana'],
+    [5, 'Reliable every week', 'Have ordered 10+ times. Always on time.', null],
+    [2, 'Okra was fibrous', 'Half the okra was too mature to cook.', 'p_okra'],
+    [4, 'Nice carrots', 'Sweet and crunchy, would buy again.', 'p_carrot'],
+    [5, 'Basil for pesto', 'Very aromatic, made great pesto.', 'p_basil'],
+    [4, 'Fresh but small bunch', 'Quality is good, quantity could be better.', 'p_methi'],
+    [1, 'Late delivery', 'Arrived 2 hours after slot. Greens had wilted.', null],
+    [5, 'Lovely heirloom mix', 'The colours and flavours are fantastic.', 'p_tomato'],
   ];
   const delivered = orders.filter((o) => o.sellerId === SELLER_A && o.status === 'delivered');
-  const reviews: Review[] = reviewTexts.map(([rating, title, body], i) => {
-    const o = delivered[(i * 5 + 3) % delivered.length]!;
+  const used = new Set<string>();
+  const reviews: Review[] = reviewTexts.map(([rating, title, body, productId], i) => {
+    // A delivered order that actually contains the reviewed product (one review per order).
+    const o =
+      delivered.find((x) => !used.has(x.id) && (!productId || x.items.some((it) => it.productId === productId)) && new Date(x.placedAt).getTime() < t - 3 * DAY) ??
+      delivered.find((x) => !used.has(x.id))!;
+    used.add(o.id);
+    const placed = new Date(o.placedAt).getTime();
+    const reviewedAt = Math.min(placed + 2 * DAY, t - 6 * 3_600_000);
     return {
       id: `rv${i + 1}`,
       sellerId: SELLER_A,
-      productId: o.items[0]!.productId,
+      productId: productId && o.items.some((it) => it.productId === productId) ? productId : o.items[0]!.productId,
       subOrderId: o.id,
       rating,
       title,
       body,
       customerFirstName: o.customer.firstName,
-      date: new Date(new Date(o.placedAt).getTime() + 2 * DAY).toISOString(),
-      ...(i === 1 || i === 4 ? { reply: { body: 'Thank you for the feedback! We have adjusted our harvest timing.', at: new Date(new Date(o.placedAt).getTime() + 3 * DAY).toISOString() } } : {}),
+      date: new Date(reviewedAt).toISOString(),
+      ...(rating <= 3 || i % 4 === 0
+        ? {
+            reply: {
+              body:
+                rating <= 2
+                  ? 'We’re sorry about this. We’ve shared it with our packing team and issued a credit to your account. Please write to us if anything else goes wrong.'
+                  : rating === 3
+                    ? 'Thanks for the honest feedback — we’re adjusting harvest timing and grading so this doesn’t happen again.'
+                    : 'Thank you! It means a lot to our farm team.',
+              at: new Date(Math.min(reviewedAt + DAY, t - 3_600_000)).toISOString(),
+            },
+          }
+        : {}),
     };
   });
   reviews.push({ id: 'rv_sr1', sellerId: SELLER_B, productId: 'p_sr_kale', subOrderId: 'SO-48300-SR', rating: 4, title: 'Crisp kale', body: 'Good.', customerFirstName: 'Kavya', date: iso(1 * DAY) });
@@ -400,6 +488,11 @@ export function createSeed(now = new Date()): DB {
     { id: 'adj3', sellerId: SELLER_A, productId: 'p_coriander', variantId: 'v1', delta: -12, resultingStock: 0, reason: 'correction', note: 'Physical count mismatch', actor: 'Ananya K.', at: iso(6 * 3_600_000) },
     { id: 'adj4', sellerId: SELLER_A, productId: 'p_tomato', variantId: 'v1', delta: 30, resultingStock: 64, reason: 'restock', note: '', actor: 'Rahul P.', at: iso(2 * DAY) },
     { id: 'adj5', sellerId: SELLER_A, productId: 'p_okra', variantId: 'v1', delta: -3, resultingStock: 9, reason: 'order', note: 'SO-48211-GV', actor: 'System', at: iso(3 * 3_600_000) },
+    { id: 'adj6', sellerId: SELLER_A, productId: 'p_orange', variantId: 'v1', delta: 60, resultingStock: 74, reason: 'restock', note: 'Consignment from Nagpur partner farm', actor: 'Sunita J.', at: iso(1.5 * DAY) },
+    { id: 'adj7', sellerId: SELLER_A, productId: 'p_strawberry', variantId: 'v1', delta: -4, resultingStock: 24, reason: 'damage', note: 'Punnets crushed in transit', actor: 'Rahul P.', at: iso(26 * 3_600_000) },
+    { id: 'adj8', sellerId: SELLER_A, productId: 'p_drumstick', variantId: 'v1', delta: -6, resultingStock: 0, reason: 'correction', note: 'End of season — remaining stock unsellable', actor: 'Ananya K.', at: iso(4 * DAY) },
+    { id: 'adj9', sellerId: SELLER_A, productId: 'p_mint', variantId: 'v1', delta: 40, resultingStock: 65, reason: 'restock', note: 'Morning harvest', actor: 'Rahul P.', at: iso(9 * 3_600_000) },
+    { id: 'adj10', sellerId: SELLER_A, productId: 'p_methi', variantId: 'v1', delta: 2, resultingStock: 42, reason: 'return', note: 'Customer return restocked (unopened)', actor: 'Sunita J.', at: iso(3 * DAY) },
   ];
 
   const notifications: AppNotification[] = [
@@ -408,6 +501,10 @@ export function createSeed(now = new Date()): DB {
     { id: 'n3', sellerId: SELLER_A, topic: 'low_stock', title: '3 variants are low on stock', body: 'Baby Spinach, Tender Okra and Alphonso Mango box.', at: iso(5 * 3_600_000), read: false, link: '/seller/inventory?filter=low' },
     { id: 'n4', sellerId: SELLER_A, topic: 'settlement', title: 'Settlement processing', body: 'A settlement for last period is being processed.', at: iso(2 * DAY), read: true, link: '/seller/settlements' },
     { id: 'n5', sellerId: SELLER_A, topic: 'moderation', title: 'Organic certificate expires in 21 days', body: 'Upload a renewed certificate to keep organic labels on your listings.', at: iso(1 * DAY), read: true, link: '/seller/documents' },
+    { id: 'n6', sellerId: SELLER_A, topic: 'moderation', title: 'Green Zucchini is pending approval', body: 'Moderation usually completes within 1 business day.', at: iso(7 * 3_600_000), read: false, link: '/seller/products/p_zucchini' },
+    { id: 'n7', sellerId: SELLER_A, topic: 'settlement', title: 'Payout request PR-0007 paid', body: '₹4,200 was included in the weekly settlement.', at: iso(25 * DAY), read: true, link: '/seller/settlements' },
+    { id: 'n8', sellerId: SELLER_A, topic: 'order_update', title: 'Order delivered', body: 'The delivery partner marked an order as delivered.', at: iso(14 * 3_600_000), read: true, link: '/seller/orders?status=delivered' },
+    { id: 'n9', sellerId: SELLER_A, topic: 'support', title: 'Support replied to your ticket', body: 'We’ve credited the customer for the wrong-item delivery. No action needed.', at: iso(6 * DAY), read: true, link: '/seller/reviews' },
   ];
 
   return {
