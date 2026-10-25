@@ -2860,18 +2860,6 @@ td a:hover {
 .account-wrap {
   position: relative;
 }
-button.avatar {
-  cursor: pointer;
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  transition: box-shadow 0.18s ease, border-color 0.18s ease;
-}
-button.avatar:hover {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
-}
 .account-menu {
   position: absolute;
   right: 0;
@@ -3129,4 +3117,321 @@ button.avatar:hover {
 .chip input:checked + span,
 .account-link:hover {
   color: var(--primary-hover);
+}
+
+/* =====================================================================
+   Controls: soft pill buttons, grouped icon actions, account trigger,
+   rounded dropdowns and form controls (matches the reference control set)
+   ===================================================================== */
+:root {
+  --pill: 999px;
+  --control-radius: 12px;
+  --control-shadow: 0 1px 2px rgb(31 45 33 / 0.05), 0 4px 14px -4px rgb(31 45 33 / 0.1);
+  --control-shadow-hover: 0 2px 4px rgb(31 45 33 / 0.06), 0 8px 20px -6px rgb(31 45 33 / 0.16);
+  --control-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+  --menu-radius: 18px;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Buttons */
+.btn {
+  border-radius: var(--pill);
+  min-height: 40px;
+  padding: 8px 18px;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--control-shadow);
+  font-weight: 500;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+  box-shadow: var(--control-shadow-hover);
+}
+.btn-sm {
+  min-height: 34px;
+  padding: 5px 14px;
+}
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+  box-shadow: 0 1px 2px rgb(31 45 33 / 0.08), 0 6px 16px -6px color-mix(in srgb, var(--primary) 70%, transparent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  box-shadow: 0 2px 4px rgb(31 45 33 / 0.1), 0 10px 22px -8px color-mix(in srgb, var(--primary) 80%, transparent);
+}
+.btn-danger {
+  border-radius: var(--pill);
+}
+.btn-danger-ghost {
+  background: var(--surface);
+  box-shadow: var(--control-shadow);
+}
+.btn-ghost,
+.btn-ghost:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--primary-hover);
+}
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.account-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  box-shadow: var(--control-ring);
+}
+
+/* Icon buttons: round, white, soft shadow */
+.icon-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--pill);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--control-shadow);
+}
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--primary);
+  box-shadow: var(--control-shadow-hover);
+}
+.modal-head .icon-btn,
+.topbar .menu-btn {
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
+}
+.modal-head .icon-btn:hover,
+.topbar .menu-btn:hover {
+  background: var(--surface-2);
+}
+
+/* Grouped icon actions: one white pill, thin dividers between icons */
+.action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--pill);
+  box-shadow: var(--control-shadow);
+}
+.action-pill > * + * {
+  position: relative;
+  padding-left: 7px;
+}
+.action-pill > * + *::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 25%;
+  height: 50%;
+  width: 1px;
+  background: var(--border);
+}
+.action-pill .icon-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text);
+}
+.action-pill .icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--primary);
+  box-shadow: none;
+}
+.action-pill .dot {
+  top: 9px;
+  right: 10px;
+}
+
+/* Account trigger: avatar circle + label + chevron */
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 4px 4px;
+  border: none;
+  background: transparent;
+  border-radius: var(--pill);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+.account-trigger:hover {
+  background: var(--surface-2);
+}
+.account-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--pill);
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--border), var(--control-shadow);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.account-trigger:hover .account-avatar {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 30%, var(--border)), var(--control-shadow-hover);
+}
+.account-chevron {
+  display: inline-grid;
+  color: var(--text-2);
+  transition: transform 0.2s ease;
+}
+.account-trigger[aria-expanded='true'] .account-chevron {
+  transform: rotate(180deg);
+}
+.topbar-actions {
+  gap: 14px;
+}
+
+/* Dropdown menus */
+.account-menu,
+.notif-panel {
+  border-radius: var(--menu-radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 10px rgb(31 45 33 / 0.05), 0 18px 40px -12px rgb(31 45 33 / 0.22);
+}
+.account-menu {
+  top: calc(100% + 10px);
+  padding: 8px;
+  min-width: 240px;
+}
+.account-link {
+  border-radius: var(--control-radius);
+  padding: 10px 12px;
+}
+.notif-panel {
+  top: calc(100% + 12px);
+  overflow: hidden auto;
+}
+.notif-list a {
+  border-radius: 0;
+}
+
+/* Selects: rounded with a custom chevron; inline filters are pills */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+select:disabled {
+  cursor: not-allowed;
+}
+.select-inline {
+  border-radius: var(--pill);
+  min-height: 40px;
+  padding-left: 16px;
+  box-shadow: var(--control-shadow);
+  font-weight: 500;
+}
+.emoji-select {
+  background-position: right 14px center;
+}
+
+/* Text inputs */
+input[type='text'],
+input[type='email'],
+input[type='tel'],
+input[type='password'],
+input[type='number'],
+input[type='date'],
+input[type='time'],
+input:not([type]),
+select,
+textarea {
+  border-radius: var(--control-radius);
+  min-height: 42px;
+}
+textarea {
+  min-height: 70px;
+}
+input[type='search'],
+.search input {
+  border-radius: var(--pill);
+  min-height: 42px;
+  padding-left: 40px;
+  box-shadow: var(--control-shadow);
+}
+.search .icon {
+  left: 15px;
+}
+
+/* Navigation actions */
+.nav-link {
+  border-radius: var(--pill);
+  padding: 9px 14px;
+}
+.settings-nav a {
+  border-radius: var(--pill);
+  padding: 8px 14px;
+}
+.tab {
+  border-radius: var(--control-radius) var(--control-radius) 0 0;
+}
+.back-link {
+  border-radius: var(--pill);
+  padding: 4px 10px 4px 6px;
+  margin-left: -6px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.back-link:hover {
+  background: var(--surface-2);
+}
+.step-link {
+  border-radius: var(--pill);
+}
+.link-btn {
+  border-radius: var(--pill);
+  padding: 4px 10px;
+}
+.link-btn:hover {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+.upload-btn {
+  border-radius: var(--pill);
+}
+.pager .btn,
+.modal-actions .btn,
+.wizard-actions .btn {
+  min-width: 96px;
+}
+
+@media (max-width: 720px) {
+  .account-label {
+    display: none;
+  }
+  .account-trigger {
+    padding-right: 6px;
+    gap: 4px;
+  }
+  .topbar-actions {
+    gap: 8px;
+  }
+  .account-avatar {
+    width: 40px;
+    height: 40px;
+  }
 }

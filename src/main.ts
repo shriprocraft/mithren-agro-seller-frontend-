@@ -68,7 +68,6 @@ const PUBLIC_PATHS = ['/seller/sign-in', '/seller/register'];
 const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2e7d32', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
 
 function shell(seller: Seller, navKey: string | undefined, bare: boolean, account: AccountView | null) {
-  const initials = (account?.fullName ?? seller.ownerName).split(' ').map((p) => p[0]).join('').slice(0, 2);
   return html`
     <a class="skip-link" href="#main" data-skip>Skip to content</a>
     <div class="layout ${bare ? 'layout-bare' : ''}">
@@ -108,14 +107,20 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
               <div class="topbar-actions">
                 ${bare
                   ? ''
-                  : html`<div class="notif-wrap">
-                      <button class="icon-btn" type="button" data-action="notifs" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel" aria-label="Notifications">
-                        ${icon('bell', 20)}<span class="dot" data-unread hidden></span>
-                      </button>
-                      <div class="notif-panel" id="notif-panel" hidden></div>
+                  : html`<div class="action-pill">
+                      <div class="notif-wrap">
+                        <button class="icon-btn" type="button" data-action="notifs" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel" aria-label="Notifications">
+                          ${icon('bell', 21)}<span class="dot" data-unread hidden></span>
+                        </button>
+                        <div class="notif-panel" id="notif-panel" hidden></div>
+                      </div>
                     </div>`}
                 <div class="account-wrap">
-                  <button class="avatar" type="button" data-action="account" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu for ${account.fullName}">${initials}</button>
+                  <button class="account-trigger" type="button" data-action="account" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu for ${account.fullName}" title="${account.fullName}">
+                    <span class="account-avatar" aria-hidden="true">${icon('user', 22)}</span>
+                    <span class="account-label">Account</span>
+                    <span class="account-chevron" aria-hidden="true">${icon('chevronDown', 18)}</span>
+                  </button>
                   <div class="account-menu" id="account-menu" hidden>
                     <p><strong>${account.fullName}</strong><span class="muted small block">${account.email}</span></p>
                     <a href="#/seller?view=status" class="account-link">Application status</a>
