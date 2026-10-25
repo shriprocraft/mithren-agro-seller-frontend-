@@ -600,7 +600,7 @@ export function toWorkspaceSeller(existing: Seller | undefined, app: Application
     serviceAreas: [],
     productTypes: [],
     bank: { accountName: '', last4: '', ifsc: '', verified: false },
-    brandColor: '#2f7d4a',
+    brandColor: '#2e7d32',
     bannerTagline: '',
     workingHours: (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const).map((day) => ({ day, open: '08:00', close: '18:00', closed: day === 'Sun' })),
     holidays: [],

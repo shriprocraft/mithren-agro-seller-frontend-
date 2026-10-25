@@ -174,7 +174,7 @@ const page: Page = async ({ root, seller, refresh }) => {
     const f = formValues($('#profile', root) as HTMLFormElement);
     $('[data-preview=name]', root)!.textContent = f.shopName || 'Shop name';
     $('[data-preview=tagline]', root)!.textContent = f.bannerTagline ?? '';
-    $('#banner-preview', root)!.style.setProperty('--brand', f.brandColor ?? '#2f7d4a');
+    $('#banner-preview', root)!.style.setProperty('--brand', f.brandColor ?? '#2e7d32');
   });
   const addArea = () => {
     const input = $('#area-input', root) as HTMLInputElement;

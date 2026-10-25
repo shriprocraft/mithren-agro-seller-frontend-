@@ -106,7 +106,7 @@ export function createSeed(now = new Date()): DB {
       gstin: '27ABCDE1234F1Z5',
       pan: 'ABCDE1234F',
       bank: { accountName: 'Green Valley Organics', last4: '4821', ifsc: 'HDFC0001234', verified: true },
-      brandColor: '#2f7d4a',
+      brandColor: '#2e7d32',
       bannerTagline: 'Harvested this morning, at your door by evening.',
       workingHours: defaultHours(),
       holidays: [{ id: 'h1', date: dateOnly(18), note: 'Farm maintenance day' }],

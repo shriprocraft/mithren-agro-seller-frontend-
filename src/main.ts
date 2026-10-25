@@ -65,7 +65,7 @@ let renderToken = 0;
 const PUBLIC_PATHS = ['/seller/sign-in', '/seller/register'];
 
 /** Placeholder for the shell while nobody is signed in (no seller data is shown). */
-const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2f7d4a', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
+const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2e7d32', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
 
 function shell(seller: Seller, navKey: string | undefined, bare: boolean, account: AccountView | null) {
   const initials = (account?.fullName ?? seller.ownerName).split(' ').map((p) => p[0]).join('').slice(0, 2);

@@ -1,32 +1,47 @@
 /* Seller Portal — design tokens and components. Light theme only, by design. */
 :root {
-  --bg: #ffffff;
-  --bg-end: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f1efe8;
-  --border: #e3e0d6;
-  --border-strong: #cfcabb;
-  --text: #1f2a1f;
-  --text-2: #5b6558;
-  --text-3: #7d8579;
-  --primary: #2f7d4a;
-  --primary-hover: #276a3e;
-  --primary-soft: #e3f1e6;
+  /* Modern Sage palette */
+  --sage-background: #ffffff;
+  --sage-primary: #2e7d32;
+  --sage-hover: #1b5e20;
+  --sage-accent: #a7d96c;
+  --sage-soft-bg: #f5fdf7;
+  --sage-headings: #1f2d21;
+  --sage-text: #667085;
+  --sage-border: #e8f1ea;
+  --sage-card: #f0f9f4;
+  --sage-highlight: #ffd88a;
+
+  --bg: var(--sage-background);
+  --bg-end: var(--sage-background);
+  --surface: var(--sage-background);
+  --surface-2: var(--sage-soft-bg);
+  --card: var(--sage-card);
+  --border: var(--sage-border);
+  /* Inputs need a visible edge on white: border mixed toward primary. */
+  --border-strong: color-mix(in srgb, var(--sage-border) 50%, var(--sage-primary) 50%);
+  --text: var(--sage-headings);
+  --text-2: var(--sage-text);
+  --text-3: var(--sage-text);
+  --primary: var(--sage-primary);
+  --primary-hover: var(--sage-hover);
+  --primary-soft: color-mix(in srgb, var(--sage-accent) 28%, var(--sage-background));
   --primary-text: #ffffff;
-  --accent: #c47a1d;
-  --green: #2f7d4a;
-  --green-soft: #e3f1e6;
-  --amber: #a15c07;
-  --amber-soft: #fdf1dc;
+  --accent: var(--sage-accent);
+  --highlight: var(--sage-highlight);
+  --green: var(--sage-primary);
+  --green-soft: color-mix(in srgb, var(--sage-accent) 28%, var(--sage-background));
+  --amber: #8a5a00;
+  --amber-soft: color-mix(in srgb, var(--sage-highlight) 45%, var(--sage-background));
   --red: #b42318;
   --red-soft: #fde8e6;
   --blue: #1d5fa8;
   --blue-soft: #e4eefa;
   --purple: #6941c6;
   --purple-soft: #efe9fb;
-  --focus: #1d5fa8;
-  --shadow: 0 1px 2px rgb(31 42 31 / 0.05), 0 1px 3px rgb(31 42 31 / 0.06);
-  --shadow-lg: 0 12px 32px rgb(31 42 31 / 0.18);
+  --focus: var(--sage-primary);
+  --shadow: 0 1px 2px rgb(31 45 33 / 0.05), 0 1px 3px rgb(31 45 33 / 0.06);
+  --shadow-lg: 0 12px 32px rgb(31 45 33 / 0.16);
   --radius: 10px;
   --radius-sm: 7px;
   --sidebar-w: 248px;
@@ -1485,8 +1500,11 @@ input[type='radio'] {
   display: block;
 }
 .chart .bar {
-  fill: var(--primary);
-  opacity: 0.85;
+  fill: var(--accent);
+  stroke: var(--primary);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 1;
 }
 .chart .hit {
   fill: transparent;
@@ -1495,7 +1513,7 @@ input[type='radio'] {
   fill: color-mix(in srgb, var(--text) 6%, transparent);
 }
 .chart .line {
-  stroke: var(--accent);
+  stroke: var(--primary);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
@@ -1528,11 +1546,11 @@ input[type='radio'] {
   border-radius: 3px;
 }
 .swatch-bar {
-  background: var(--primary);
+  background: var(--accent);
 }
 .swatch-line {
   height: 3px;
-  background: var(--accent);
+  background: var(--primary);
 }
 .breakdown,
 .rating-bars {
@@ -1579,7 +1597,7 @@ input[type='radio'] {
   background: var(--blue);
 }
 .bd-star {
-  background: var(--accent);
+  background: var(--highlight);
 }
 .bd-value {
   text-align: right;
@@ -1632,7 +1650,9 @@ input[type='radio'] {
   gap: 1px;
 }
 .star-on {
-  fill: var(--accent);
+  fill: var(--highlight);
+  stroke: color-mix(in srgb, var(--highlight) 55%, var(--amber));
+  stroke-width: 1.2;
 }
 .star-off {
   fill: var(--border-strong);
@@ -1722,7 +1742,7 @@ input[type='radio'] {
   scroll-margin-top: 80px;
 }
 .banner-preview {
-  --brand: #2f7d4a;
+  --brand: var(--sage-primary);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2349,11 +2369,11 @@ input[type='radio'] {
    No layout, spacing, sizing or typography is changed here.
    ===================================================================== */
 :root {
-  --glass-bg: rgb(255 255 255 / 0.62);
-  --glass-bg-strong: rgb(255 255 255 / 0.78);
-  --glass-bg-soft: rgb(255 255 255 / 0.42);
-  --glass-border: rgb(255 255 255 / 0.75);
-  --glass-edge: rgb(47 125 74 / 0.12);
+  --glass-bg: var(--card);
+  --glass-bg-strong: var(--surface);
+  --glass-bg-soft: color-mix(in srgb, var(--surface) 60%, transparent);
+  --glass-border: var(--border);
+  --glass-edge: color-mix(in srgb, var(--primary) 10%, transparent);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.85), inset 0 0 0 1px rgb(255 255 255 / 0.25);
   --glass-shadow: 0 1px 2px rgb(31 42 31 / 0.04), 0 8px 24px -6px rgb(31 42 31 / 0.1);
   --glass-shadow-hover: 0 2px 4px rgb(31 42 31 / 0.05), 0 14px 32px -8px rgb(31 42 31 / 0.16);
@@ -2442,8 +2462,8 @@ body {
   backdrop-filter: var(--glass-blur);
 }
 .sidebar {
-  background: var(--glass-bg);
-  border-right-color: var(--glass-border);
+  background: var(--surface-2);
+  border-right-color: var(--border);
   box-shadow: inset -1px 0 0 var(--glass-edge), var(--glass-highlight);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -2806,7 +2826,7 @@ textarea:not(:disabled):not([readonly]):hover {
 }
 .chart .bar:has(+ .hit:hover) {
   opacity: 1;
-  fill: var(--primary-hover);
+  fill: color-mix(in srgb, var(--accent) 70%, var(--primary));
 }
 
 /* Text links */
@@ -3099,4 +3119,14 @@ button.avatar:hover {
   .wizard-actions {
     flex-wrap: wrap;
   }
+}
+
+/* Modern Sage: text on the pale-lime selection tint uses the darker green for AA contrast. */
+.nav-link.active,
+.nav-link:hover,
+.tab.active,
+.tab.active .tab-count,
+.chip input:checked + span,
+.account-link:hover {
+  color: var(--primary-hover);
 }
