@@ -3,7 +3,7 @@
 
 import { readFile, writeFile, rename, unlink, mkdir, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join, normalize, extname, resolve } from 'node:path';
+import { join, extname, resolve, sep, posix } from 'node:path';
 import * as core from '../dist/api-core.js';
 import { ApiError } from '../dist/errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS } from '../dist/rpc.js';
@@ -462,13 +462,14 @@ export function createApp(config) {
       res.end(req.method === 'HEAD' ? undefined : indexHtml);
       return true;
     }
-    const rel = normalize(decodeURIComponent(pathname)).replace(/^[/\\]+/, '');
-    if (rel.includes('..') || rel.includes('\0')) return false;
+    // URL paths always use '/', so normalise them as POSIX paths on every platform (Windows included).
+    const rel = posix.normalize(decodeURIComponent(pathname)).replace(/^\/+/, '');
+    if (rel.includes('..') || rel.includes('\0') || rel.includes('\\')) return false;
     if (!STATIC_FILES.includes(rel) && !STATIC_ROOTS.some((r) => rel.startsWith(r))) return false;
     const type = STATIC_TYPES[extname(rel)];
     if (!type) return false;
-    const full = join(rootDir, rel);
-    if (!full.startsWith(rootDir)) return false;
+    const full = join(rootDir, ...rel.split('/'));
+    if (!full.startsWith(rootDir + sep)) return false;
     const st = await stat(full).catch(() => null);
     if (!st?.isFile()) return false;
     res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'no-cache' });
