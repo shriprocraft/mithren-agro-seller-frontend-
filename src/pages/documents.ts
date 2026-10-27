@@ -3,7 +3,7 @@
 
 import type { Page } from '../router.js';
 import { html, on, formValues } from '../ui/dom.js';
-import { pageHeader, field, select, icon, badge, callout, showFieldErrors } from '../ui/components.js';
+import { pageHeader, field, select, icon, badge, callout, showFieldErrors, fileInput } from '../ui/components.js';
 import { toast, modal } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { fmtDate, fileSize } from '../lib.js';
@@ -95,16 +95,11 @@ function openUpload(view: ApplicationView, kinds: ApplicationDocKind[], initial:
   modal({
     title: 'Upload document',
     body: html`<form class="stack" novalidate>
-      ${select({ name: 'kind', label: 'Document type', value: initial, options: kinds.map((k) => [k, DOC_KIND_LABEL[k]] as [string, string]) })}
-      <div class="field">
-        <label for="f_file">File<span class="req" aria-hidden="true"> *</span></label>
-        <input type="file" id="f_file" name="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required aria-describedby="f_file_hint f_file_err" />
-        <p class="hint" id="f_file_hint">PDF, JPG or PNG up to 5 MB (logos: PNG or JPG up to 2 MB).</p>
-        <p class="field-error" id="f_file_err" hidden></p>
-      </div>
+      ${select({ name: 'kind', label: 'Document type', value: initial, placeholder: 'Select document type', options: kinds.map((k) => [k, DOC_KIND_LABEL[k]] as [string, string]) })}
+      ${fileInput({ name: 'file', label: 'File', required: true, accept: '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png', prompt: 'Choose a file to upload', hint: 'PDF, JPG or PNG up to 5 MB (logos: PNG or JPG up to 2 MB).' })}
       <div id="cert-fields" ${initial === 'organic_cert' ? '' : 'hidden'}>
-        ${field({ name: 'certBody', label: 'Certification body', value: view.data.certBody, required: true })}
-        ${field({ name: 'certNumber', label: 'Certificate number', value: view.data.certNumber, hint: 'If applicable.' })}
+        ${field({ name: 'certBody', label: 'Certification body', value: view.data.certBody, required: true, placeholder: 'Enter the certification body' })}
+        ${field({ name: 'certNumber', label: 'Certificate number', value: view.data.certNumber, placeholder: 'Enter your certificate number', hint: 'If applicable.' })}
         <div class="row-2">
           ${field({ name: 'certIssueDate', label: 'Issue date', type: 'date', value: view.data.certIssueDate, attrs: `max="${today}"` })}
           ${field({ name: 'certExpiryDate', label: 'Expiry date', type: 'date', value: view.data.certExpiryDate, attrs: `min="${today}"` })}

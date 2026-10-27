@@ -378,8 +378,9 @@ td.mono,
   text-align: center;
 }
 main {
+  flex: 1 0 auto; /* pushes the footer to the bottom on short pages */
   padding: 24px;
-  max-width: 1320px;
+  max-width: 1560px;
   width: 100%;
   margin: 0 auto;
   outline: none;
@@ -943,9 +944,73 @@ a.metric:hover {
 .pager {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 4px 0;
   font-size: 14px;
+}
+.pager-count {
+  color: var(--text-2);
+}
+.pager-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pager-pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pager-num {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.pager-num:hover {
+  background: var(--surface-2);
+}
+.pager-num.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+  font-weight: 600;
+  cursor: default;
+}
+.pager-gap {
+  padding: 0 4px;
+  color: var(--text-3);
+}
+.pager-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+}
+.pager-size select {
+  width: auto;
+  min-width: 78px;
+}
+
+/* ---------- blocks that pair a table with its pager ---------- */
+.table-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.table-block > .table-wrap {
+  margin: 0;
 }
 
 /* ---------- forms ---------- */
@@ -1210,9 +1275,10 @@ input[type='radio'] {
 }
 
 /* ---------- product form ---------- */
+/* Main form ≈ 2/3, side panels ≈ 1/3. The side column keeps a usable minimum width. */
 .form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -1820,8 +1886,9 @@ input[type='radio'] {
 /* ---------- documents ---------- */
 .doc-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
   gap: 16px;
+  align-items: start; /* cards size to their content instead of stretching to the tallest in the row */
 }
 .doc-card .card-title {
   font-size: 15px;
@@ -1996,7 +2063,7 @@ input[type='radio'] {
 /* ---------- empty / loading ---------- */
 .empty {
   text-align: center;
-  padding: 48px 20px;
+  padding: 32px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2063,12 +2130,21 @@ input[type='radio'] {
   z-index: 60;
   animation: fade 0.12s ease-out;
 }
+/*
+ * The dialog is a flex column that never scrolls itself: the header stays put and only
+ * .modal-body scrolls. Because the rounded, overflow-hidden shell clips the scroller, the
+ * scrollbar can't poke past the right-hand corners. Its scrollbar is hidden (scrolling still works).
+ */
 .modal {
+  --modal-radius: 16px;
+  display: flex;
+  flex-direction: column;
   width: min(520px, 100%);
   max-height: calc(100vh - 32px);
-  overflow-y: auto;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
   background: var(--surface);
-  border-radius: 14px;
+  border-radius: var(--modal-radius);
   box-shadow: var(--shadow-lg);
 }
 .modal-wide {
@@ -2076,21 +2152,33 @@ input[type='radio'] {
 }
 .modal-head {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
   background: var(--surface);
-  z-index: 1;
 }
 .modal-head h2 {
   font-size: 17px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+.modal-body::-webkit-scrollbar {
+  display: none; /* Chrome, Edge, Safari */
+  width: 0;
+  height: 0;
 }
 .modal-actions {
   display: flex;
@@ -2098,6 +2186,16 @@ input[type='radio'] {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 4px;
+}
+/* Keep the primary buttons reachable while a long form scrolls underneath them. */
+.modal-body .modal-actions {
+  position: sticky;
+  bottom: -20px;
+  z-index: 2;
+  margin: 4px -20px -20px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 .proto-grid {
   display: flex;
@@ -3434,4 +3532,410 @@ input[type='search'],
     width: 40px;
     height: 40px;
   }
+}
+
+/* ======================================================================
+   Filters, pagination, uploads, variants and footer
+   ====================================================================== */
+
+/* ---------- filter toolbars (products, ledger) ---------- */
+.product-filters,
+.ledger-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toolbar .select-inline {
+  width: auto;
+  max-width: 100%;
+}
+.filter-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.filter-panel > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px;
+}
+.filter-panel > summary::-webkit-details-marker {
+  display: none;
+}
+.filter-panel:not([open]) {
+  border-color: transparent;
+  background: transparent;
+  width: fit-content;
+}
+.filter-panel:not([open]) > summary {
+  margin: 0;
+}
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 16px;
+  padding: 4px 16px 16px;
+}
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px 12px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.filter-group legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.filter-group .field label {
+  font-size: 13px;
+}
+.filter-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.filter-summary .chip-row {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.filter-summary > .muted {
+  margin-left: auto;
+}
+
+/* ---------- file pickers and product image upload ---------- */
+.file-drop,
+.image-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 18px 16px;
+  text-align: center;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.image-drop {
+  padding: 28px 16px;
+  gap: 6px;
+}
+.file-drop:hover,
+.file-drop:focus-within,
+.image-drop:hover,
+.image-drop:focus-within,
+.image-drop.is-over {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.file-drop.has-file {
+  border-style: solid;
+  border-color: var(--primary);
+}
+.file-drop input[type='file'],
+.image-drop input[type='file'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+}
+.file-drop-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow);
+}
+.file-drop-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.image-grid:empty {
+  display: none;
+  margin: 0;
+}
+.image-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+}
+.image-tile.is-primary {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.image-tile img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.image-primary {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.image-actions .btn {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.preview-img {
+  overflow: hidden;
+}
+.preview-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------- product variants ---------- */
+.expander {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.expander:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.expander .icon {
+  transition: transform 0.15s ease;
+}
+.expander[aria-expanded='true'] .icon {
+  transform: rotate(180deg);
+}
+.table tr.is-open > td {
+  border-bottom-color: transparent;
+}
+.table tr.variant-row > td {
+  padding: 0 14px 14px;
+  background: var(--surface-2);
+}
+.variant-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow-x: auto;
+}
+.variant-panel .table th,
+.variant-panel .table td {
+  padding: 8px 12px;
+}
+.variant-panel .table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---------- footer credit ---------- */
+.app-footer {
+  flex: none;
+  padding: 16px 24px calc(16px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.app-footer a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.app-footer a:hover,
+.app-footer a:focus-visible {
+  text-decoration: underline;
+}
+
+/* ---------- tablet ---------- */
+@media (max-width: 1024px) {
+  /* Stacked side panels sit side by side in columns that stay wide enough to use. */
+  .form-side {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    align-items: start;
+  }
+  .form-side .sticky-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- mobile ---------- */
+@media (max-width: 720px) {
+  .app-footer {
+    padding-inline: 16px;
+  }
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .toolbar .search {
+    max-width: none;
+    flex-basis: auto;
+  }
+  .toolbar .select-inline {
+    width: 100%;
+  }
+  .filter-panel {
+    width: 100%;
+  }
+  .filter-panel:not([open]) {
+    width: 100%;
+  }
+  .filter-panel > summary {
+    display: flex;
+    justify-content: center;
+    min-height: 42px;
+  }
+  .filter-panel:not([open]) > summary {
+    width: 100%;
+  }
+  .filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .filter-summary > .muted {
+    margin-left: 0;
+    width: 100%;
+  }
+  .pager {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .pager-nav,
+  .pager-size {
+    justify-content: center;
+  }
+  .pager-nav .btn {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .page-actions,
+  .page-actions .btn {
+    max-width: 100%;
+  }
+  .modal-backdrop {
+    padding: 12px;
+  }
+  .modal-head,
+  .modal-body {
+    padding-inline: 16px;
+  }
+  .modal-body .modal-actions {
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+  .modal-actions .btn {
+    flex: 1 1 120px;
+  }
+  .image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .btn-block,
+  .sticky-actions .btn {
+    width: 100%;
+  }
+}
+
+/* Touch screens: comfortable hit areas for compact controls. */
+@media (pointer: coarse) {
+  .btn-sm,
+  .pager-num,
+  .expander,
+  .link-btn {
+    min-height: 40px;
+  }
+  .pager-num {
+    min-width: 40px;
+  }
+}
+
+/* ---------- fill the available space (no dead areas beside shorter cards) ---------- */
+/* Paired cards share a row height instead of leaving a gap under the shorter one. */
+.grid-main {
+  align-items: stretch;
+}
+.grid-main > .card {
+  display: flex;
+  flex-direction: column;
+}
+.grid-main > .card > .formula {
+  margin-top: auto;
+}
+/* Documents: masonry columns so cards of different heights pack together. */
+.doc-grid {
+  display: block;
+  column-width: 340px;
+  column-gap: 16px;
+}
+.doc-grid > .card {
+  display: inline-block;
+  width: 100%;
+  margin: 0 0 16px;
+  break-inside: avoid;
+}
+/* Reviews: use the full width on large screens. */
+.review-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.review-list > .review {
+  height: 100%;
 }

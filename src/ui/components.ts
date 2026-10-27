@@ -1,6 +1,7 @@
 // Shared presentational components. All return escaped HTML via `html`.
 
 import { html, raw, esc, type Raw, $, $$ } from './dom.js';
+import { setQuery } from '../router.js';
 import { ORDER_STATUS_LABEL, PRODUCT_STATUS_LABEL, SETTLEMENT_LABEL, SELLER_STATUS_LABEL } from '../lib.js';
 import type { OrderStatus, ProductStatus, SettlementState, SellerStatus } from '../types.js';
 
@@ -171,17 +172,52 @@ export function textarea(o: FieldOpts & { rows?: number }) {
     </div>`;
 }
 
+/** `placeholder` adds a leading empty option such as "Select category". */
 export function select(o: FieldOpts & { options: [string, string][] }) {
   const id = `f_${o.name}`;
+  const options: [string, string][] = o.placeholder ? [['', o.placeholder], ...o.options] : o.options;
   return html`
     <div class="field ${o.error ? 'has-error' : ''}">
       <label for="${id}">${o.label}${o.required ? html`<span class="req" aria-hidden="true"> *</span>` : ''}</label>
       <select id="${id}" name="${o.name}" ${o.required ? raw('required') : ''} ${o.disabled ? raw('disabled') : ''} aria-describedby="${id}_hint ${id}_err" ${o.error ? raw('aria-invalid="true"') : ''} ${raw(o.attrs ?? '')}>
-        ${o.options.map(([v, l]) => html`<option value="${v}" ${String(o.value ?? '') === v ? raw('selected') : ''}>${l}</option>`)}
+        ${options.map(([v, l]) => html`<option value="${v}" ${String(o.value ?? '') === v ? raw('selected') : ''}>${l}</option>`)}
       </select>
       ${o.hint ? html`<p class="hint" id="${id}_hint">${o.hint}</p>` : ''}
       <p class="field-error" id="${id}_err" ${o.error ? '' : raw('hidden')}>${o.error ?? ''}</p>
     </div>`;
+}
+
+/**
+ * File picker with visible instructions (instead of a text placeholder, which file inputs don't have).
+ * The native input stays the real control, so keyboard, drag-and-drop and form submission all work.
+ */
+export function fileInput(o: { name: string; label: string; accept: string; hint: string; required?: boolean; multiple?: boolean; prompt?: string; attrs?: string }) {
+  const id = `f_${o.name}`;
+  return html`
+    <div class="field">
+      <label for="${id}">${o.label}${o.required ? html`<span class="req" aria-hidden="true"> *</span>` : ''}</label>
+      <div class="file-drop" data-file-drop>
+        <span class="file-drop-icon" aria-hidden="true">${icon('upload', 22)}</span>
+        <span class="file-drop-text"><strong>${o.prompt ?? 'Choose a file'}</strong> or drag it here</span>
+        <span class="file-drop-name muted small" data-file-name>No file selected</span>
+        <input type="file" id="${id}" name="${o.name}" accept="${o.accept}" ${o.multiple ? raw('multiple') : ''} ${o.required ? raw('required') : ''} aria-describedby="${id}_hint ${id}_err" ${raw(o.attrs ?? '')} />
+      </div>
+      <p class="hint" id="${id}_hint">${o.hint}</p>
+      <p class="field-error" id="${id}_err" hidden></p>
+    </div>`;
+}
+
+/** Shows the chosen file name inside every `fileInput` under `root`. */
+export function bindFileInputs(root: HTMLElement) {
+  root.addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement;
+    const drop = input.closest?.('[data-file-drop]');
+    if (!drop || input.type !== 'file') return;
+    const files = Array.from(input.files ?? []);
+    const label = drop.querySelector('[data-file-name]');
+    if (label) label.textContent = files.length === 0 ? 'No file selected' : files.length === 1 ? files[0]!.name : `${files.length} files selected`;
+    drop.classList.toggle('has-file', files.length > 0);
+  });
 }
 
 /** Writes server-side field errors back into a rendered form. */
@@ -234,6 +270,98 @@ export function stars(rating: number, size = 14) {
   return html`<span class="stars" role="img" aria-label="${rating} out of 5 stars">${Array.from({ length: 5 }, (_, i) =>
     raw(`<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" class="${i < full ? 'star-on' : 'star-off'}"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6L12 16.3 6.6 19.3l1.3-6L3.3 9.2l6.1-.6L12 3Z"/></svg>`),
   )}</span>`;
+}
+
+// ---------- pagination ----------
+export const PAGE_SIZES = [10, 25, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 25;
+
+export interface PageInfo {
+  page: number;
+  size: number;
+  pages: number;
+  total: number;
+  /** 1-based index of the first and last row shown (0 when empty). */
+  from: number;
+  to: number;
+  /** Query-string keys, so several tables on one page paginate independently. */
+  pageKey: string;
+  sizeKey: string;
+}
+
+const keysFor = (key: string) => (key ? { pageKey: `${key}_page`, sizeKey: `${key}_size` } : { pageKey: 'page', sizeKey: 'size' });
+
+/**
+ * Slices `items` for the current page. State lives in the URL (`page`/`size`, or
+ * `<key>_page`/`<key>_size`), so it survives a refresh and is shareable. Out-of-range
+ * pages are clamped, which also covers "filters changed and the list got shorter".
+ */
+export function paginate<T>(items: T[], query: URLSearchParams, key = ''): { rows: T[]; info: PageInfo } {
+  const { pageKey, sizeKey } = keysFor(key);
+  const wanted = Number(query.get(sizeKey));
+  const size = (PAGE_SIZES as readonly number[]).includes(wanted) ? wanted : DEFAULT_PAGE_SIZE;
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / size));
+  const page = Math.min(pages, Math.max(1, Math.floor(Number(query.get(pageKey))) || 1));
+  const start = (page - 1) * size;
+  return { rows: items.slice(start, start + size), info: { page, size, pages, total, from: total ? start + 1 : 0, to: Math.min(total, start + size), pageKey, sizeKey } };
+}
+
+/** Page numbers to show: first, last, and a window around the current page, with gaps as null. */
+function pageWindow(page: number, pages: number): (number | null)[] {
+  const keep = new Set([1, pages, page - 1, page, page + 1]);
+  if (page <= 3) [2, 3, 4].forEach((n) => keep.add(n));
+  if (page >= pages - 2) [pages - 1, pages - 2, pages - 3].forEach((n) => keep.add(n));
+  const nums = [...keep].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  nums.forEach((n, i) => {
+    if (i && n - nums[i - 1]! > 1) out.push(null);
+    out.push(n);
+  });
+  return out;
+}
+
+/** Pager markup. Wire it up once per page with `bindPager`. Renders nothing for an empty list. */
+export function pager(info: PageInfo, noun = 'records') {
+  if (!info.total) return html``;
+  const { page, pages, size, pageKey, sizeKey } = info;
+  const sizeId = `ps_${pageKey}`;
+  return html`<nav class="pager" aria-label="Pagination${info.pageKey === 'page' ? '' : ` for ${noun}`}" data-pager="${pageKey}">
+    <p class="pager-count" aria-live="polite">Showing <strong>${info.from}–${info.to}</strong> of <strong>${info.total}</strong> ${noun}</p>
+    <div class="pager-nav">
+      <button class="btn btn-sm" type="button" data-pager-page="${page - 1}" data-pager-key="${pageKey}" ${page <= 1 ? raw('disabled') : ''}>Previous</button>
+      <ol class="pager-pages">${pageWindow(page, pages).map((n) =>
+        n === null
+          ? html`<li class="pager-gap" aria-hidden="true">…</li>`
+          : html`<li><button type="button" class="pager-num ${n === page ? 'active' : ''}" data-pager-page="${n}" data-pager-key="${pageKey}" ${n === page ? raw('aria-current="page"') : ''} aria-label="Page ${n}">${n}</button></li>`,
+      )}</ol>
+      <button class="btn btn-sm" type="button" data-pager-page="${page + 1}" data-pager-key="${pageKey}" ${page >= pages ? raw('disabled') : ''}>Next</button>
+    </div>
+    <div class="pager-size">
+      <label for="${sizeId}">Rows per page</label>
+      <select id="${sizeId}" class="select-inline" data-pager-size="${sizeKey}" data-pager-key="${pageKey}">${PAGE_SIZES.map((n) => html`<option value="${n}" ${n === size ? raw('selected') : ''}>${n}</option>`)}</select>
+    </div>
+  </nav>`;
+}
+
+/** Delegated handlers for every `pager(...)` inside `root`. `refresh` re-runs the page. */
+export function bindPager(root: HTMLElement, refresh: () => void) {
+  root.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-pager-page]');
+    if (!btn || !root.contains(btn) || (btn as HTMLButtonElement).disabled) return;
+    const key = btn.dataset.pagerKey!;
+    // Land at the top of the table, not the top of the page, when paging a long table.
+    (btn.closest('.table-block, .card') ?? root).scrollIntoView({ block: 'nearest' });
+    setQuery({ [key]: btn.dataset.pagerPage === '1' ? undefined : btn.dataset.pagerPage });
+    refresh();
+  });
+  root.addEventListener('change', (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>('[data-pager-size]');
+    if (!sel || !root.contains(sel)) return;
+    // A different page size makes the old page number meaningless.
+    setQuery({ [sel.dataset.pagerSize!]: sel.value === String(DEFAULT_PAGE_SIZE) ? undefined : sel.value, [sel.dataset.pagerKey!]: undefined });
+    refresh();
+  });
 }
 
 export function tabs(items: { href: string; label: string; count?: number; active: boolean }[], label: string) {

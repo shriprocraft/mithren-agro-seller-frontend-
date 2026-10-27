@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
 import { html, on } from '../ui/dom.js';
-import { pageHeader, emptyState, stars, badge } from '../ui/components.js';
+import { pageHeader, emptyState, stars, badge, paginate, pager, bindPager } from '../ui/components.js';
 import { ratingBars } from '../ui/charts.js';
 import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
@@ -17,7 +17,8 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const avg = total ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
   const dist = [1, 2, 3, 4, 5].map((n) => reviews.filter((r) => r.rating === n).length);
   const replied = reviews.filter((r) => r.reply).length;
-  const shown = reviews.filter((r) => (filter === 'unanswered' ? !r.reply : filter === 'critical' ? r.rating <= 3 : true));
+  const filteredReviews = reviews.filter((r) => (filter === 'unanswered' ? !r.reply : filter === 'critical' ? r.rating <= 3 : true));
+  const { rows: shown, info } = paginate(filteredReviews, query, 'rv');
 
   const finished = orders.filter((o) => ['delivered', 'cancelled', 'rejected', 'returned', 'return_requested'].includes(o.status));
   const delivered = orders.filter((o) => o.status === 'delivered').length;
@@ -78,13 +79,14 @@ const page: Page = async ({ root, query, seller, refresh }) => {
                   </form>`
                 : ''}
           </li>`,
-        )}</ul>`
+        )}</ul>${pager(info, 'reviews')}`
       : emptyState('No reviews here', filter ? 'Nothing matches this filter.' : 'Reviews from customers will appear here.')}`.value;
 
   on(root, 'click', '[data-filter]', (_e, el) => {
-    setQuery({ filter: el.dataset.filter || undefined });
+    setQuery({ filter: el.dataset.filter || undefined, rv_page: undefined });
     refresh();
   });
+  bindPager(root, refresh);
   on(root, 'submit', '.reply-form', async (e, form) => {
     e.preventDefault();
     const ta = form.querySelector('textarea')!;

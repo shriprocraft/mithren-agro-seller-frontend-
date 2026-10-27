@@ -16,8 +16,8 @@ const page: Page = ({ root, query }) => {
         <p class="muted">Manage your shop, orders and payouts.</p>
       </header>
       <form class="card auth-card" novalidate data-role="sign-in">
-        ${field({ name: 'email', label: 'Email', type: 'email', required: true, attrs: 'autocomplete="email" autofocus' })}
-        ${field({ name: 'password', label: 'Password', type: 'password', required: true, attrs: 'autocomplete="current-password"' })}
+        ${field({ name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'Enter your registered email address', attrs: 'autocomplete="email" autofocus' })}
+        ${field({ name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Enter your password', attrs: 'autocomplete="current-password"' })}
         <p class="form-error" role="alert" hidden></p>
         <button type="submit" class="btn btn-primary btn-block">Sign in</button>
         <p class="muted small center">New to Mithren Agro? <a href="#/seller/register">Create a seller account</a></p>

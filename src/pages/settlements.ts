@@ -2,15 +2,17 @@
 
 import type { Page } from '../router.js';
 import { html, raw, on } from '../ui/dom.js';
-import { pageHeader, settlementBadge, emptyState, icon, callout, badge, field, showFieldErrors } from '../ui/components.js';
+import { pageHeader, settlementBadge, emptyState, icon, callout, badge, field, showFieldErrors, paginate, pager, bindPager } from '../ui/components.js';
 import { toast, modal } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money2, fmtDate } from '../lib.js';
 import { round2 } from '../data/seed.js';
 import type { Settlement } from '../types.js';
 
-const page: Page = async ({ root, seller, refresh }) => {
+const page: Page = async ({ root, query, seller, refresh }) => {
   const [settlements, ledger, requests] = await Promise.all([api.listSettlements(), api.getLedger(), api.listPayoutRequests()]);
+  const stPage = paginate(settlements, query, 'st');
+  const prPage = paginate(requests, query, 'pr');
   const eligible = round2(ledger.filter((l) => l.state === 'eligible' && !l.settlementId).reduce((s, l) => s + l.net, 0));
   const pending = round2(ledger.filter((l) => l.state === 'pending').reduce((s, l) => s + l.net + l.hold, 0));
   const processing = round2(settlements.filter((s) => s.state === 'processing').reduce((s, x) => s + x.amount, 0));
@@ -47,29 +49,30 @@ const page: Page = async ({ root, seller, refresh }) => {
     <section class="card" aria-labelledby="st-h">
       <h2 id="st-h" class="card-title">Settlement history</h2>
       ${settlements.length
-        ? html`<div class="table-wrap"><table class="table">
+        ? html`<div class="table-block"><div class="table-wrap"><table class="table">
             <thead><tr><th scope="col">Settlement</th><th scope="col">Period</th><th scope="col" class="num">Orders</th><th scope="col" class="num">Amount</th><th scope="col">State</th><th scope="col">Reference</th><th scope="col">Paid on</th></tr></thead>
-            <tbody>${settlements.map(row)}</tbody></table></div>`
+            <tbody>${stPage.rows.map(row)}</tbody></table></div>${pager(stPage.info, 'settlements')}</div>`
         : emptyState('No settlements yet', 'Your first settlement runs after your first orders clear the return window.')}
     </section>
 
     ${requests.length
       ? html`<section class="card" aria-labelledby="pr-h">
           <h2 id="pr-h" class="card-title">Payout requests</h2>
-          <div class="table-wrap"><table class="table table-compact">
+          <div class="table-block"><div class="table-wrap"><table class="table table-compact">
             <thead><tr><th scope="col">Request</th><th scope="col">Requested</th><th scope="col" class="num">Amount</th><th scope="col">Status</th><th scope="col">Note</th></tr></thead>
-            <tbody>${requests.map((r) => html`<tr><td class="mono small">${r.id}</td><td>${fmtDate(r.requestedAt)}</td><td class="num">${money2(r.amount)}</td><td>${r.state === 'requested' ? badge('Awaiting review', 'amber') : r.state === 'paid' ? badge('Paid', 'green') : r.state === 'approved' ? badge('Approved', 'blue') : badge('Rejected', 'red')}</td><td class="muted">${r.note ?? '—'}</td></tr>`)}</tbody>
-          </table></div>
+            <tbody>${prPage.rows.map((r) => html`<tr><td class="mono small">${r.id}</td><td>${fmtDate(r.requestedAt)}</td><td class="num">${money2(r.amount)}</td><td>${r.state === 'requested' ? badge('Awaiting review', 'amber') : r.state === 'paid' ? badge('Paid', 'green') : r.state === 'approved' ? badge('Approved', 'blue') : badge('Rejected', 'red')}</td><td class="muted">${r.note ?? '—'}</td></tr>`)}</tbody>
+          </table></div>${pager(prPage.info, 'payout requests')}</div>
         </section>`
       : ''}`.value;
 
+  bindPager(root, refresh);
   on(root, 'click', '[data-action=request]', () => {
     const max = round2(eligible - openReq);
     modal({
       title: 'Request a payout',
       body: html`<form class="stack" novalidate>
         <p>You can request up to <strong>${money2(max)}</strong> from your eligible balance. The platform reviews requests and pays them with the next transfer batch.</p>
-        ${field({ name: 'amount', label: 'Amount (₹)', type: 'number', value: Math.floor(max), required: true, attrs: `min="500" max="${max}" step="0.01" inputmode="decimal" autofocus` })}
+        ${field({ name: 'amount', label: 'Amount (₹)', type: 'number', value: Math.floor(max), required: true, placeholder: 'Enter payout amount in ₹ (minimum 500)', attrs: `min="500" max="${max}" step="0.01" inputmode="decimal" autofocus` })}
         <p class="form-error" role="alert" hidden></p>
         <div class="modal-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Submit request</button></div>
       </form>`,

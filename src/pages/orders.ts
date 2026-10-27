@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
 import { html, on } from '../ui/dom.js';
-import { pageHeader, orderBadge, emptyState, tabs, icon, badge } from '../ui/components.js';
+import { pageHeader, orderBadge, emptyState, tabs, icon, badge, paginate, pager, bindPager } from '../ui/components.js';
 import { toast } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money, timeAgo, fmtDate } from '../lib.js';
@@ -17,16 +17,12 @@ const TABS: [string, string][] = [
   ['', 'All'],
 ];
 
-const PAGE_SIZE = 25;
-
 const page: Page = async ({ root, query, seller, refresh }) => {
   const status = query.get('status') ?? 'active';
   const q = query.get('q') ?? '';
-  const pageNo = Math.max(1, Number(query.get('page') ?? 1));
   const [all, list] = await Promise.all([api.listOrders(), api.listOrders({ status, q })]);
   const countFor = (s: string) => (s ? all.filter((o) => (s === 'active' ? ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit'].includes(o.status) : s === 'issues' ? ['cancelled', 'rejected', 'return_requested', 'returned'].includes(o.status) : o.status === s)).length : all.length);
-  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
-  const shown = list.slice((pageNo - 1) * PAGE_SIZE, pageNo * PAGE_SIZE);
+  const { rows: shown, info } = paginate(list, query);
   const canAct = seller.status === 'approved';
 
   root.innerHTML = html`
@@ -40,18 +36,11 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       </div>
     </form>
     ${shown.length
-      ? html`<div class="table-wrap"><table class="table">
+      ? html`<div class="table-block"><div class="table-wrap"><table class="table">
           <caption class="sr-only">Orders</caption>
           <thead><tr><th scope="col">Order</th><th scope="col">Placed</th><th scope="col">Slot</th><th scope="col">Customer</th><th scope="col">Items</th><th scope="col" class="num">Value</th><th scope="col">Payment</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
           <tbody>${shown.map((o) => row(o, canAct))}</tbody>
-        </table></div>
-        ${pages > 1
-          ? html`<nav class="pager" aria-label="Pagination">
-              <button class="btn btn-sm" type="button" data-page="${pageNo - 1}" ${pageNo <= 1 ? 'disabled' : ''}>Previous</button>
-              <span class="muted">Page ${pageNo} of ${pages} · ${list.length} orders</span>
-              <button class="btn btn-sm" type="button" data-page="${pageNo + 1}" ${pageNo >= pages ? 'disabled' : ''}>Next</button>
-            </nav>`
-          : ''}`
+        </table></div>${pager(info, 'orders')}</div>`
       : emptyState(status === 'awaiting_confirmation' ? 'No orders to confirm' : 'No orders here', status === 'awaiting_confirmation' ? 'New orders appear here first. You’ll also get a notification.' : 'Try another tab or clear your search.')}
   `.value;
 
@@ -64,11 +53,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     }, 300);
   });
   on(root, 'submit', '[data-role=filters]', (e) => e.preventDefault());
-  on(root, 'click', '[data-page]', (_e, el) => {
-    setQuery({ page: el.dataset.page });
-    refresh();
-    window.scrollTo(0, 0);
-  });
+  bindPager(root, refresh);
   on(root, 'click', '[data-action=accept]', async (_e, el) => {
     (el as HTMLButtonElement).disabled = true;
     try {

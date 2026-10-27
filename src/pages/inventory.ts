@@ -2,7 +2,8 @@
 
 import type { Page } from '../router.js';
 import { html, on, $ } from '../ui/dom.js';
-import { pageHeader, emptyState, tabs, icon, badge, field, select, textarea, showFieldErrors } from '../ui/components.js';
+import { setQuery } from '../router.js';
+import { pageHeader, emptyState, tabs, icon, badge, field, select, textarea, showFieldErrors, fileInput, paginate, pager, bindPager } from '../ui/components.js';
 import { toast, modal, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { fmtDate, toCsv, validateInventoryCsv, money } from '../lib.js';
@@ -26,12 +27,18 @@ const REASON_LABEL: Record<AdjustmentReason, string> = {
 
 const page: Page = async ({ root, query, seller, refresh }) => {
   const filter = query.get('filter') ?? '';
+  const q = (query.get('q') ?? '').trim();
   const products = await api.listProducts();
   const log = await api.listAdjustments();
   const readOnly = seller.status === 'suspended';
 
   const rows = products.flatMap((p) => p.variants.map((v) => ({ p, v, low: v.stock <= p.lowStockThreshold, out: v.stock === 0 })));
-  const filtered = rows.filter((r) => (filter === 'low' ? r.low : filter === 'out' ? r.out : true));
+  const needle = q.toLowerCase();
+  const filtered = rows
+    .filter((r) => (filter === 'low' ? r.low : filter === 'out' ? r.out : true))
+    .filter((r) => !needle || r.p.name.toLowerCase().includes(needle) || r.v.sku.toLowerCase().includes(needle) || r.v.label.toLowerCase().includes(needle));
+  const stockPage = paginate(filtered, query, 'inv');
+  const logPage = paginate(log, query, 'log');
   const name = (pid: string, vid: string) => {
     const p = products.find((x) => x.id === pid);
     return p ? `${p.name} · ${p.variants.find((v) => v.id === vid)?.label ?? ''}` : 'Archived product';
@@ -52,11 +59,18 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       ],
       'Filter inventory',
     )}
+    <form class="toolbar" role="search" data-role="filters">
+      <div class="search">
+        ${icon('search', 16)}
+        <label class="sr-only" for="iq">Search inventory</label>
+        <input id="iq" name="q" type="search" placeholder="Search by product, variant or SKU" value="${q}" />
+      </div>
+    </form>
     ${filtered.length
-      ? html`<div class="table-wrap"><table class="table">
+      ? html`<div class="table-block"><div class="table-wrap"><table class="table">
           <caption class="sr-only">Stock by variant</caption>
           <thead><tr><th scope="col">Product</th><th scope="col">Variant</th><th scope="col">SKU</th><th scope="col" class="num">Price</th><th scope="col" class="num">Stock</th><th scope="col" class="num">Alert at</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-          <tbody>${filtered.map(
+          <tbody>${stockPage.rows.map(
             ({ p, v, low, out }) => html`<tr>
               <td><a href="#/seller/products/${p.id}">${p.emoji} ${p.name}</a>${p.status !== 'approved' ? html` <span class="muted small">(${p.status})</span>` : ''}</td>
               <td>${v.label}</td>
@@ -67,15 +81,17 @@ const page: Page = async ({ root, query, seller, refresh }) => {
               <td>${out ? badge('Out of stock', 'red') : low ? badge('Low', 'amber') : badge('In stock', 'green')}</td>
               <td class="actions">${readOnly ? '' : html`<button type="button" class="btn btn-sm" data-action="adjust" data-p="${p.id}" data-v="${v.id}">Adjust</button>`}</td>
             </tr>`,
-          )}</tbody></table></div>`
-      : emptyState(filter ? 'Nothing here' : 'No products yet', filter === 'low' ? 'All variants are above their low-stock threshold.' : filter === 'out' ? 'Every variant has stock.' : 'Add a product to start tracking stock.')}
+          )}</tbody></table></div>${pager(stockPage.info, 'variants')}</div>`
+      : q
+        ? emptyState('No matching variants', 'Try a different product name or SKU.', html`<a class="btn" href="#/seller/inventory${filter ? `?filter=${filter}` : ''}">Clear search</a>`)
+        : emptyState(filter ? 'Nothing here' : 'No products yet', filter === 'low' ? 'All variants are above their low-stock threshold.' : filter === 'out' ? 'Every variant has stock.' : 'Add a product to start tracking stock.')}
 
     <section class="card" aria-labelledby="log-h">
       <div class="card-head"><h2 id="log-h" class="card-title">Adjustment log</h2><span class="muted small">Most recent first</span></div>
       ${log.length
-        ? html`<div class="table-wrap"><table class="table table-compact">
+        ? html`<div class="table-block"><div class="table-wrap"><table class="table table-compact">
             <thead><tr><th scope="col">When</th><th scope="col">Item</th><th scope="col" class="num">Change</th><th scope="col" class="num">New stock</th><th scope="col">Reason</th><th scope="col">Note</th><th scope="col">By</th></tr></thead>
-            <tbody>${log.slice(0, 40).map(
+            <tbody>${logPage.rows.map(
               (a) => html`<tr>
                 <td class="nowrap"><time datetime="${a.at}">${fmtDate(a.at, true)}</time></td>
                 <td>${name(a.productId, a.variantId)}</td>
@@ -85,9 +101,20 @@ const page: Page = async ({ root, query, seller, refresh }) => {
                 <td class="muted">${a.note || '—'}</td>
                 <td>${a.actor}</td>
               </tr>`,
-            )}</tbody></table></div>`
+            )}</tbody></table></div>${pager(logPage.info, 'adjustments')}</div>`
         : html`<p class="muted">No adjustments yet.</p>`}
     </section>`.value;
+
+  let searchTimer: ReturnType<typeof setTimeout>;
+  on(root, 'input', '#iq', (_e, el) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      setQuery({ q: (el as HTMLInputElement).value.trim() || undefined, inv_page: undefined });
+      refresh();
+    }, 300);
+  });
+  on(root, 'submit', '[data-role=filters]', (e) => e.preventDefault());
+  bindPager(root, refresh);
 
   on(root, 'click', '[data-action=adjust]', (_e, el) => {
     const p = products.find((x) => x.id === el.dataset.p)!;
@@ -113,10 +140,10 @@ function openAdjust(p: Product, v: Variant, refresh: () => void) {
           <label for="f_direction">Change</label>
           <select id="f_direction" name="direction"><option value="1">Add (+)</option><option value="-1">Remove (−)</option></select>
         </div>
-        ${field({ name: 'delta', label: 'Quantity', type: 'number', required: true, attrs: 'min="1" step="1" inputmode="numeric" autofocus' })}
+        ${field({ name: 'delta', label: 'Quantity', type: 'number', required: true, placeholder: 'Enter quantity', attrs: 'min="1" step="1" inputmode="numeric" autofocus' })}
       </div>
       ${select({ name: 'reason', label: 'Reason', options: REASONS })}
-      ${textarea({ name: 'note', label: 'Note', rows: 2, hint: 'Required for damage and corrections.', attrs: 'maxlength="200"' })}
+      ${textarea({ name: 'note', label: 'Note', rows: 2, placeholder: 'Add a note, e.g. damaged in transit or new harvest received', hint: 'Required for damage and corrections.', attrs: 'maxlength="200"' })}
       <p class="muted small" id="adj-preview" aria-live="polite"></p>
       <p class="form-error" role="alert" hidden></p>
       <div class="modal-actions">
@@ -173,11 +200,7 @@ function openImport(variants: Variant[], refresh: () => void) {
       <div class="row-wrap">
         <button type="button" class="btn btn-sm" data-action="template">${icon('download', 14)} Download template</button>
       </div>
-      <div class="field">
-        <label for="csv-file">CSV file</label>
-        <input type="file" id="csv-file" accept=".csv,text/csv" />
-        <p class="hint">Max 1 MB.</p>
-      </div>
+      ${fileInput({ name: 'csv-file', label: 'CSV file', accept: '.csv,text/csv', prompt: 'Choose a CSV file', hint: 'CSV only, max 1 MB.' })}
       <div id="csv-report" aria-live="polite"></div>
       <div class="modal-actions">
         <button type="button" class="btn" data-close>Cancel</button>
@@ -189,7 +212,7 @@ function openImport(variants: Variant[], refresh: () => void) {
       el.querySelector('[data-action=template]')!.addEventListener('click', () => {
         saveFile('inventory-template.csv', toCsv([['sku', 'stock', 'price'], ...variants.slice(0, 3).map((v) => [v.sku, v.stock, v.price])]));
       });
-      el.querySelector('#csv-file')!.addEventListener('change', async (e) => {
+      el.querySelector('#f_csv-file')!.addEventListener('change', async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         const report = $('#csv-report', el)!;
         const apply = el.querySelector('[data-action=apply]') as HTMLButtonElement;

@@ -131,6 +131,9 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
             : html`<div class="topbar-actions"><a class="btn btn-sm" href="#/seller/sign-in">Sign in</a></div>`}
         </header>
         <main id="main" tabindex="-1"></main>
+        <footer class="app-footer">
+          <p>Powered by <a href="https://shriprocraft.com/" target="_blank" rel="noopener noreferrer">Shri Pro Craft</a></p>
+        </footer>
       </div>
     </div>`;
 }
@@ -384,7 +387,7 @@ function openPrototypeControls() {
               <label for="proto-msg">Message to the seller</label>
               <textarea id="proto-msg" rows="2" placeholder="Required for reject, request changes and suspend"></textarea>
               <label for="proto-items">Requested items (one per line, for “Request changes”)</label>
-              <textarea id="proto-items" rows="2"></textarea>
+              <textarea id="proto-items" rows="2" placeholder="Enter one requested item per line"></textarea>
               <div class="row-wrap">
                 <button class="btn btn-sm" type="button" data-decide="approve">Approve</button>
                 <button class="btn btn-sm" type="button" data-decide="request_changes">Request changes</button>

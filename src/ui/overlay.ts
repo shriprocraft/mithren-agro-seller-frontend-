@@ -1,7 +1,7 @@
 // Toasts, modal dialogs and tooltips.
 
 import { html, raw, type Raw, $, $$, EMBEDDED, download } from './dom.js';
-import { icon } from './components.js';
+import { icon, bindFileInputs } from './components.js';
 
 export function toast(message: string, tone: 'success' | 'error' | 'info' = 'success') {
   const region = $('#toasts');
@@ -42,6 +42,7 @@ export function modal(o: ModalOpts): { close: () => void; el: HTMLElement } {
   openCount++;
   document.body.classList.add('no-scroll');
   const dialog = backdrop.firstElementChild as HTMLElement;
+  bindFileInputs(dialog);
 
   const close = () => {
     backdrop.remove();
@@ -92,7 +93,7 @@ export function confirmDialog(o: { title: string; message: string; confirmLabel:
           ${o.reasonLabel
             ? html`<div class="field">
                 <label for="f_reason">${o.reasonLabel}${o.reasonRequired ? html`<span class="req" aria-hidden="true"> *</span>` : ''}</label>
-                <textarea id="f_reason" name="reason" rows="3" autofocus ${o.reasonRequired ? raw('required') : ''} aria-describedby="f_reason_err"></textarea>
+                <textarea id="f_reason" name="reason" rows="3" autofocus ${o.reasonRequired ? raw('required') : ''} placeholder="${o.reasonRequired ? 'Explain the reason. It is shared with the customer' : 'Add a note (optional)'}" aria-describedby="f_reason_err"></textarea>
                 <p class="field-error" id="f_reason_err" hidden></p>
               </div>`
             : ''}

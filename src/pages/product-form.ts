@@ -14,6 +14,17 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const UNITS: Unit[] = ['g', 'kg', 'bunch', 'piece', 'box'];
 const EMOJIS = ['🥭', '🍌', '🍅', '🥬', '🥕', '🌿', '🌱', '🫛', '🍈', '🥑', '🍎', '🍊', '🍇', '🍓', '🥒', '🥦', '🧅', '🧄', '🥔', '🌽', '🫑', '🍆', '🌻'];
 
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_MAX_COUNT = 6;
+
+/** An image the seller picked in this session. The first entry is the primary image. */
+interface PickedImage {
+  id: string;
+  file: File;
+  url: string;
+}
+
 const blankProduct = (): Product => ({
   id: '',
   sellerId: '',
@@ -74,17 +85,32 @@ const page: Page = async ({ root, params, seller }) => {
         <div class="form-main">
           <section class="card">
             <h2 class="card-title">Basics</h2>
-            ${field({ name: 'name', label: 'Product name', value: product.name, required: true, attrs: 'maxlength="80" autocomplete="off"' })}
-            ${field({ name: 'slug', label: 'URL slug', value: product.slug, required: true, hint: 'Used in the storefront link. Lowercase letters, numbers and hyphens.', attrs: 'maxlength="80"' })}
+            ${field({ name: 'name', label: 'Product name', value: product.name, required: true, placeholder: 'Enter the product name, e.g. Alphonso Mango', attrs: 'maxlength="80" autocomplete="off"' })}
+            ${field({ name: 'slug', label: 'URL slug', value: product.slug, required: true, placeholder: 'product-name-in-lowercase', hint: 'Used in the storefront link. Lowercase letters, numbers and hyphens.', attrs: 'maxlength="80"' })}
             <div class="row-2">
-              ${select({ name: 'category', label: 'Category', value: product.category, required: true, options: [['', 'Choose…'], ...CATEGORIES.map((c) => [c, c] as [string, string])] })}
+              ${select({ name: 'category', label: 'Category', value: product.category, required: true, placeholder: 'Select category', options: CATEGORIES.map((c) => [c, c] as [string, string]) })}
               <div class="field">
-                <label for="f_emoji">Image placeholder</label>
+                <label for="f_emoji">Fallback icon</label>
                 <select id="f_emoji" name="emoji" class="emoji-select">${EMOJIS.map((e) => html`<option ${e === product.emoji ? 'selected' : ''}>${e}</option>`)}</select>
-                <p class="hint">Photo upload connects to storage in production.</p>
+                <p class="hint">Shown wherever a product photo isn’t available.</p>
               </div>
             </div>
-            ${textarea({ name: 'description', label: 'Description', value: product.description, rows: 4, hint: 'Variety, taste, how it’s grown. At least 20 characters to submit.', attrs: 'maxlength="1200"' })}
+            ${textarea({ name: 'description', label: 'Description', value: product.description, rows: 4, placeholder: 'Describe the variety, taste and how it is grown', hint: 'Variety, taste, how it’s grown. At least 20 characters to submit.', attrs: 'maxlength="1200"' })}
+          </section>
+
+          <section class="card" id="images-card" aria-labelledby="img-h">
+            <div class="card-head"><h2 id="img-h" class="card-title">Product images</h2><span class="muted small" id="img-count" aria-live="polite"></span></div>
+            <div class="image-drop" data-image-drop>
+              <span class="file-drop-icon" aria-hidden="true">${icon('upload', 28)}</span>
+              <strong>Upload product images</strong>
+              <span class="muted small">Click to browse, or drag and drop</span>
+              <span class="hint">PNG, JPG or WEBP · up to ${IMAGE_MAX_BYTES / 1048576} MB each · up to ${IMAGE_MAX_COUNT} images</span>
+              <input type="file" id="f_images" accept="${IMAGE_TYPES.join(',')}" multiple aria-label="Upload product images" aria-describedby="f_images_err" />
+            </div>
+            <p class="field-error" id="f_images_err" hidden></p>
+            <ul class="image-grid" id="image-grid" aria-label="Selected product images"></ul>
+            <p class="hint">The first image is the primary image. Use “Make primary” to change it.</p>
+            <p class="hint warn-text" id="img-note" hidden>${icon('alert', 14)} Photo storage isn’t connected to the catalogue backend yet. Selected images appear in the preview but aren’t saved with the listing.</p>
           </section>
 
           <section class="card">
@@ -93,16 +119,16 @@ const page: Page = async ({ root, params, seller }) => {
             <div id="variants"></div>
             <p class="field-error" id="f_variants_err" hidden></p>
             <div class="row-3">
-              ${field({ name: 'minQty', label: 'Min order qty', type: 'number', value: product.minQty, attrs: 'min="1" step="1" inputmode="numeric"' })}
-              ${field({ name: 'maxQty', label: 'Max order qty', type: 'number', value: product.maxQty, attrs: 'min="1" step="1" inputmode="numeric"' })}
-              ${field({ name: 'lowStockThreshold', label: 'Low-stock alert at', type: 'number', value: product.lowStockThreshold, attrs: 'min="0" step="1" inputmode="numeric"' })}
+              ${field({ name: 'minQty', label: 'Min order qty', type: 'number', value: product.minQty, placeholder: 'e.g. 1', attrs: 'min="1" step="1" inputmode="numeric"' })}
+              ${field({ name: 'maxQty', label: 'Max order qty', type: 'number', value: product.maxQty, placeholder: 'e.g. 10', attrs: 'min="1" step="1" inputmode="numeric"' })}
+              ${field({ name: 'lowStockThreshold', label: 'Low-stock alert at', type: 'number', value: product.lowStockThreshold, placeholder: 'e.g. 10', attrs: 'min="0" step="1" inputmode="numeric"' })}
             </div>
             <p class="muted small">Platform commission for this category is set by the marketplace and shown on your Earnings page. It can’t be changed here.</p>
           </section>
 
           <section class="card">
             <h2 class="card-title">Origin, freshness &amp; storage</h2>
-            ${field({ name: 'origin', label: 'Origin', value: product.origin, placeholder: 'e.g. Mulshi, Pune', hint: 'Farm or region where it is grown.' })}
+            ${field({ name: 'origin', label: 'Origin', value: product.origin, placeholder: 'Enter the farm or region, e.g. Mulshi, Pune', hint: 'Farm or region where it is grown.' })}
             <fieldset class="field">
               <legend>Seasonality</legend>
               <div class="radio-row">
@@ -118,10 +144,10 @@ const page: Page = async ({ root, params, seller }) => {
               <p class="field-error" id="f_seasonMonths_err" hidden></p>
             </fieldset>
             <div class="row-2">
-              ${field({ name: 'harvestDate', label: 'Harvest date', type: 'date', value: product.harvestDate, hint: 'Optional. Shown to customers if set.' })}
-              ${field({ name: 'packedDate', label: 'Packed date', type: 'date', value: product.packedDate })}
+              ${field({ name: 'harvestDate', label: 'Harvest date', type: 'date', value: product.harvestDate, hint: 'Optional. Pick a date; shown to customers if set.' })}
+              ${field({ name: 'packedDate', label: 'Packed date', type: 'date', value: product.packedDate, hint: 'Optional. Pick a date.' })}
             </div>
-            ${textarea({ name: 'storage', label: 'Storage guidance', value: product.storage, rows: 2, placeholder: 'e.g. Refrigerate at 2–4 °C. Best within 3 days.' })}
+            ${textarea({ name: 'storage', label: 'Storage guidance', value: product.storage, rows: 2, placeholder: 'Enter storage guidance, e.g. Refrigerate at 2–4 °C. Best within 3 days.' })}
           </section>
         </div>
 
@@ -176,13 +202,13 @@ const page: Page = async ({ root, params, seller }) => {
         (v, i) => html`<fieldset class="variant" data-index="${i}">
           <legend>Variant ${i + 1}</legend>
           <div class="variant-grid">
-            ${field({ name: `variant_${i}_label`, label: 'Label', value: v.label, placeholder: '500 g', attrs: `data-v="label" data-i="${i}"` })}
-            ${field({ name: `variant_${i}_sku`, label: 'SKU', value: v.sku, placeholder: 'GV-XXX-500', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
-            ${field({ name: `variant_${i}_packSize`, label: 'Pack size', type: 'number', value: v.packSize, attrs: `data-v="packSize" data-i="${i}" min="0" step="any"` })}
+            ${field({ name: `variant_${i}_label`, label: 'Label', value: v.label, placeholder: 'e.g. 500 g', attrs: `data-v="label" data-i="${i}"` })}
+            ${field({ name: `variant_${i}_sku`, label: 'SKU', value: v.sku, placeholder: 'e.g. GV-MNG-500', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
+            ${field({ name: `variant_${i}_packSize`, label: 'Pack size', type: 'number', value: v.packSize, placeholder: 'Enter pack size', attrs: `data-v="packSize" data-i="${i}" min="0" step="any"` })}
             ${select({ name: `variant_${i}_unit`, label: 'Unit', value: v.unit, options: UNITS.map((u) => [u, UNIT_LABEL[u]] as [string, string]), attrs: `data-v="unit" data-i="${i}"` })}
-            ${field({ name: `variant_${i}_price`, label: 'Selling price (₹)', type: 'number', value: v.price || '', attrs: `data-v="price" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
-            ${field({ name: `variant_${i}_mrp`, label: 'MRP (₹)', type: 'number', value: v.mrp ?? '', hint: 'Optional', attrs: `data-v="mrp" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
-            ${field({ name: `variant_${i}_stock`, label: isNew || !product.variants.some((x) => x.id === v.id) ? 'Opening stock' : 'Stock', type: 'number', value: v.stock, disabled: !isNew && product.variants.some((x) => x.id === v.id), hint: !isNew && product.variants.some((x) => x.id === v.id) ? 'Change on Inventory page' : undefined, attrs: `data-v="stock" data-i="${i}" min="0" step="1" inputmode="numeric"` })}
+            ${field({ name: `variant_${i}_price`, label: 'Selling price (₹)', type: 'number', value: v.price || '', placeholder: 'Enter selling price', attrs: `data-v="price" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
+            ${field({ name: `variant_${i}_mrp`, label: 'MRP (₹)', type: 'number', value: v.mrp ?? '', placeholder: 'Enter MRP', hint: 'Optional', attrs: `data-v="mrp" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
+            ${field({ name: `variant_${i}_stock`, label: isNew || !product.variants.some((x) => x.id === v.id) ? 'Opening stock' : 'Stock', type: 'number', value: v.stock, placeholder: 'Enter stock quantity', disabled: !isNew && product.variants.some((x) => x.id === v.id), hint: !isNew && product.variants.some((x) => x.id === v.id) ? 'Change on Inventory page' : undefined, attrs: `data-v="stock" data-i="${i}" min="0" step="1" inputmode="numeric"` })}
           </div>
           ${variants.length > 1 && !readOnly ? html`<button type="button" class="btn btn-sm btn-danger-ghost" data-action="remove-variant" data-i="${i}">Remove variant</button>` : ''}
         </fieldset>`,
@@ -215,13 +241,55 @@ const page: Page = async ({ root, params, seller }) => {
     } as api.ProductInput;
   };
 
+  // ---------- product images ----------
+  let images: PickedImage[] = [];
+  const imageError = (msg: string) => {
+    const err = $('#f_images_err', root)!;
+    err.textContent = msg;
+    err.hidden = !msg;
+    $('#f_images', root)?.setAttribute('aria-invalid', String(!!msg));
+  };
+  const renderImages = () => {
+    $('#img-count', root)!.textContent = images.length ? `${images.length} of ${IMAGE_MAX_COUNT}` : '';
+    $('#img-note', root)!.hidden = images.length === 0;
+    $('#image-grid', root)!.innerHTML = images
+      .map(
+        (img, i) => html`<li class="image-tile ${i === 0 ? 'is-primary' : ''}">
+          <img src="${img.url}" alt="Product image ${i + 1}: ${img.file.name}" />
+          ${i === 0 ? html`<span class="image-primary">Primary</span>` : ''}
+          <div class="image-actions">
+            ${i === 0 || readOnly ? '' : html`<button type="button" class="btn btn-sm" data-action="primary-image" data-id="${img.id}">Make primary</button>`}
+            ${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-danger-ghost" data-action="remove-image" data-id="${img.id}" aria-label="Remove image ${img.file.name}">${icon('close', 14)} Remove</button>`}
+          </div>
+        </li>`.value,
+      )
+      .join('');
+    renderPreview();
+  };
+  const addImages = (files: File[]) => {
+    const problems: string[] = [];
+    for (const file of files) {
+      if (images.length >= IMAGE_MAX_COUNT) {
+        problems.push(`You can add up to ${IMAGE_MAX_COUNT} images.`);
+        break;
+      }
+      if (!IMAGE_TYPES.includes(file.type)) problems.push(`${file.name}: use a PNG, JPG or WEBP image.`);
+      else if (file.size > IMAGE_MAX_BYTES) problems.push(`${file.name}: images must be ${IMAGE_MAX_BYTES / 1048576} MB or smaller.`);
+      else if (images.some((x) => x.file.name === file.name && x.file.size === file.size && x.file.lastModified === file.lastModified)) problems.push(`${file.name}: already added.`);
+      else images.push({ id: `img${Date.now().toString(36)}${images.length}`, file, url: URL.createObjectURL(file) });
+    }
+    imageError(problems.join(' '));
+    renderImages();
+  };
+  const releaseImages = () => images.forEach((x) => URL.revokeObjectURL(x.url));
+
   const renderPreview = () => {
     const p = readForm();
     const v = p.variants[0];
     const cert = docs.find((d) => d.id === p.certificateId);
     const labelOk = p.organicClaim !== 'none' && cert?.status === 'approved' && (!cert.expiresAt || cert.expiresAt >= new Date().toISOString().slice(0, 10));
     $('#preview', root)!.innerHTML = html`
-      <div class="preview-img" aria-hidden="true">${p.emoji}</div>
+      <div class="preview-img" aria-hidden="${images[0] ? 'false' : 'true'}">${images[0] ? html`<img src="${images[0].url}" alt="Primary product image" />` : p.emoji}</div>
       <div class="preview-body">
         ${labelOk ? badge(p.organicClaim === 'certified' ? 'Certified organic' : 'In conversion', 'green') : p.organicClaim !== 'none' ? html`<span class="muted small" data-tip="The label shows once a verified, unexpired certificate is linked.">No organic label yet</span>` : ''}
         <strong>${p.name || 'Product name'}</strong>
@@ -231,7 +299,28 @@ const page: Page = async ({ root, params, seller }) => {
   };
 
   renderVariants();
-  renderPreview();
+  renderImages();
+
+  on(root, 'change', '#f_images', (_e, el) => {
+    const input = el as HTMLInputElement;
+    addImages(Array.from(input.files ?? []));
+    input.value = ''; // allow picking the same file again after removing it
+  });
+  on(root, 'click', '[data-action=remove-image]', (_e, el) => {
+    const gone = images.find((x) => x.id === el.dataset.id);
+    if (gone) URL.revokeObjectURL(gone.url);
+    images = images.filter((x) => x !== gone);
+    imageError('');
+    renderImages();
+  });
+  on(root, 'click', '[data-action=primary-image]', (_e, el) => {
+    const pick = images.find((x) => x.id === el.dataset.id);
+    if (pick) images = [pick, ...images.filter((x) => x !== pick)];
+    renderImages();
+  });
+  const drop = $('[data-image-drop]', root)!;
+  for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, () => drop.classList.add('is-over'));
+  for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, () => drop.classList.remove('is-over'));
 
   on(root, 'input', '[data-v]', (_e, el) => {
     const i = Number(el.dataset.i);
@@ -288,6 +377,7 @@ const page: Page = async ({ root, params, seller }) => {
     errBox.hidden = true;
     try {
       const saved = await api.saveProduct(readForm(), submit);
+      releaseImages();
       toast(submit ? (saved.status === 'pending' ? (product.status === 'approved' ? 'Changes saved — sent for re-approval' : 'Sent for approval') : 'Changes saved') : 'Draft saved');
       navigate(`/seller/products/${saved.id}`, isNew);
     } catch (err) {

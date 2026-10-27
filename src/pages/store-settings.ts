@@ -2,7 +2,7 @@
 
 import type { Page } from '../router.js';
 import { html, raw, on, $, $$, formValues } from '../ui/dom.js';
-import { pageHeader, field, textarea, callout, icon, showFieldErrors, badge } from '../ui/components.js';
+import { pageHeader, field, textarea, callout, icon, showFieldErrors, badge, paginate, pager, bindPager } from '../ui/components.js';
 import { toast, modal, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { fmtDate, EMAIL_RE } from '../lib.js';
@@ -32,8 +32,9 @@ const SECTIONS = [
   ['account', 'Account details'],
 ];
 
-const page: Page = async ({ root, seller, refresh }) => {
+const page: Page = async ({ root, query, seller, refresh }) => {
   const readOnly = seller.status === 'suspended';
+  const staffPage = paginate(seller.staff, query, 'staff');
   let areas = [...seller.serviceAreas];
   let holidays = [...seller.holidays];
 
@@ -52,24 +53,24 @@ const page: Page = async ({ root, seller, refresh }) => {
             <div><strong data-preview="name">${seller.shopName}</strong><span data-preview="tagline">${seller.bannerTagline}</span></div>
           </div>
           <p class="muted small">Logo and banner image uploads connect to file storage in production. The preview uses your brand colour.</p>
-          ${field({ name: 'shopName', label: 'Shop name', value: seller.shopName, required: true, attrs: 'maxlength="60"' })}
-          ${field({ name: 'bannerTagline', label: 'Banner tagline', value: seller.bannerTagline, attrs: 'maxlength="90"' })}
+          ${field({ name: 'shopName', label: 'Shop name', value: seller.shopName, required: true, placeholder: 'Enter your shop name', attrs: 'maxlength="60"' })}
+          ${field({ name: 'bannerTagline', label: 'Banner tagline', value: seller.bannerTagline, placeholder: 'Enter a short tagline for your shop banner', attrs: 'maxlength="90"' })}
           <div class="field">
             <label for="f_brandColor">Brand colour</label>
             <input type="color" id="f_brandColor" name="brandColor" value="${seller.brandColor}" />
           </div>
-          ${textarea({ name: 'description', label: 'About your shop', value: seller.description, rows: 4, attrs: 'maxlength="800"' })}
+          ${textarea({ name: 'description', label: 'About your shop', value: seller.description, rows: 4, placeholder: 'Describe your shop, what you grow and how you sell', attrs: 'maxlength="800"' })}
           ${saveRow(readOnly)}
         </form>
 
         <form class="card" id="pickup" data-section="pickup" novalidate>
           <h2 class="card-title">Pickup & service areas</h2>
-          ${textarea({ name: 'pickupAddress', label: 'Pickup address', value: seller.pickupAddress, rows: 2, required: true, hint: 'Where the delivery partner collects orders.' })}
+          ${textarea({ name: 'pickupAddress', label: 'Pickup address', value: seller.pickupAddress, rows: 2, required: true, placeholder: 'Enter the complete address where orders are collected', hint: 'Where the delivery partner collects orders.' })}
           <div class="field" id="f_serviceAreas" tabindex="-1">
             <label for="area-input">Service areas</label>
             <div class="chip-row" id="area-chips"></div>
             <div class="row-wrap">
-              <input id="area-input" type="text" placeholder="Add a locality or PIN code" maxlength="40" />
+              <input id="area-input" type="text" placeholder="Add a locality or PIN code, e.g. Baner or 411045" maxlength="40" />
               <button type="button" class="btn btn-sm" data-action="add-area">Add</button>
             </div>
             <p class="field-error" id="f_serviceAreas_err" hidden></p>
@@ -95,7 +96,7 @@ const page: Page = async ({ root, seller, refresh }) => {
           <ul class="holiday-list" id="holidays"></ul>
           <div class="row-wrap">
             <label class="sr-only" for="hol-date">Holiday date</label><input type="date" id="hol-date" min="${new Date().toISOString().slice(0, 10)}" />
-            <label class="sr-only" for="hol-note">Note</label><input type="text" id="hol-note" placeholder="Note (optional)" maxlength="60" />
+            <label class="sr-only" for="hol-note">Note</label><input type="text" id="hol-note" placeholder="Add a note, e.g. Diwali break (optional)" maxlength="60" />
             <button type="button" class="btn btn-sm" data-action="add-holiday">Add holiday</button>
           </div>
           ${saveRow(readOnly)}
@@ -105,9 +106,9 @@ const page: Page = async ({ root, seller, refresh }) => {
           <h2 class="card-title">Fulfilment</h2>
           <label class="check-row"><input type="checkbox" name="autoAccept" ${seller.fulfilment.autoAccept ? raw('checked') : ''} /> <span><strong>Auto-accept orders</strong><span class="muted small block">Orders skip “awaiting confirmation” when every item is in stock.</span></span></label>
           <div class="row-3">
-            ${field({ name: 'acceptWindowMins', label: 'Acceptance window (min)', type: 'number', value: seller.fulfilment.acceptWindowMins, attrs: 'min="5" max="120"' })}
-            ${field({ name: 'packingTimeMins', label: 'Packing time (min)', type: 'number', value: seller.fulfilment.packingTimeMins, attrs: 'min="5" max="240"' })}
-            ${field({ name: 'minOrderValue', label: 'Minimum order (₹)', type: 'number', value: seller.fulfilment.minOrderValue, attrs: 'min="0"' })}
+            ${field({ name: 'acceptWindowMins', label: 'Acceptance window (min)', type: 'number', value: seller.fulfilment.acceptWindowMins, placeholder: 'e.g. 30', attrs: 'min="5" max="120"' })}
+            ${field({ name: 'packingTimeMins', label: 'Packing time (min)', type: 'number', value: seller.fulfilment.packingTimeMins, placeholder: 'e.g. 45', attrs: 'min="5" max="240"' })}
+            ${field({ name: 'minOrderValue', label: 'Minimum order (₹)', type: 'number', value: seller.fulfilment.minOrderValue, placeholder: 'e.g. 200', attrs: 'min="0"' })}
           </div>
           ${saveRow(readOnly)}
         </form>
@@ -129,11 +130,11 @@ const page: Page = async ({ root, seller, refresh }) => {
           <div class="card-head"><h2 class="card-title">Staff accounts</h2>${readOnly ? '' : html`<button type="button" class="btn btn-sm" data-action="invite">${icon('plus', 14)} Invite</button>`}</div>
           <p class="muted small">Packers can view and fulfil orders and adjust stock. Managers can also edit products. Only you can see earnings, bank details and settings.</p>
           ${seller.staff.length
-            ? html`<ul class="staff-list">${seller.staff.map(
+            ? html`<div class="table-block"><ul class="staff-list">${staffPage.rows.map(
                 (s) => html`<li><div><strong>${s.name}</strong><span class="muted small block">${s.email} · invited ${fmtDate(s.invitedAt)}</span></div>
                   ${badge(s.role === 'manager' ? 'Manager' : 'Packer', 'blue')} ${s.active ? '' : badge('Deactivated')}
                   ${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-ghost" data-action="toggle-staff" data-id="${s.id}">${s.active ? 'Deactivate' : 'Reactivate'}</button>`}</li>`,
-              )}</ul>`
+              )}</ul>${pager(staffPage.info, 'staff members')}</div>`
             : html`<p class="muted">No staff yet.</p>`}
         </section>
 
@@ -164,6 +165,7 @@ const page: Page = async ({ root, seller, refresh }) => {
   renderHolidays();
   if (readOnly) $$('input,select,textarea', root).forEach((el) => ((el as HTMLInputElement).disabled = true));
 
+  bindPager(root, refresh);
   on(root, 'click', '[data-jump]', (e, el) => {
     e.preventDefault();
     const target = $(`#${el.dataset.jump}`, root);
@@ -264,8 +266,8 @@ const page: Page = async ({ root, seller, refresh }) => {
     modal({
       title: 'Invite a staff member',
       body: html`<form class="stack" novalidate>
-        ${field({ name: 'name', label: 'Name', required: true, attrs: 'autofocus maxlength="60"' })}
-        ${field({ name: 'email', label: 'Email', type: 'email', required: true })}
+        ${field({ name: 'name', label: 'Name', required: true, placeholder: 'Enter the staff member’s full name', attrs: 'autofocus maxlength="60"' })}
+        ${field({ name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'Enter the staff member’s email address' })}
         <fieldset class="field"><legend>Role</legend>
           <div class="radio-row"><label><input type="radio" name="role" value="packer" checked /> Packer</label><label><input type="radio" name="role" value="manager" /> Manager</label></div>
         </fieldset>
