@@ -75,7 +75,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
         ? ''
         : html`<aside class="sidebar" id="sidebar" aria-label="Seller navigation">
             <div class="brand brand-logo">
-              <img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="168" height="78" />
+              <img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="168" height="70" />
               <span>Seller Portal</span>
             </div>
             <nav>
@@ -98,7 +98,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
           <div class="scrim" data-action="close-nav" hidden></div>`}
       <div class="main-col">
         <header class="topbar">
-          ${bare ? html`<div class="brand brand-inline"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="40" /><span>Seller Portal</span></div>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
+          ${bare ? html`<div class="brand brand-inline"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="36" /><span>Seller Portal</span></div>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
           ${account
             ? html`<div class="topbar-shop">
                 <span class="shop-avatar" style="background:${seller.brandColor}" aria-hidden="true">${(seller.shopName || account.fullName).slice(0, 1)}</span>
