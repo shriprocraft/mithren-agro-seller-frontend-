@@ -82,6 +82,8 @@ export interface Variant {
   price: number;
   mrp?: number;
   stock: number;
+  /** Apparel and accessories only: the size this variant is sold in. */
+  size?: 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'Free Size';
 }
 
 export interface Product {

@@ -9,10 +9,11 @@ import * as api from '../api.js';
 import { slugify, money, fmtDate, UNIT_LABEL } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
+import { APPAREL_SIZES, categoryKind, type ApparelSize } from '../catalog.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UNITS: Unit[] = ['g', 'kg', 'bunch', 'piece', 'box'];
-const EMOJIS = ['🥭', '🍌', '🍅', '🥬', '🥕', '🌿', '🌱', '🫛', '🍈', '🥑', '🍎', '🍊', '🍇', '🍓', '🥒', '🥦', '🧅', '🧄', '🥔', '🌽', '🫑', '🍆', '🌻'];
+const EMOJIS = ['🥭', '🍌', '🍅', '🥬', '🥕', '🌿', '🌱', '🫛', '🍈', '🥑', '🍎', '🍊', '🍇', '🍓', '🥒', '🥦', '🧅', '🧄', '🥔', '🌽', '🫑', '🍆', '🌻', '👗', '👚', '👜', '💍', '🧣'];
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -65,6 +66,12 @@ const page: Page = async ({ root, params, seller }) => {
   const readOnly = seller.status === 'suspended';
   let variants: Variant[] = structuredClone(product.variants);
   let slugTouched = !isNew;
+  // Apparel and accessories are sold by size and have no organic or freshness fields.
+  let apparel = categoryKind(product.category) === 'apparel';
+  const variantHint = () =>
+    apparel
+      ? 'One variant per size, such as S, M, L or Free Size.'
+      : 'Pack sizes such as 250 g, 500 g, 1 kg, a bunch or a box.';
 
   const moderationInfo =
     product.status === 'rejected'
@@ -115,7 +122,7 @@ const page: Page = async ({ root, params, seller }) => {
 
           <section class="card">
             <div class="card-head"><h2 class="card-title">Variants &amp; pricing</h2><button type="button" class="btn btn-sm" data-action="add-variant">${icon('plus', 14)} Add variant</button></div>
-            <p class="muted small">Pack sizes such as 250 g, 500 g, 1 kg, a bunch or a box. ${isNew ? 'Opening stock is recorded in the inventory log.' : 'Stock for existing variants is adjusted on the Inventory page so every change is audited.'}</p>
+            <p class="muted small"><span id="variant-hint">${variantHint()}</span> ${isNew ? 'Opening stock is recorded in the inventory log.' : 'Stock for existing variants is adjusted on the Inventory page so every change is audited.'}</p>
             <div id="variants"></div>
             <p class="field-error" id="f_variants_err" hidden></p>
             <div class="row-3">
@@ -126,7 +133,7 @@ const page: Page = async ({ root, params, seller }) => {
             <p class="muted small">Platform commission for this category is set by the marketplace and shown on your Earnings page. It can’t be changed here.</p>
           </section>
 
-          <section class="card">
+          <section class="card" id="origin-card" ${apparel ? raw('hidden') : ''}>
             <h2 class="card-title">Origin, freshness &amp; storage</h2>
             ${field({ name: 'origin', label: 'Origin', value: product.origin, placeholder: 'Enter the farm or region, e.g. Mulshi, Pune', hint: 'Farm or region where it is grown.' })}
             <fieldset class="field">
@@ -152,7 +159,7 @@ const page: Page = async ({ root, params, seller }) => {
         </div>
 
         <aside class="form-side">
-          <section class="card">
+          <section class="card" id="organic-card" ${apparel ? raw('hidden') : ''}>
             <h2 class="card-title">Organic claim</h2>
             <p class="muted small">Organic labels appear only when backed by a certificate that a reviewer has verified and that hasn’t expired.</p>
             <fieldset class="field">
@@ -202,10 +209,12 @@ const page: Page = async ({ root, params, seller }) => {
         (v, i) => html`<fieldset class="variant" data-index="${i}">
           <legend>Variant ${i + 1}</legend>
           <div class="variant-grid">
-            ${field({ name: `variant_${i}_label`, label: 'Label', value: v.label, placeholder: 'e.g. 500 g', attrs: `data-v="label" data-i="${i}"` })}
-            ${field({ name: `variant_${i}_sku`, label: 'SKU', value: v.sku, placeholder: 'e.g. GV-MNG-500', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
-            ${field({ name: `variant_${i}_packSize`, label: 'Pack size', type: 'number', value: v.packSize, placeholder: 'Enter pack size', attrs: `data-v="packSize" data-i="${i}" min="0" step="any"` })}
-            ${select({ name: `variant_${i}_unit`, label: 'Unit', value: v.unit, options: UNITS.map((u) => [u, UNIT_LABEL[u]] as [string, string]), attrs: `data-v="unit" data-i="${i}"` })}
+            ${field({ name: `variant_${i}_label`, label: 'Label', value: v.label, placeholder: apparel ? 'e.g. Size M' : 'e.g. 500 g', attrs: `data-v="label" data-i="${i}"` })}
+            ${field({ name: `variant_${i}_sku`, label: 'SKU', value: v.sku, placeholder: apparel ? 'e.g. GV-KRT-M' : 'e.g. GV-MNG-500', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
+            ${apparel
+              ? select({ name: `variant_${i}_size`, label: 'Size', value: v.size ?? '', required: true, placeholder: 'Select size', options: APPAREL_SIZES.map((sz) => [sz, sz] as [string, string]), attrs: `data-v="size" data-i="${i}"` })
+              : html`${field({ name: `variant_${i}_packSize`, label: 'Pack size', type: 'number', value: v.packSize, placeholder: 'Enter pack size', attrs: `data-v="packSize" data-i="${i}" min="0" step="any"` })}
+                ${select({ name: `variant_${i}_unit`, label: 'Unit', value: v.unit, options: UNITS.map((u) => [u, UNIT_LABEL[u]] as [string, string]), attrs: `data-v="unit" data-i="${i}"` })}`}
             ${field({ name: `variant_${i}_price`, label: 'Selling price (₹)', type: 'number', value: v.price || '', placeholder: 'Enter selling price', attrs: `data-v="price" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
             ${field({ name: `variant_${i}_mrp`, label: 'MRP (₹)', type: 'number', value: v.mrp ?? '', placeholder: 'Enter MRP', hint: 'Optional', attrs: `data-v="mrp" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
             ${field({ name: `variant_${i}_stock`, label: isNew || !product.variants.some((x) => x.id === v.id) ? 'Opening stock' : 'Stock', type: 'number', value: v.stock, placeholder: 'Enter stock quantity', disabled: !isNew && product.variants.some((x) => x.id === v.id), hint: !isNew && product.variants.some((x) => x.id === v.id) ? 'Change on Inventory page' : undefined, attrs: `data-v="stock" data-i="${i}" min="0" step="1" inputmode="numeric"` })}
@@ -218,6 +227,27 @@ const page: Page = async ({ root, params, seller }) => {
   const readForm = (): api.ProductInput => {
     const f = formValues(form);
     const months = $$<HTMLInputElement>('input[name=month]:checked', form).map((m) => Number(m.value));
+    if (apparel) {
+      // Hidden sections are not sent: no organic claim, origin, freshness or storage details.
+      return {
+        ...(isNew ? {} : { id: product.id }),
+        name: f.name?.trim() ?? '',
+        slug: f.slug?.trim() ?? '',
+        description: f.description ?? '',
+        category: f.category ?? '',
+        emoji: f.emoji ?? '👗',
+        variants: variants.map((v) => ({ ...v, sku: v.sku.trim().toUpperCase(), packSize: 1, unit: 'piece' as Unit })),
+        origin: '',
+        seasonality: 'year_round',
+        seasonMonths: [],
+        storage: '',
+        organicClaim: 'none',
+        available: product.available,
+        minQty: Number(f.minQty),
+        maxQty: Number(f.maxQty),
+        lowStockThreshold: Number(f.lowStockThreshold),
+      } as api.ProductInput;
+    }
     return {
       ...(isNew ? {} : { id: product.id }),
       name: f.name?.trim() ?? '',
@@ -225,7 +255,7 @@ const page: Page = async ({ root, params, seller }) => {
       description: f.description ?? '',
       category: f.category ?? '',
       emoji: f.emoji ?? '🥬',
-      variants: variants.map((v) => ({ ...v, sku: v.sku.trim().toUpperCase() })),
+      variants: variants.map(({ size: _size, ...v }) => ({ ...v, sku: v.sku.trim().toUpperCase() })),
       origin: f.origin ?? '',
       seasonality: (f.seasonality as Product['seasonality']) ?? 'year_round',
       seasonMonths: f.seasonality === 'seasonal' ? months : [],
@@ -293,7 +323,7 @@ const page: Page = async ({ root, params, seller }) => {
       <div class="preview-body">
         ${labelOk ? badge(p.organicClaim === 'certified' ? 'Certified organic' : 'In conversion', 'green') : p.organicClaim !== 'none' ? html`<span class="muted small" data-tip="The label shows once a verified, unexpired certificate is linked.">No organic label yet</span>` : ''}
         <strong>${p.name || 'Product name'}</strong>
-        <span class="muted small">${p.origin || 'Origin'}</span>
+        ${apparel ? '' : html`<span class="muted small">${p.origin || 'Origin'}</span>`}
         ${v ? html`<span>${v.price ? money(v.price) : '₹—'} ${v.mrp && v.mrp > v.price ? html`<s class="muted small">${money(v.mrp)}</s>` : ''} <span class="muted small">/ ${v.label || 'pack'}</span></span>` : ''}
       </div>`.value;
   };
@@ -327,7 +357,10 @@ const page: Page = async ({ root, params, seller }) => {
     const key = el.dataset.v as keyof Variant;
     const val = (el as HTMLInputElement).value;
     const v = variants[i]!;
-    if (key === 'packSize' || key === 'price' || key === 'stock') (v[key] as number) = val === '' ? 0 : Number(val);
+    if (key === 'size') {
+      if (val) v.size = val as ApparelSize;
+      else delete v.size;
+    } else if (key === 'packSize' || key === 'price' || key === 'stock') (v[key] as number) = val === '' ? 0 : Number(val);
     else if (key === 'mrp') {
       if (val === '') delete v.mrp;
       else v.mrp = Number(val);
@@ -338,8 +371,34 @@ const page: Page = async ({ root, params, seller }) => {
   on(root, 'change', '[data-v=unit]', (_e, el) => {
     variants[Number(el.dataset.i)]!.unit = (el as HTMLSelectElement).value as Unit;
   });
+  on(root, 'change', '[data-v=size]', (_e, el) => {
+    const v = variants[Number(el.dataset.i)]!;
+    const val = (el as HTMLSelectElement).value;
+    if (val) v.size = val as ApparelSize;
+    else delete v.size;
+    renderPreview();
+  });
+  // Show the fields that fit the chosen category.
+  on(root, 'change', '#f_category', (_e, el) => {
+    const next = categoryKind((el as HTMLSelectElement).value) === 'apparel';
+    if (next === apparel) return;
+    apparel = next;
+    $('#origin-card', root)!.hidden = apparel;
+    $('#organic-card', root)!.hidden = apparel;
+    $('#variant-hint', root)!.textContent = variantHint();
+    for (const v of variants) {
+      if (apparel) {
+        v.unit = 'piece';
+        v.packSize = 1;
+      } else {
+        delete v.size;
+      }
+    }
+    renderVariants();
+    renderPreview();
+  });
   on(root, 'click', '[data-action=add-variant]', () => {
-    variants.push({ id: `v${Date.now().toString(36)}`, label: '', sku: '', packSize: 1, unit: 'kg', price: 0, stock: 0 });
+    variants.push({ id: `v${Date.now().toString(36)}`, label: '', sku: '', packSize: 1, unit: apparel ? 'piece' : 'kg', price: 0, stock: 0 });
     renderVariants();
     ($(`#f_variant_${variants.length - 1}_label`, root) as HTMLInputElement | null)?.focus();
   });

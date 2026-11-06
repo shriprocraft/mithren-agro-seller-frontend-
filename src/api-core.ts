@@ -16,6 +16,7 @@
 
 import { createSeed, createEmptySeed, buildLedgerEntry, DB_VERSION, SELLER_A, round2, type DB } from './data/seed.js';
 import { canSellerTransition, slugify, SKU_RE, ACTIVE_STATUSES } from './lib.js';
+import { categoryKind, isApparelSize, rupeesToPaise } from './catalog.js';
 import type {
   AdjustmentReason,
   AppNotification,
@@ -256,16 +257,25 @@ function validateProduct(input: ProductInput, submitting: boolean): Record<strin
   else if (db.products.some((p) => p.slug === input.slug && p.sellerId === session.sellerId && p.id !== input.id)) e.slug = 'You already have a product with this slug.';
   if (!input.category) e.category = 'Choose a category.';
   if (input.variants.length === 0) e.variants = 'Add at least one variant.';
+  const apparel = categoryKind(input.category) === 'apparel';
   const skus = new Set<string>();
+  const sizes = new Set<string>();
   input.variants.forEach((v, i) => {
     if (!v.label.trim()) e[`variant_${i}_label`] = 'Label is required.';
     if (!SKU_RE.test(v.sku)) e[`variant_${i}_sku`] = '3–32 chars: A–Z, 0–9, hyphen.';
     else if (skus.has(v.sku)) e[`variant_${i}_sku`] = 'Duplicate SKU.';
     else if (db.products.some((p) => p.sellerId === session.sellerId && p.id !== input.id && p.variants.some((x) => x.sku === v.sku))) e[`variant_${i}_sku`] = 'SKU used by another product.';
     skus.add(v.sku);
-    if (!(v.packSize > 0)) e[`variant_${i}_packSize`] = 'Must be > 0.';
+    if (apparel) {
+      if (!isApparelSize(v.size)) e[`variant_${i}_size`] = 'Choose a size.';
+      else if (sizes.has(v.size)) e[`variant_${i}_size`] = 'Each size can be listed once.';
+      sizes.add(String(v.size));
+    } else if (!(v.packSize > 0)) e[`variant_${i}_packSize`] = 'Must be > 0.';
+    // Prices are sent to the backend as integer paise (K3), so they must convert exactly.
     if (!(v.price > 0)) e[`variant_${i}_price`] = 'Must be > 0.';
-    if (v.mrp !== undefined && v.mrp < v.price) e[`variant_${i}_mrp`] = 'MRP can’t be below price.';
+    else if (rupeesToPaise(v.price) === null) e[`variant_${i}_price`] = 'Use at most 2 decimal places, e.g. 349.50.';
+    if (v.mrp !== undefined && rupeesToPaise(v.mrp) === null) e[`variant_${i}_mrp`] = 'Use at most 2 decimal places, e.g. 399.00.';
+    else if (v.mrp !== undefined && v.mrp < v.price) e[`variant_${i}_mrp`] = 'MRP can’t be below price.';
     if (!Number.isInteger(v.stock) || v.stock < 0) e[`variant_${i}_stock`] = 'Whole number ≥ 0.';
   });
   if (!(input.minQty >= 1)) e.minQty = 'Minimum is 1.';
@@ -275,9 +285,11 @@ function validateProduct(input: ProductInput, submitting: boolean): Record<strin
   if (input.harvestDate && input.harvestDate > new Date().toISOString().slice(0, 10)) e.harvestDate = 'Harvest date can’t be in the future.';
   if (submitting) {
     if (input.description.trim().length < 20) e.description = 'Write at least 20 characters so customers know what they’re buying.';
-    if (!input.origin.trim()) e.origin = 'Origin is required for listings.';
-    if (!input.storage.trim()) e.storage = 'Storage guidance is required for listings.';
-    if (input.organicClaim !== 'none') {
+    // Apparel and accessories have no origin, freshness or organic fields.
+    if (!apparel && !input.origin.trim()) e.origin = 'Origin is required for listings.';
+    if (!apparel && !input.storage.trim()) e.storage = 'Storage guidance is required for listings.';
+    if (apparel && input.organicClaim !== 'none') e.organicClaim = 'Organic claims apply to produce only.';
+    else if (input.organicClaim !== 'none') {
       const cert = db.documents.find((d) => d.id === input.certificateId && d.sellerId === session.sellerId && d.type === 'organic_cert');
       if (!cert) e.certificateId = 'Link an organic certificate to make an organic claim.';
       else if (cert.expiresAt && cert.expiresAt < new Date().toISOString().slice(0, 10)) e.certificateId = 'This certificate has expired.';
