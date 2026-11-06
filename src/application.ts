@@ -177,6 +177,20 @@ export const INDIAN_STATES = [
   'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
 ];
 
+/** GST state codes: the first two digits of a GSTIN registered in that state or union territory. */
+export const GST_STATE_CODES: Record<string, string> = {
+  'Jammu and Kashmir': '01', 'Himachal Pradesh': '02', Punjab: '03', Chandigarh: '04', Uttarakhand: '05',
+  Haryana: '06', Delhi: '07', Rajasthan: '08', 'Uttar Pradesh': '09', Bihar: '10', Sikkim: '11',
+  'Arunachal Pradesh': '12', Nagaland: '13', Manipur: '14', Mizoram: '15', Tripura: '16', Meghalaya: '17',
+  Assam: '18', 'West Bengal': '19', Jharkhand: '20', Odisha: '21', Chhattisgarh: '22', 'Madhya Pradesh': '23',
+  Gujarat: '24', 'Dadra and Nagar Haveli and Daman and Diu': '26', Maharashtra: '27', Karnataka: '29', Goa: '30',
+  Lakshadweep: '31', Kerala: '32', 'Tamil Nadu': '33', Puducherry: '34', 'Andaman and Nicobar Islands': '35',
+  Telangana: '36', 'Andhra Pradesh': '37', Ladakh: '38',
+};
+
+/** The state a GST state code belongs to, if any. */
+export const gstStateName = (code: string) => Object.keys(GST_STATE_CODES).find((s) => GST_STATE_CODES[s] === code);
+
 export const STEPS = [
   { n: 1, key: 'account', label: 'Account verification' },
   { n: 2, key: 'shop', label: 'Shop & owner details' },
@@ -362,6 +376,11 @@ export function validateStep(step: number, d: ApplicationData, ctx: ValidationCo
       if (r.gstinRequired) {
         if (!RE.gstin.test(d.gstin)) e.gstin = 'GSTIN should be 15 characters, like 27ABCDE1234F1Z5.';
         else if (d.pan && d.gstin.slice(2, 12) !== d.pan) e.gstin = 'GSTIN doesn’t match the PAN entered.';
+        else if (d.state && GST_STATE_CODES[d.state] && d.gstin.slice(0, 2) !== GST_STATE_CODES[d.state]) {
+          const code = d.gstin.slice(0, 2);
+          const other = gstStateName(code);
+          e.gstin = `GSTIN starts with ${code}${other ? ` (${other})` : ''}, but your business address is in ${d.state} (${GST_STATE_CODES[d.state]}). Use the GSTIN registered in ${d.state}.`;
+        }
       }
       if (r.registrationRequired) {
         if (d.businessType === 'llp' && !RE.llpin.test(d.registrationNumber)) e.registrationNumber = 'LLPIN should look like AAB-1234.';

@@ -57,6 +57,10 @@ export const COMMISSION_RULES: CommissionRule[] = [
   { category: 'Root Vegetables', ratePct: 7 },
   { category: 'Herbs', ratePct: 6 },
   { category: 'Exotic', ratePct: 10 },
+  // Non-produce categories. 8% matches the default rate for categories without a rule.
+  { category: 'Women Apparel', ratePct: 8 },
+  { category: 'Women Accessories', ratePct: 8 },
+  { category: 'Others', ratePct: 8 },
 ];
 
 export const CATEGORIES = COMMISSION_RULES.map((r) => r.category);

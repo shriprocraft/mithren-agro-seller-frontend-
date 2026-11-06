@@ -115,16 +115,183 @@ export function clearAllData() {
   local.resyncWorkspace();
 }
 
+// ---------- email OTP (FastAPI backend) ----------
+
+/** FastAPI backend that sends real email OTPs. Override with <meta name="otp-api" content="...">. */
+export const OTP_API = (meta('otp-api') ?? 'http://127.0.0.1:8000').replace(/\/+$/, '');
+
+async function otpPost<T>(path: string, body: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${OTP_API}/api/v1/auth/email-otp/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(503, 'Can’t reach the verification server. Check that it is running and try again.');
+  }
+  const json = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+  if (!res.ok) {
+    const d = json?.detail;
+    const message =
+      typeof d === 'object' && d && !Array.isArray(d) && 'message' in d
+        ? String((d as { message: unknown }).message)
+        : Array.isArray(d) && d[0]?.msg
+          ? String(d[0].msg).replace(/^Value error, /, '')
+          : `Request failed (${res.status}).`;
+    throw new ApiError(res.status, message, { emailCode: message });
+  }
+  return json as T;
+}
+
+// ---------- seller shop details (FastAPI backend) ----------
+
+export interface ShopDetailsStep2 {
+  shop_name: string;
+  owner_name: string;
+  email: string;
+  phone: string;
+}
+export interface ShopDetailsPatch extends Partial<ShopDetailsStep2> {
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  pan_number?: string | null;
+  gstin?: string | null;
+}
+export interface ShopDetailsView extends ShopDetailsStep2 {
+  seller_id: string;
+  approval_status: 'pending' | 'approved' | 'rejected';
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  pan_number: string | null;
+  gstin: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface BankDetailsInput {
+  account_holder_name: string;
+  ifsc_code: string;
+  account_number: string;
+}
+export interface BankDetailsView {
+  seller_id: string;
+  account_holder_name: string;
+  ifsc_code: string;
+  last_4_digits: string;
+  updated_at: string;
+}
+
+/** Backend field name → wizard form field, so errors highlight the right input. */
+const SHOP_FIELD: Record<string, string> = {
+  shop_name: 'shopName',
+  owner_name: 'ownerName',
+  email: 'businessEmail',
+  phone: 'primaryPhone',
+  address_line1: 'addressLine1',
+  city: 'city',
+  state: 'state',
+  pincode: 'pincode',
+  pan_number: 'pan',
+  gstin: 'gstin',
+  account_holder_name: 'holderName',
+  ifsc_code: 'ifsc',
+  account_number: 'accountNumber',
+};
+
+async function sellerRequest<T>(method: 'POST' | 'PATCH', path: string, body: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${OTP_API}/api/v1/seller/${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(503, 'Can’t reach the server. Check that it is running and try again.');
+  }
+  const json = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+  if (res.ok) return json as T;
+  const d = json?.detail;
+  const fieldErrors: Record<string, string> = {};
+  let message = `Request failed (${res.status}).`;
+  if (Array.isArray(d)) {
+    // FastAPI validation errors: [{ loc: ['body', 'pincode'], msg: '...' }]
+    for (const e of d as { loc?: unknown[]; msg?: string }[]) {
+      const field = SHOP_FIELD[String(e.loc?.[e.loc.length - 1])];
+      const msg = String(e.msg ?? 'Invalid value').replace(/^Value error, /, '');
+      if (field && !fieldErrors[field]) fieldErrors[field] = msg.endsWith('.') ? msg : `${msg}.`;
+    }
+    message = 'Please fix the highlighted fields.';
+  } else if (d && typeof d === 'object' && 'message' in d) {
+    message = String((d as { message: unknown }).message);
+    const field = SHOP_FIELD[String((d as { field?: unknown }).field)];
+    if (field) fieldErrors[field] = message;
+  }
+  throw new ApiError(res.status, message, fieldErrors);
+}
+
+const sellerIdKey = (owner: string) => `mithren.sellerId:${owner.toLowerCase()}`;
+
+export const shopDetails = {
+  /** Step 2: POST /api/v1/seller/shop-details. Creates the seller and returns its seller_id. */
+  create: (input: ShopDetailsStep2) => sellerRequest<ShopDetailsView>('POST', 'shop-details', input),
+  /** Steps 3 and 5 (and a revisited Step 2): PATCH /api/v1/seller/shop-details/{seller_id}. */
+  update: (sellerId: string, patch: ShopDetailsPatch) =>
+    sellerRequest<ShopDetailsView>('PATCH', `shop-details/${encodeURIComponent(sellerId)}`, patch),
+  /** Step 6: POST /api/v1/seller/bank-details/{seller_id}. Creates or replaces the payout account. */
+  saveBank: (sellerId: string, input: BankDetailsInput) =>
+    sellerRequest<BankDetailsView>('POST', `bank-details/${encodeURIComponent(sellerId)}`, input),
+  /** The seller_id is kept in this browser, per signed-in account, until seller sign-in exists. */
+  savedSellerId(owner: string): string | null {
+    try {
+      return localStorage.getItem(sellerIdKey(owner));
+    } catch {
+      return null;
+    }
+  },
+  rememberSellerId(owner: string, sellerId: string) {
+    try {
+      localStorage.setItem(sellerIdKey(owner), sellerId);
+    } catch {
+      /* private mode: the seller is created again on the next step */
+    }
+  },
+};
+
+async function currentEmail(): Promise<string> {
+  const a = await local!.localAuth.current();
+  if (!a) throw new ApiError(401, 'Sign in again to continue.');
+  return a.email;
+}
+
 // ---------- accounts ----------
 
 export const auth = {
   current: (): Promise<AccountView | null> => (local ? local.localAuth.current() : http<{ account: AccountView | null }>('GET', '/api/auth/me').then((r) => r.account)),
   signUp: (input: { fullName: string; email: string; phone: string; password: string }): Promise<AccountView> =>
     local ? local.localAuth.signUp(input) : http<{ account: AccountView }>('POST', '/api/auth/signup', input).then((r) => r.account),
-  /** In the preview, returns the code to display because no email/SMS provider exists. */
-  sendCode: (channel: 'email' | 'phone'): Promise<{ previewCode?: string }> => (local ? local.localAuth.sendCode(channel) : http('POST', '/api/auth/send-code', { channel })),
-  verifyCode: (channel: 'email' | 'phone', code: string): Promise<AccountView> =>
-    local ? local.localAuth.verifyCode(channel, code) : http<{ account: AccountView }>('POST', '/api/auth/verify', { channel, code }).then((r) => r.account),
+  /** Email codes are sent by the FastAPI backend. The preview has no SMS provider, so it returns the phone code to display. */
+  sendCode: async (channel: 'email' | 'phone'): Promise<{ previewCode?: string }> => {
+    if (!local) return http('POST', '/api/auth/send-code', { channel });
+    if (channel === 'email') {
+      await otpPost('send', { email: await currentEmail() });
+      return {};
+    }
+    return local.localAuth.sendCode(channel);
+  },
+  verifyCode: async (channel: 'email' | 'phone', code: string): Promise<AccountView> => {
+    if (!local) return http<{ account: AccountView }>('POST', '/api/auth/verify', { channel, code }).then((r) => r.account);
+    if (channel === 'email') {
+      await otpPost('verify', { email: await currentEmail(), code });
+      return local.localAuth.markVerified('email');
+    }
+    return local.localAuth.verifyCode(channel, code);
+  },
   signIn: (email: string, password: string): Promise<AccountView> =>
     local ? local.localAuth.signIn(email, password) : http<{ account: AccountView }>('POST', '/api/auth/signin', { email, password }).then((r) => r.account),
   signOut: (): Promise<void> => (local ? local.localAuth.signOut() : http<void>('POST', '/api/auth/signout')),

@@ -150,7 +150,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     if (verified) return html`<div class="verify-row verified">${icon('check', 16)} <span><strong>${label} verified</strong><span class="muted small block">${target}</span></span></div>`;
     return html`<div class="verify-row">
       <div class="verify-target"><strong>${label}</strong><span class="muted small block">${target}</span></div>
-      ${field({ name: `${channel}Code`, label: `${channel === 'email' ? 'Email' : 'SMS'} code`, hint: previewCodes[channel] ? `Preview only, no ${channel === 'email' ? 'email' : 'SMS'} is sent: your code is ${previewCodes[channel]}` : 'Enter the 6-digit code we sent.', placeholder: 'Enter the 6-digit code', attrs: 'inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*"' })}
+      ${field({ name: `${channel}Code`, label: `${channel === 'email' ? 'Email' : 'SMS'} code`, hint: channel === 'email' ? `Enter the 6-digit code we emailed to ${target}. Check your spam folder if it doesn’t arrive.` : previewCodes.phone ? `Preview only, no SMS is sent: your code is ${previewCodes.phone}` : 'Enter the 6-digit code we sent.', placeholder: 'Enter the 6-digit code', attrs: 'inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*"' })}
       <div class="row-wrap">
         <button type="button" class="btn btn-sm btn-primary" data-verify="${channel}">Verify</button>
         <button type="button" class="btn btn-sm btn-ghost" data-send="${channel}">Send a new code</button>
@@ -397,6 +397,46 @@ const page: Page = async ({ root, account: initialAccount }) => {
     }
   }
 
+  // Steps 2, 3, 5 and 6 are also recorded in the FastAPI seller onboarding API: Step 2 creates the
+  // seller (POST) and returns its seller_id; the address and KYC steps add their fields (PATCH) and
+  // Step 6 saves the payout account.
+  const step2Fields = (): api.ShopDetailsStep2 => ({ shop_name: data.shopName, owner_name: data.ownerName, email: data.businessEmail, phone: data.primaryPhone });
+  const isNotFound = (e: unknown) => (e as api.ApiError).status === 404;
+
+  /** Creates the seller from Step 2's data and remembers its id. */
+  async function createSeller(a: AccountView): Promise<string> {
+    const created = await api.shopDetails.create(step2Fields());
+    api.shopDetails.rememberSellerId(a.email, created.seller_id);
+    return created.seller_id;
+  }
+
+  /** Runs fn with the seller's id, creating the seller first if it is unknown or no longer exists. */
+  async function withSeller<T>(a: AccountView, fn: (sellerId: string) => Promise<T>): Promise<T> {
+    const saved = api.shopDetails.savedSellerId(a.email);
+    if (saved) {
+      try {
+        return await fn(saved);
+      } catch (e) {
+        if (!isNotFound(e)) throw e;
+      }
+    }
+    return fn(await createSeller(a));
+  }
+
+  async function syncShopDetails(a: AccountView) {
+    if (step === 2) {
+      if (!api.shopDetails.savedSellerId(a.email)) return void (await createSeller(a));
+      return void (await withSeller(a, (id) => api.shopDetails.update(id, step2Fields())));
+    }
+    const patch: api.ShopDetailsPatch | null =
+      step === 3
+        ? { address_line1: data.addressLine1, city: data.city, state: data.state || undefined, pincode: data.pincode }
+        : step === 5
+          ? { pan_number: data.pan || null, gstin: data.gstin || null }
+          : null;
+    if (patch) await withSeller(a, (id) => api.shopDetails.update(id, patch));
+  }
+
   async function goTo(target: number, validate: boolean) {
     if (!account) return;
     if (step >= 2) {
@@ -404,6 +444,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       if (validate) {
         const errors = validateStep(step, data, ctxFor());
         if (Object.keys(errors).length) return showError('Please fix the highlighted fields.', errors);
+        await syncShopDetails(account);
       }
       view = await api.application.saveDraft(data, target, validate ? step : null);
       data = view.data;
@@ -541,6 +582,11 @@ const page: Page = async ({ root, account: initialAccount }) => {
     const errors = validateBank(input);
     if (Object.keys(errors).length) return showError('Please fix the bank details.', errors);
     void guarded(el as HTMLButtonElement, 'Saving…', async () => {
+      const a = account;
+      if (a) {
+        const bank = { account_holder_name: input.holderName.trim(), ifsc_code: input.ifsc.trim(), account_number: input.accountNumber.replace(/\s/g, '') };
+        await withSeller(a, (id) => api.shopDetails.saveBank(id, bank));
+      }
       view = await api.application.saveBank(input);
       render();
       toast('Bank details saved securely');

@@ -278,6 +278,18 @@ export const localAuth = {
     save();
     return { previewCode: code };
   },
+  /** Records a verification confirmed by the FastAPI backend (email OTP). */
+  async markVerified(channel: 'email' | 'phone'): Promise<AccountView> {
+    const u = currentUser();
+    delete state.codes[`${u.id}:${channel}`];
+    if (channel === 'email') u.emailVerifiedAt = new Date().toISOString();
+    else u.phoneVerifiedAt = new Date().toISOString();
+    store.transaction(() => {
+      const app = store.getApplicationByUser(u.id);
+      if (app) service.syncWorkspace(app);
+    });
+    return toAccountView(accountOf(u));
+  },
   async verifyCode(channel: 'email' | 'phone', code: string): Promise<AccountView> {
     const u = currentUser();
     const rec = state.codes[`${u.id}:${channel}`];
