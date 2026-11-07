@@ -3271,6 +3271,15 @@ td a:hover {
 }
 .btn-danger {
   border-radius: 10px;
+  /* The .btn reset above turns every button white; keep danger buttons red and readable. */
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 88%, #000);
+  border-color: color-mix(in srgb, var(--red) 88%, #000);
+  color: #fff;
 }
 .btn-danger-ghost {
   background: var(--surface);

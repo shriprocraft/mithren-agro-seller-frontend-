@@ -108,3 +108,32 @@ test('produce maps pack size and unit, and drafts are sent inactive', () => {
 test('a price that is not whole paise is refused, not rounded', () => {
   assert.throws(() => toBackendProduct(kurti({ variants: [{ ...kurti().variants[0], price: 799.999 }] }), 's', true), /at most 2 decimals/);
 });
+
+// ---------- automatic SKUs and edit payloads ----------
+import { generateSku, toBackendUpdate } from '../dist/catalog.js';
+
+test('SKUs come from category, product name and size or pack', () => {
+  assert.equal(generateSku('Women Apparel', 'Cotton Kurti', { size: 'M', packSize: 1, unit: 'piece' }), 'APP-KURTI-M');
+  assert.equal(generateSku('Women Apparel', 'Cotton Kurti', { size: 'Free Size', packSize: 1, unit: 'piece' }), 'APP-KURTI-FS');
+  assert.equal(generateSku('Women Accessories', 'Silk Scarf', { size: 'XXL', packSize: 1, unit: 'piece' }), 'ACC-SCARF-XXL');
+  assert.equal(generateSku('Fruits', 'Alphonso Mango', { packSize: 500, unit: 'g' }), 'FRT-MANGO-500G');
+  assert.equal(generateSku('Fruits', 'Alphonso Mango 1 kg', { packSize: 1.5, unit: 'kg' }), 'FRT-MANGO-1P5KG');
+  assert.equal(generateSku('Herbs', 'Fresh Coriander bunch', { packSize: 1, unit: 'bunch' }), 'HRB-CORIANDER-1BN');
+  assert.equal(generateSku('Others', '12 34', { packSize: 1, unit: 'box' }), 'OTH-ITEM-1BX');
+});
+
+test('generated SKUs avoid ones already in use and stay valid', () => {
+  const taken = new Set(['APP-KURTI-M', 'APP-KURTI-M-2']);
+  assert.equal(generateSku('Women Apparel', 'Cotton Kurti', { size: 'M', packSize: 1, unit: 'piece' }, taken), 'APP-KURTI-M-3');
+  const long = generateSku('Exotic', 'Supercalifragilisticexpialidocious', { packSize: 1234.567, unit: 'kg' });
+  assert.match(long, /^[A-Z0-9][A-Z0-9-]{2,31}$/);
+});
+
+test('edit payloads keep stored photos and clear an emptied description', () => {
+  const body = toBackendUpdate(kurti({ description: '  ' }), 'seller-1', false);
+
+  assert.equal('images' in body, false);
+  assert.equal(body.description, null);
+  assert.equal(body.is_active, false);
+  assert.equal(body.variants.length, 2);
+});

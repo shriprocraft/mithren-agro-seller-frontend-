@@ -207,13 +207,12 @@ type FieldFor = (loc: unknown[]) => string | undefined;
 const shopField: FieldFor = (loc) => SHOP_FIELD[String(loc[loc.length - 1])];
 
 /** Calls the FastAPI backend under /api/v1 and turns its errors into an ApiError with field errors. */
-async function backendRequest<T>(method: 'POST' | 'PATCH', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
+async function backendRequest<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${OTP_API}/api/v1/${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
     });
   } catch {
     throw new ApiError(503, 'Can’t reach the server. Check that it is running and try again.');
@@ -297,6 +296,12 @@ const productField: FieldFor = (loc) => {
 export const products = {
   /** POST /api/v1/products. Prices must already be integer paise (see toBackendProduct). */
   create: (payload: import('./catalog.js').BackendProduct) => backendRequest<BackendProductView>('POST', 'products', payload, productField),
+  /** PATCH /api/v1/products/{id}. Sent variants replace the stored list. */
+  update: (backendId: string, payload: import('./catalog.js').BackendProductUpdate) =>
+    backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, payload, productField),
+  /** DELETE /api/v1/products/{id}: soft delete, the product becomes inactive. */
+  remove: (backendId: string, sellerId: string) =>
+    backendRequest<BackendProductView>('DELETE', `products/${encodeURIComponent(backendId)}?seller_id=${encodeURIComponent(sellerId)}`, undefined, productField),
 };
 
 /**

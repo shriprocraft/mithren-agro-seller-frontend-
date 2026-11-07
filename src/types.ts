@@ -111,6 +111,8 @@ export interface Product {
   lowStockThreshold: number;
   archived: boolean;
   updatedAt: string;
+  /** The product's id in the FastAPI catalogue (POST /api/v1/products), once it is there. */
+  backendId?: string;
 }
 
 export type AdjustmentReason =

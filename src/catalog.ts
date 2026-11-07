@@ -92,3 +92,59 @@ export function toBackendProduct(p: FormProduct, sellerId: string, active: boole
     is_active: active,
   };
 }
+
+/** The body of PATCH /api/v1/products/{id}: the whole form, so variants replace the stored list. */
+export type BackendProductUpdate = Omit<BackendProduct, 'description' | 'images'> & { description: string | null };
+
+/**
+ * Maps the form to a PATCH body. Images are left out so photos stored on the server are kept,
+ * and an empty description clears the stored one.
+ */
+export function toBackendUpdate(p: FormProduct, sellerId: string, active: boolean): BackendProductUpdate {
+  const { images: _images, description, ...rest } = toBackendProduct(p, sellerId, active);
+  void _images;
+  return { ...rest, description: description ?? null };
+}
+
+// ---------- automatic SKUs ----------
+
+const CATEGORY_CODES: Record<string, string> = {
+  Fruits: 'FRT',
+  Vegetables: 'VEG',
+  'Leafy Greens': 'LFG',
+  'Root Vegetables': 'RTV',
+  Herbs: 'HRB',
+  Exotic: 'EXO',
+  'Women Apparel': 'APP',
+  'Women Accessories': 'ACC',
+  Others: 'OTH',
+};
+const UNIT_CODES: Record<string, string> = { g: 'G', kg: 'KG', bunch: 'BN', piece: 'PC', box: 'BX' };
+// Pack words say nothing about the product, so they don't name it.
+const PACK_WORDS = new Set(['G', 'GM', 'GMS', 'GRAM', 'GRAMS', 'KG', 'KGS', 'BUNCH', 'PIECE', 'PIECES', 'PCS', 'BOX', 'PACK', 'SIZE', 'FREE', 'ML', 'LITRE']);
+
+/** The product's main word: the last word of 3+ letters that isn't a pack word, e.g. "Cotton Kurti" -> KURTI. */
+function nameCode(name: string): string {
+  const words = name.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim().split(' ').filter((w) => /^[A-Z]{3,}$/.test(w) && !PACK_WORDS.has(w));
+  return (words[words.length - 1] ?? 'ITEM').slice(0, 10);
+}
+
+function variantCode(category: string, v: { size?: ApparelSize; packSize: number; unit: string }): string {
+  if (categoryKind(category) === 'apparel') return v.size === 'Free Size' ? 'FS' : (v.size ?? '');
+  if (!(v.packSize > 0)) return '';
+  const qty = String(Number(v.packSize.toFixed(3))).replace('.', 'P');
+  return `${qty}${UNIT_CODES[v.unit] ?? ''}`;
+}
+
+/**
+ * A SKU from category, product name and variant, e.g. APP-KURTI-M or FRT-MANGO-500G.
+ * `taken` holds SKUs already in use; a clash gets a numeric suffix (-2, -3, ...).
+ */
+export function generateSku(category: string, name: string, v: { size?: ApparelSize; packSize: number; unit: string }, taken: ReadonlySet<string> = new Set()): string {
+  const base = [CATEGORY_CODES[category] ?? 'GEN', nameCode(name), variantCode(category, v)].filter(Boolean).join('-').slice(0, 29);
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}

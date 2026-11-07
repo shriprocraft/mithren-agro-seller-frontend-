@@ -17,6 +17,7 @@ route('/seller/dashboard', 'Dashboard', async () => (await import('./pages/dashb
 route('/seller/products', 'Products', async () => (await import('./pages/products.js')).default, 'products');
 route('/seller/products/new', 'New product', async () => (await import('./pages/product-form.js')).default, 'products');
 route('/seller/products/:id', 'Edit product', async () => (await import('./pages/product-form.js')).default, 'products');
+route('/seller/products/:id/edit', 'Edit product', async () => (await import('./pages/product-form.js')).default, 'products');
 route('/seller/orders', 'Orders', async () => (await import('./pages/orders.js')).default, 'orders');
 route('/seller/orders/:id', 'Order details', async () => (await import('./pages/order-detail.js')).default, 'orders');
 route('/seller/inventory', 'Inventory', async () => (await import('./pages/inventory.js')).default, 'inventory');

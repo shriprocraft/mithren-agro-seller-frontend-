@@ -4,12 +4,12 @@ import type { Page } from '../router.js';
 import { navigate } from '../router.js';
 import { html, raw, on, $, $$, formValues } from '../ui/dom.js';
 import { pageHeader, field, textarea, select, callout, productBadge, icon, showFieldErrors, badge, emptyState } from '../ui/components.js';
-import { toast } from '../ui/overlay.js';
+import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { slugify, money, fmtDate, UNIT_LABEL } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
-import { APPAREL_SIZES, categoryKind, toBackendProduct, type ApparelSize } from '../catalog.js';
+import { APPAREL_SIZES, categoryKind, generateSku, toBackendProduct, toBackendUpdate, type ApparelSize } from '../catalog.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UNITS: Unit[] = ['g', 'kg', 'bunch', 'piece', 'box'];
@@ -66,6 +66,14 @@ const page: Page = async ({ root, params, seller, account }) => {
   const readOnly = seller.status === 'suspended';
   let variants: Variant[] = structuredClone(product.variants);
   let slugTouched = !isNew;
+  // SKUs are generated from category, name and size or pack until the seller types their own.
+  // Saved variants keep their SKU, so an edit never renames stock that already exists.
+  const skuManual = new Set(variants.filter((v) => !isNew && v.sku).map((v) => v.id));
+  const takenSkus = new Set(
+    (await api.listProducts({ includeArchived: true })).filter((p) => p.id !== product.id).flatMap((p) => p.variants.map((v) => v.sku)),
+  );
+  const sellerIdOnServer = () => (account ? api.shopDetails.savedSellerId(account.email) : null);
+  const NO_SERVER_SELLER = 'Your seller profile isn’t on the server yet. Complete Step 2 of seller registration, then add products.';
   // Apparel and accessories are sold by size and have no organic or freshness fields.
   let apparel = categoryKind(product.category) === 'apparel';
   const variantHint = () =>
@@ -84,7 +92,7 @@ const page: Page = async ({ root, params, seller, account }) => {
 
   root.innerHTML = html`
     ${pageHeader(isNew ? 'Add product' : product.name, isNew ? 'Fill in the details customers see. Save a draft any time.' : `Last updated ${fmtDate(product.updatedAt, true)}`, isNew ? undefined : productBadge(product.status), { href: '/seller/products', label: 'Products' })}
-    ${!approved && !readOnly ? callout('warn', 'Drafts only until your account is approved', 'You can prepare listings now. Submitting for approval unlocks once your seller account is approved.') : ''}
+    ${!approved && !readOnly ? callout('warn', 'Drafts only until your account is approved', 'You can prepare listings now. Publishing unlocks once your seller account is approved.') : ''}
     ${readOnly ? callout('error', 'Read-only', 'Your account is suspended, so listings can’t be edited.') : ''}
     ${moderationInfo}
     <form class="product-form" novalidate data-role="form">
@@ -191,10 +199,11 @@ const page: Page = async ({ root, params, seller, account }) => {
             ${readOnly
               ? ''
               : html`<button type="submit" class="btn btn-primary btn-block" data-submit="submit" ${approved ? '' : raw('disabled aria-describedby="submit-why"')}>
-                  ${product.status === 'approved' || product.status === 'inactive' ? 'Save changes' : product.status === 'pending' ? 'Update submission' : 'Submit for approval'}
+                  ${isNew ? 'Publish Product' : product.status === 'approved' || product.status === 'inactive' ? 'Save changes' : product.status === 'pending' ? 'Update submission' : 'Publish Product'}
                 </button>
                 ${approved ? '' : html`<p class="hint" id="submit-why">Available after account approval.</p>`}
-                ${product.status === 'approved' || product.status === 'inactive' ? '' : html`<button type="submit" class="btn btn-block" data-submit="draft">Save draft</button>`}`}
+                ${product.status === 'approved' || product.status === 'inactive' ? '' : html`<button type="submit" class="btn btn-block" data-submit="draft">Save draft</button>`}
+                ${isNew ? '' : html`<button type="button" class="btn btn-block btn-danger-ghost" data-action="delete-product">Delete product</button>`}`}
           </div>
         </aside>
       </div>
@@ -210,7 +219,7 @@ const page: Page = async ({ root, params, seller, account }) => {
           <legend>Variant ${i + 1}</legend>
           <div class="variant-grid">
             ${field({ name: `variant_${i}_label`, label: 'Label', value: v.label, placeholder: apparel ? 'e.g. Size M' : 'e.g. 500 g', attrs: `data-v="label" data-i="${i}"` })}
-            ${field({ name: `variant_${i}_sku`, label: 'SKU', value: v.sku, placeholder: apparel ? 'e.g. GV-KRT-M' : 'e.g. GV-MNG-500', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
+            ${field({ name: `variant_${i}_sku`, label: 'SKU', value: v.sku, placeholder: apparel ? 'e.g. APP-KURTI-M' : 'e.g. FRT-MANGO-500G', hint: skuManual.has(v.id) ? undefined : 'Filled in for you. You can change it.', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
             ${apparel
               ? select({ name: `variant_${i}_size`, label: 'Size', value: v.size ?? '', required: true, placeholder: 'Select size', options: APPAREL_SIZES.map((sz) => [sz, sz] as [string, string]), attrs: `data-v="size" data-i="${i}"` })
               : html`${field({ name: `variant_${i}_packSize`, label: 'Pack size', type: 'number', value: v.packSize, placeholder: 'Enter pack size', attrs: `data-v="packSize" data-i="${i}" min="0" step="any"` })}
@@ -231,6 +240,7 @@ const page: Page = async ({ root, params, seller, account }) => {
       // Hidden sections are not sent: no organic claim, origin, freshness or storage details.
       return {
         ...(isNew ? {} : { id: product.id }),
+        ...(product.backendId ? { backendId: product.backendId } : {}),
         name: f.name?.trim() ?? '',
         slug: f.slug?.trim() ?? '',
         description: f.description ?? '',
@@ -250,6 +260,7 @@ const page: Page = async ({ root, params, seller, account }) => {
     }
     return {
       ...(isNew ? {} : { id: product.id }),
+      ...(product.backendId ? { backendId: product.backendId } : {}),
       name: f.name?.trim() ?? '',
       slug: f.slug?.trim() ?? '',
       description: f.description ?? '',
@@ -352,11 +363,31 @@ const page: Page = async ({ root, params, seller, account }) => {
   for (const ev of ['dragenter', 'dragover']) drop.addEventListener(ev, () => drop.classList.add('is-over'));
   for (const ev of ['dragleave', 'drop']) drop.addEventListener(ev, () => drop.classList.remove('is-over'));
 
+  /** Regenerates every SKU the seller hasn't typed, avoiding SKUs used elsewhere or by earlier variants. */
+  const refreshSkus = () => {
+    const category = ($('#f_category', root) as HTMLSelectElement).value;
+    const name = ($('#f_name', root) as HTMLInputElement).value;
+    const taken = new Set([...takenSkus, ...variants.filter((v) => skuManual.has(v.id)).map((v) => v.sku.trim().toUpperCase())]);
+    variants.forEach((v, i) => {
+      if (skuManual.has(v.id)) return;
+      v.sku = category && name.trim() ? generateSku(category, name, v, taken) : '';
+      taken.add(v.sku);
+      const input = $(`#f_variant_${i}_sku`, root) as HTMLInputElement | null;
+      if (input) input.value = v.sku;
+    });
+  };
+
   on(root, 'input', '[data-v]', (_e, el) => {
     const i = Number(el.dataset.i);
     const key = el.dataset.v as keyof Variant;
     const val = (el as HTMLInputElement).value;
     const v = variants[i]!;
+    if (key === 'sku') {
+      // Typing takes over; clearing the field hands it back to the generator.
+      if (val.trim()) skuManual.add(v.id);
+      else skuManual.delete(v.id);
+    }
+    if (key === 'packSize' || key === 'size' || (key === 'sku' && !val.trim())) queueMicrotask(refreshSkus);
     if (key === 'size') {
       if (val) v.size = val as ApparelSize;
       else delete v.size;
@@ -370,12 +401,14 @@ const page: Page = async ({ root, params, seller, account }) => {
   });
   on(root, 'change', '[data-v=unit]', (_e, el) => {
     variants[Number(el.dataset.i)]!.unit = (el as HTMLSelectElement).value as Unit;
+    refreshSkus();
   });
   on(root, 'change', '[data-v=size]', (_e, el) => {
     const v = variants[Number(el.dataset.i)]!;
     const val = (el as HTMLSelectElement).value;
     if (val) v.size = val as ApparelSize;
     else delete v.size;
+    refreshSkus();
     renderPreview();
   });
   // Show the fields that fit the chosen category.
@@ -395,20 +428,26 @@ const page: Page = async ({ root, params, seller, account }) => {
       }
     }
     renderVariants();
+    refreshSkus();
     renderPreview();
   });
+  on(root, 'change', '#f_category', () => refreshSkus());
   on(root, 'click', '[data-action=add-variant]', () => {
     variants.push({ id: `v${Date.now().toString(36)}`, label: '', sku: '', packSize: 1, unit: apparel ? 'piece' : 'kg', price: 0, stock: 0 });
     renderVariants();
+    refreshSkus();
     ($(`#f_variant_${variants.length - 1}_label`, root) as HTMLInputElement | null)?.focus();
   });
   on(root, 'click', '[data-action=remove-variant]', (_e, el) => {
-    variants.splice(Number(el.dataset.i), 1);
+    const [gone] = variants.splice(Number(el.dataset.i), 1);
+    if (gone) skuManual.delete(gone.id);
     renderVariants();
+    refreshSkus();
     renderPreview();
   });
   on(root, 'input', '#f_name', (_e, el) => {
     if (!slugTouched) ($('#f_slug', root) as HTMLInputElement).value = slugify((el as HTMLInputElement).value);
+    refreshSkus();
   });
   on(root, 'input', '#f_slug', () => (slugTouched = true));
   on(root, 'input', 'input:not([data-v]),textarea', () => renderPreview());
@@ -436,26 +475,35 @@ const page: Page = async ({ root, params, seller, account }) => {
     errBox.hidden = true;
     try {
       const input = readForm();
-      if (isNew) {
-        // New listings go to the FastAPI catalogue first, after the same checks as saving, so a
-        // listing the portal would refuse never reaches the backend. Drafts are sent inactive.
-        api.checkProduct(input, submit);
-        const sellerId = account ? api.shopDetails.savedSellerId(account.email) : null;
-        if (!sellerId) throw new api.ApiError(409, 'Your seller profile isn’t on the server yet. Complete Step 2 of seller registration, then add products.');
-        let payload;
+      // The FastAPI catalogue is written first, after the same checks as saving, so a listing the
+      // portal would refuse never reaches it. Publish sends it active; Save draft sends it inactive.
+      api.checkProduct(input, submit);
+      const sellerId = sellerIdOnServer();
+      const convert = <T>(build: () => T): T => {
         try {
-          payload = toBackendProduct(input, sellerId, submit);
-        } catch (convert) {
-          throw new api.ApiError(422, (convert as Error).message);
+          return build();
+        } catch (e) {
+          throw new api.ApiError(422, (e as Error).message);
         }
-        await api.products.create(payload);
+      };
+      let synced = false;
+      if (product.backendId) {
+        if (!sellerId) throw new api.ApiError(409, NO_SERVER_SELLER);
+        await api.products.update(product.backendId, convert(() => toBackendUpdate(input, sellerId, submit)));
+        synced = true;
+      } else if (sellerId) {
+        // New products, and older ones saved before the catalogue existed, are created there.
+        input.backendId = (await api.products.create(convert(() => toBackendProduct(input, sellerId, submit)))).id;
+        synced = true;
+      } else if (isNew) {
+        throw new api.ApiError(409, NO_SERVER_SELLER);
       }
       const saved = await api.saveProduct(input, submit);
       releaseImages();
       toast(
         isNew
-          ? `${submit ? 'Sent for approval' : 'Draft saved'} and added to the catalogue`
-          : submit ? (saved.status === 'pending' ? (product.status === 'approved' ? 'Changes saved — sent for re-approval' : 'Sent for approval') : 'Changes saved') : 'Draft saved',
+          ? submit ? 'Product published' : 'Draft saved'
+          : `${submit ? (saved.status === 'pending' && product.status !== 'pending' ? 'Changes saved — sent for re-approval' : 'Changes saved') : 'Draft saved'}${synced ? '' : ' (this product isn’t in the catalogue)'}`,
       );
       navigate(`/seller/products/${saved.id}`, isNew);
     } catch (err) {
@@ -467,6 +515,44 @@ const page: Page = async ({ root, params, seller, account }) => {
       btns.forEach((b) => (b.disabled = b.dataset.submit === 'submit' && !approved));
     }
   });
+
+  on(root, 'click', '[data-action=delete-product]', async (_e, el) => {
+    const { ok } = await confirmDialog({
+      title: 'Delete this product?',
+      message: 'It is removed from the storefront and your product list. Its sales history and stock records are kept.',
+      confirmLabel: 'Delete product',
+      danger: true,
+    });
+    if (!ok) return;
+    const btn = el as HTMLButtonElement;
+    btn.disabled = true;
+    const errBox = $('#form-error', root)!;
+    errBox.hidden = true;
+    try {
+      const sellerId = sellerIdOnServer();
+      if (product.backendId && !sellerId) throw new api.ApiError(409, NO_SERVER_SELLER);
+      // The portal goes first: it refuses while orders for this product are still open.
+      await api.archiveProduct(product.id, true);
+      if (product.backendId && sellerId) {
+        try {
+          await api.products.remove(product.backendId, sellerId);
+        } catch (err) {
+          await api.archiveProduct(product.id, false); // keep both sides in step
+          throw err;
+        }
+      }
+      releaseImages();
+      toast('Product deleted');
+      navigate('/seller/products', true);
+    } catch (err) {
+      const ae = err instanceof api.ApiError ? err : new api.ApiError(500, 'Something went wrong. Try again.');
+      errBox.textContent = ae.message;
+      errBox.hidden = false;
+      btn.disabled = false;
+    }
+  });
+
+  refreshSkus();
 };
 
 function certLabel(d: SellerDocument) {
