@@ -19,6 +19,8 @@ const ICONS: Record<string, string> = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.9 3.9M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m3 3 18 18"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -143,6 +145,8 @@ interface FieldOpts {
   placeholder?: string;
   attrs?: string;
   disabled?: boolean;
+  /** Password fields only: adds a show/hide button inside the input. */
+  reveal?: boolean;
 }
 
 export function field(o: FieldOpts) {
@@ -151,11 +155,17 @@ export function field(o: FieldOpts) {
   return html`
     <div class="field ${o.error ? 'has-error' : ''}">
       <label for="${id}">${o.label}${o.required ? html`<span class="req" aria-hidden="true"> *</span>` : ''}</label>
+      ${o.reveal ? raw('<div class="input-reveal">') : ''}
       <input id="${id}" name="${o.name}" type="${o.type ?? 'text'}" value="${o.value ?? ''}"
         ${o.required ? raw('required') : ''} ${o.disabled ? raw('disabled') : ''}
         ${o.placeholder ? raw(`placeholder="${esc(o.placeholder)}"`) : ''}
         ${describedBy ? raw(`aria-describedby="${describedBy}"`) : ''}
         ${o.error ? raw('aria-invalid="true"') : ''} ${raw(o.attrs ?? '')} />
+      ${o.reveal
+        ? html`<button type="button" class="reveal-btn" data-reveal="${id}" aria-controls="${id}" aria-pressed="false" aria-label="Show password" title="Show password">
+            <span class="reveal-show">${icon('eye', 18)}</span><span class="reveal-hide" hidden>${icon('eyeOff', 18)}</span>
+          </button></div>`
+        : ''}
       ${o.hint ? html`<p class="hint" id="${id}_hint">${o.hint}</p>` : ''}
       <p class="field-error" id="${id}_err" ${o.error ? '' : raw('hidden')}>${o.error ?? ''}</p>
     </div>`;
@@ -370,4 +380,26 @@ export function tabs(items: { href: string; label: string; count?: number; activ
   return html`<nav class="tabs" aria-label="${label}">
     ${items.map((t) => html`<a href="#${t.href}" class="tab ${t.active ? 'active' : ''}" ${t.active ? raw('aria-current="page"') : ''}>${t.label}${t.count !== undefined ? html` <span class="tab-count">${t.count}</span>` : ''}</a>`)}
   </nav>`;
+}
+
+// Show/hide buttons on password fields (field({ reveal: true })). One delegated listener serves every
+// page, so re-rendered forms work without binding again.
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    const btn = (e.target as Element | null)?.closest<HTMLButtonElement>('button[data-reveal]');
+    if (!btn) return;
+    const input = document.getElementById(btn.dataset.reveal!) as HTMLInputElement | null;
+    if (!input) return;
+    const show = input.type === 'password';
+    // Keep the caret where it was while switching type.
+    const { selectionStart, selectionEnd } = input;
+    input.type = show ? 'text' : 'password';
+    if (selectionStart !== null && document.activeElement === input) input.setSelectionRange(selectionStart, selectionEnd);
+    const label = show ? 'Hide password' : 'Show password';
+    btn.setAttribute('aria-pressed', String(show));
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    btn.querySelector<HTMLElement>('.reveal-show')!.hidden = show;
+    btn.querySelector<HTMLElement>('.reveal-hide')!.hidden = !show;
+  });
 }

@@ -313,11 +313,15 @@ const page: Page = async ({ root, params, seller }) => {
       : img.state === 'failed'
         ? html`<span class="image-state error-text">${img.error ?? 'Upload failed'}</span>`
         : img.state === 'local'
-          ? html`<span class="image-state warn-text">Not saved</span>`
+          ? canUpload()
+            ? html`<span class="image-state">Preview (will save on submit)</span>`
+            : html`<span class="image-state warn-text">Not saved</span>`
           : '';
   const renderImages = () => {
     $('#img-count', root)!.textContent = images.length ? `${images.length} of ${IMAGE_MAX_COUNT}` : '';
-    $('#img-note', root)!.hidden = !images.some((x) => x.state === 'local');
+    // The sign-in warning is only for sellers without a server session; signed-in sellers' photos
+    // are uploaded now or, at the latest, when the form is saved.
+    $('#img-note', root)!.hidden = canUpload() || !images.some((x) => x.state === 'local');
     $('#image-grid', root)!.innerHTML = images
       .map(
         (img, i) => html`<li class="image-tile ${i === 0 ? 'is-primary' : ''} ${img.state === 'uploading' ? 'is-uploading' : ''} ${img.state === 'failed' ? 'is-failed' : ''}">
@@ -374,6 +378,11 @@ const page: Page = async ({ root, params, seller }) => {
     for (const img of added) void upload(img);
   };
   const releaseImages = () => images.forEach((x) => x.file && URL.revokeObjectURL(x.url));
+  /** Uploads photos picked before the seller had a server session, now that there is one. */
+  const uploadPending = async () => {
+    if (!canUpload()) return;
+    await Promise.all(images.filter((x) => x.state === 'local').map((x) => upload(x)));
+  };
   /** Paths of the stored photos in display order, or an error if some aren't stored yet. */
   const imagePaths = (): string[] => {
     if (images.some((x) => x.state === 'uploading')) throw new api.ApiError(409, 'Wait for the photos to finish uploading.');
@@ -535,6 +544,7 @@ const page: Page = async ({ root, params, seller }) => {
     const errBox = $('#form-error', root)!;
     errBox.hidden = true;
     try {
+      await uploadPending();
       const input = { ...readForm(), images: imagePaths() };
       // The FastAPI catalogue is written first, after the same checks as saving, so a listing the
       // portal would refuse never reaches it. Publish sends it active; Save draft sends it inactive.

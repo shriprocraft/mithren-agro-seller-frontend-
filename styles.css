@@ -4315,3 +4315,39 @@ textarea {
     margin-bottom: 14px;
   }
 }
+
+/* Password fields with a show/hide button inside the input. */
+.input-reveal {
+  position: relative;
+}
+.input-reveal > input {
+  width: 100%;
+  padding-right: 44px;
+}
+.reveal-btn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.reveal-btn:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.reveal-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 0;
+}
+.reveal-btn [hidden] {
+  display: none;
+}

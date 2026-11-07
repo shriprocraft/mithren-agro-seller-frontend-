@@ -141,8 +141,8 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${field({ name: 'phone', label: 'Mobile number', type: 'tel', required: true, placeholder: 'Enter your 10-digit mobile number', hint: 'Indian mobile number. We’ll send an OTP.', attrs: 'autocomplete="tel" maxlength="16"' })}
     </div>
     <div class="row-2">
-      ${field({ name: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Create a strong password', hint: 'At least 10 characters, with letters and numbers.', attrs: 'autocomplete="new-password" maxlength="200"' })}
-      ${field({ name: 'password2', label: 'Confirm password', type: 'password', required: true, placeholder: 'Re-enter your password', attrs: 'autocomplete="new-password" maxlength="200"' })}
+      ${field({ name: 'password', label: 'Password', type: 'password', reveal: true, required: true, placeholder: 'Create a strong password', hint: 'At least 10 characters, with letters and numbers.', attrs: 'autocomplete="new-password" maxlength="200"' })}
+      ${field({ name: 'password2', label: 'Confirm password', type: 'password', reveal: true, required: true, placeholder: 'Re-enter your password', attrs: 'autocomplete="new-password" maxlength="200"' })}
     </div>`;
 
   const verifyBlock = (channel: 'email' | 'phone', verified: boolean, target: string) => {
