@@ -2,7 +2,7 @@
 
 import type { Page } from '../router.js';
 import { html, raw, on, $, $$, formValues } from '../ui/dom.js';
-import { pageHeader, field, textarea, callout, icon, showFieldErrors, badge, paginate, pager, bindPager } from '../ui/components.js';
+import { pageHeader, field, textarea, callout, icon, showFieldErrors, badge, paginate, pager, bindPager, sellerBadge } from '../ui/components.js';
 import { toast, modal, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { fmtDate, EMAIL_RE } from '../lib.js';
@@ -42,9 +42,12 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     ${pageHeader('Store settings', 'How your shop appears to customers and how you fulfil orders.')}
     ${readOnly ? callout('error', 'Read-only', 'Settings can’t be changed while your account is suspended.') : ''}
     <div class="settings-layout">
-      <nav class="settings-nav" aria-label="Settings sections">
-        <ul>${SECTIONS.map(([id, l], i) => html`<li><a href="#/seller/store-settings" data-jump="${id}" class="${i === 0 ? 'is-active' : ''}" ${i === 0 ? raw('aria-current="true"') : ''}>${l}</a></li>`)}</ul>
-      </nav>
+      <aside class="settings-aside">
+        <nav class="settings-nav" aria-label="Settings sections">
+          <ul>${SECTIONS.map(([id, l], i) => html`<li><a href="#/seller/store-settings" data-jump="${id}" class="${i === 0 ? 'is-active' : ''}" ${i === 0 ? raw('aria-current="true"') : ''}>${l}</a></li>`)}</ul>
+        </nav>
+        ${glanceCard(seller)}
+      </aside>
       <div class="stack">
         <form class="card" id="profile" data-section="profile" novalidate>
           <h2 class="card-title">Shop profile</h2>
@@ -360,6 +363,30 @@ const page: Page = async ({ root, query, seller, refresh }) => {
 
 function saveRow(readOnly: boolean) {
   return readOnly ? html`` : html`<div class="save-row"><span class="save-status" role="status" aria-live="polite"></span><button type="submit" class="btn btn-primary">Save</button></div>`;
+}
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** A short summary under the section tabs: account status, today's hours and what customers see. */
+function glanceCard(seller: Parameters<Page>[0]['seller']) {
+  // Today in India, where the shop operates.
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const hours = seller.workingHours.find((h) => h.day === DAYS[now.getDay()]);
+  const holidayToday = seller.holidays.some((h) => h.date === todayIso);
+  const upcoming = seller.holidays.filter((h) => h.date >= todayIso).length;
+  const today = holidayToday ? 'Closed (holiday)' : !hours || hours.closed ? 'Closed' : `Open ${hours.open}–${hours.close}`;
+  return html`<section class="settings-glance" aria-labelledby="glance-h">
+    <h2 id="glance-h" class="settings-glance-title">Store at a glance</h2>
+    <dl class="kv kv-compact">
+      <div><dt>Account</dt><dd>${sellerBadge(seller.status)}</dd></div>
+      <div><dt>Today</dt><dd>${today}</dd></div>
+      <div><dt>Delivery areas</dt><dd>${seller.serviceAreas.length ? `${seller.serviceAreas.length} area${seller.serviceAreas.length === 1 ? '' : 's'}` : 'None yet'}</dd></div>
+      <div><dt>Holidays</dt><dd>${upcoming ? `${upcoming} upcoming` : 'None planned'}</dd></div>
+      <div><dt>New orders</dt><dd>${seller.fulfilment.autoAccept ? 'Accepted automatically' : 'You confirm each'}</dd></div>
+    </dl>
+    <p class="settings-glance-help small">${icon('info', 13)} Questions about your settings? <a href="mailto:${seller.supportEmail}">Contact seller support</a></p>
+  </section>`;
 }
 
 export default page;

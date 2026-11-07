@@ -4197,3 +4197,74 @@ textarea {
   font-size: 12px;
   color: var(--text-2);
 }
+
+/* ---------- Store settings: pinned sidebar (tabs + summary) ---------- */
+.settings-aside {
+  /* The whole sidebar stays pinned 80px from the top, below the sticky top bar. */
+  position: sticky;
+  top: 80px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-aside .settings-nav {
+  position: static;
+}
+.settings-nav a {
+  padding: 11px 12px 11px 18px;
+}
+.settings-glance {
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 16 / 0.04), 0 8px 24px -12px rgb(16 24 16 / 0.18);
+}
+.settings-glance-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+.settings-glance .kv {
+  margin: 0;
+  gap: 10px;
+}
+.settings-glance .kv div {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+.settings-glance-help {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-2);
+}
+@media (max-width: 1024px) {
+  .settings-aside {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 5;
+  }
+  .settings-glance {
+    display: none;
+  }
+}
+@media (min-width: 1025px) {
+  /* Jumping to a section lines its card up with the top of the pinned sidebar. */
+  .settings-layout form.card,
+  .settings-layout section.card:not(.settings-glance) {
+    scroll-margin-top: 80px;
+  }
+}
+@media (min-width: 1025px) {
+  /* Room for the summary values on one line. */
+  .settings-layout {
+    grid-template-columns: 272px minmax(0, 1fr);
+  }
+  .settings-glance .kv div {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+}
