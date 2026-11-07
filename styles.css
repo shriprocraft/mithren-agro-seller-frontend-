@@ -3977,3 +3977,20 @@ textarea {
   border-radius: 8px;
   box-shadow: none;
 }
+
+/* Product details (read-only) */
+.product-row[data-view] {
+  cursor: pointer;
+}
+.product-view-image {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  max-height: 260px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 72px;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+}

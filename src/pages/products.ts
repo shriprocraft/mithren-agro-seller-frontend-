@@ -1,7 +1,7 @@
 // /seller/products — catalogue list with status tabs, search, filters, sorting, variants and pagination.
 
 import type { Page } from '../router.js';
-import { setQuery } from '../router.js';
+import { setQuery, navigate } from '../router.js';
 import { html, raw, on } from '../ui/dom.js';
 import { pageHeader, productBadge, icon, emptyState, tabs, badge, paginate, pager, bindPager } from '../ui/components.js';
 import { toast, confirmDialog, saveFile } from '../ui/overlay.js';
@@ -241,6 +241,11 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   bindPager(root, refresh);
 
   // ----- variant panels (client-side show/hide; nothing to fetch) -----
+  // Clicking anywhere on a product row (except its controls) opens the read-only details view.
+  on(root, 'click', 'tr[data-view]', (e, rowEl) => {
+    if ((e.target as HTMLElement).closest('a,button,input,label,select,textarea')) return;
+    navigate(`/seller/products/${(rowEl as HTMLElement).dataset.view}`);
+  });
   on(root, 'click', '[data-action=expand]', (_e, btn) => {
     const id = btn.dataset.id!;
     const open = !expanded.has(id);
@@ -297,7 +302,7 @@ function row(p: Product, readOnly: boolean) {
   const multi = new Set(prices).size > 1;
   const canToggle = !readOnly && !p.archived && (p.status === 'approved' || p.status === 'inactive');
   const open = expanded.has(p.id);
-  return html`<tr class="${open ? 'is-open' : ''}">
+  return html`<tr class="product-row ${open ? 'is-open' : ''}" data-view="${p.id}">
     <td>
       <a class="prod-cell" href="#/seller/products/${p.id}">
         <span class="prod-thumb" aria-hidden="true">${p.emoji}</span>
@@ -317,7 +322,7 @@ function row(p: Product, readOnly: boolean) {
     </td>
     <td class="muted">${timeAgo(p.updatedAt)}</td>
     <td class="actions">
-      <a class="btn btn-sm btn-ghost" href="#/seller/products/${p.id}">${readOnly ? 'View' : 'Edit'}</a>
+      <a class="btn btn-sm btn-ghost" href="#/seller/products/${p.id}${readOnly ? '' : '/edit'}">${readOnly ? 'View' : 'Edit'}</a>
       ${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-ghost" data-action="archive" data-id="${p.id}" data-archived="${String(p.archived)}">${p.archived ? 'Restore' : 'Archive'}</button>`}
     </td>
   </tr>
