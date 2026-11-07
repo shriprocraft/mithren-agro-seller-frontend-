@@ -7,6 +7,8 @@ import * as core from './api-core.js';
 import { ApiError } from './errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS, type RpcName } from './rpc.js';
 import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, BankInput } from './application.js';
+import type { OrderStatus, SubOrder } from './types.js';
+import { BACKEND_STATUS, toSubOrder, type BackendOrder } from './backend-orders.js';
 
 export { ApiError };
 export type { DashboardMetrics, ProductFilter, ProductInput, OrderFilter, LedgerEntry, Settlement } from './api-core.js';
@@ -82,9 +84,15 @@ export const archiveProduct = rpc('archiveProduct');
 export const adjustStock = rpc('adjustStock');
 export const listAdjustments = rpc('listAdjustments');
 export const applyInventoryCsv = rpc('applyInventoryCsv');
-export const listOrders = rpc('listOrders');
-export const getOrder = rpc('getOrder');
-export const transitionOrder = rpc('transitionOrder');
+const localListOrders = rpc('listOrders');
+const localGetOrder = rpc('getOrder');
+const localTransitionOrder = rpc('transitionOrder');
+
+/** The seller's orders: from the FastAPI backend when signed in there, otherwise the portal's own. */
+export const listOrders = (f: core.OrderFilter = {}): Promise<SubOrder[]> => (sellerSession.isSignedIn() ? backendOrders.list(f) : localListOrders(f));
+export const getOrder = (id: string): Promise<SubOrder> => (sellerSession.isSignedIn() ? backendOrders.get(id) : localGetOrder(id));
+export const transitionOrder = (id: string, to: OrderStatus, note = ''): Promise<SubOrder> =>
+  sellerSession.isSignedIn() ? backendOrders.transition(id, to, note) : localTransitionOrder(id, to, note);
 export const markItemUnavailable = rpc('markItemUnavailable');
 export const getLedger = rpc('getLedger');
 export const listSettlements = rpc('listSettlements');
@@ -288,10 +296,9 @@ async function backendFetch(method: string, path: string, body: unknown): Promis
  * an ApiError with field errors. A 401 refreshes the tokens once and retries; if that fails the
  * session is cleared and SESSION_EXPIRED_EVENT sends the seller to sign in.
  */
-async function backendRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
-  let res: Response;
+async function sendWithRefresh(method: string, path: string, body: unknown): Promise<Response> {
   try {
-    res = await backendFetch(method, path, body);
+    let res = await backendFetch(method, path, body);
     const sessionCall = !path.startsWith('auth/');
     if (res.status === 401 && sessionCall && sellerSession.isSignedIn()) {
       if (await refreshTokens()) res = await backendFetch(method, path, body);
@@ -300,9 +307,14 @@ async function backendRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', pa
         window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
       }
     }
+    return res;
   } catch {
     throw new ApiError(503, 'Can’t reach the server. Check that it is running and try again.');
   }
+}
+
+async function backendRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
+  const res = await sendWithRefresh(method, path, body);
   if (res.status === 204) return undefined as T;
   const json = (await res.json().catch(() => null)) as { detail?: unknown } | null;
   if (res.ok) return json as T;
@@ -408,6 +420,45 @@ export const uploads = {
     return backendRequest<UploadedImage>('POST', 'uploads/product-image', form, () => undefined);
   },
 };
+
+// ---------- orders (FastAPI backend) ----------
+
+const ACTIVE: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit'];
+const ISSUES: OrderStatus[] = ['cancelled', 'rejected', 'return_requested', 'returned'];
+
+const backendOrders = {
+  /** Every order (a page at a time), then the portal's own tab and search filters. */
+  async list(f: core.OrderFilter = {}): Promise<SubOrder[]> {
+    const all: BackendOrder[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await backendRequest<{ items: BackendOrder[]; total: number }>('GET', `seller/orders?limit=100&offset=${offset}`, undefined, () => undefined);
+      all.push(...page.items);
+      if (all.length >= page.total || !page.items.length) break;
+    }
+    const q = f.q?.trim().toLowerCase();
+    return all
+      .map((o) => toSubOrder(o))
+      .filter((o) => (!f.status ? true : f.status === 'active' ? ACTIVE.includes(o.status) : f.status === 'issues' ? ISSUES.includes(o.status) : o.status === f.status))
+      .filter((o) => (q ? o.id.toLowerCase().includes(q) || o.customer.firstName.toLowerCase().includes(q) : true));
+  },
+  async get(id: string): Promise<SubOrder> {
+    return toSubOrder(await backendRequest<BackendOrder>('GET', `seller/orders/${encodeURIComponent(id)}`, undefined, () => undefined));
+  },
+  async transition(id: string, to: OrderStatus, note: string): Promise<SubOrder> {
+    const status = BACKEND_STATUS[to];
+    if (!status) throw new ApiError(409, 'The delivery partner updates this status.');
+    const body = { status, ...(note.trim() ? { reason: note.trim() } : {}) };
+    return toSubOrder(await backendRequest<BackendOrder>('PATCH', `seller/orders/${encodeURIComponent(id)}/status`, body, () => undefined));
+  },
+};
+
+/** The printable GST invoice (HTML) for a backend order. */
+export async function orderInvoiceHtml(id: string): Promise<string> {
+  const res = await sendWithRefresh('GET', `seller/orders/${encodeURIComponent(id)}/invoice`, undefined);
+  if (res.ok) return res.text();
+  const json = (await res.json().catch(() => null)) as { detail?: { message?: string } } | null;
+  throw new ApiError(res.status, json?.detail?.message ?? `The invoice couldn’t be loaded (${res.status}).`);
+}
 
 /** A product image as a URL the browser can load: server paths are served by the FastAPI backend. */
 export const imageUrl = (pathOrUrl: string): string => (pathOrUrl.startsWith('/') ? `${OTP_API}${pathOrUrl}` : pathOrUrl);

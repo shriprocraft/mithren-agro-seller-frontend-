@@ -189,6 +189,8 @@ export interface SubOrder {
   reason?: string;
   /** Count only. Other sellers' details are never exposed. */
   otherSellerCount: number;
+  /** Set when the order comes from the FastAPI backend (its UUID). */
+  backendId?: string;
 }
 
 export type SettlementState = 'pending' | 'eligible' | 'processing' | 'paid' | 'failed' | 'reversed';

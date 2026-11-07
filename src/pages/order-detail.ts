@@ -35,14 +35,17 @@ const page: Page = async ({ root, params, seller, refresh }) => {
   const negative = next.filter((s) => s === 'rejected' || s === 'cancelled');
   const stepIdx = FULFILMENT_FLOW.indexOf(o.status);
   const offFlow = stepIdx < 0;
-  const canMarkUnavailable = canAct && ['awaiting_confirmation', 'accepted'].includes(o.status) && live.length > 1;
+  // Backend orders don't support removing single items yet.
+  const canMarkUnavailable = canAct && !o.backendId && ['awaiting_confirmation', 'accepted'].includes(o.status) && live.length > 1;
+  // The GST invoice comes from the backend, once the order is confirmed.
+  const canInvoice = !!o.backendId && ['accepted', 'packed', 'ready_for_pickup', 'in_transit', 'delivered'].includes(o.status);
 
   const placedMs = new Date(o.placedAt).getTime();
   const deadline = placedMs + seller.fulfilment.acceptWindowMins * 60_000;
   const minsLeft = Math.round((deadline - Date.now()) / 60_000);
 
   root.innerHTML = html`
-    ${pageHeader(`Order ${o.id}`, `Placed ${fmtDate(o.placedAt, true)} · delivery slot ${o.deliverySlot}`, html`${orderBadge(o.status)}${EMBEDDED ? '' : html`<button type="button" class="btn btn-sm" data-action="print">Print packing slip</button>`}`, { href: '/seller/orders', label: 'Orders' })}
+    ${pageHeader(`Order ${o.id}`, `Placed ${fmtDate(o.placedAt, true)} · delivery slot ${o.deliverySlot}`, html`${orderBadge(o.status)}${EMBEDDED ? '' : html`${canInvoice ? html`<button type="button" class="btn btn-sm btn-primary" data-action="invoice">${icon('download', 14)} Print GST invoice</button>` : ''}<button type="button" class="btn btn-sm" data-action="print">Print packing slip</button>`}`, { href: '/seller/orders', label: 'Orders' })}
     ${o.status === 'awaiting_confirmation'
       ? callout(minsLeft > 0 ? 'warn' : 'error', minsLeft > 0 ? `Confirm within ${minsLeft} min` : 'Confirmation window has passed', minsLeft > 0 ? 'Unconfirmed orders may be auto-cancelled by the platform and count towards your cancellation rate.' : 'The platform may auto-cancel this order. Accept now if you can still fulfil it.')
       : ''}
@@ -127,6 +130,33 @@ const page: Page = async ({ root, params, seller, refresh }) => {
 
   on(root, 'click', '[data-action=print]', () => window.print());
 
+  on(root, 'click', '[data-action=invoice]', async (_e, el) => {
+    // Printed from a hidden frame on this page, so pop-up blockers don't get in the way. The invoice
+    // has no scripts and every value in it is escaped by the server.
+    const btn = el as HTMLButtonElement;
+    btn.disabled = true;
+    try {
+      const page = await api.orderInvoiceHtml(o.backendId ?? o.id);
+      document.querySelector('#invoice-frame')?.remove();
+      const frame = document.createElement('iframe');
+      frame.id = 'invoice-frame';
+      frame.title = `GST invoice for order ${o.id}`;
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+      frame.addEventListener('load', () => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+        toast('Invoice ready to print.', 'info');
+      }, { once: true });
+      frame.srcdoc = page;
+      document.body.appendChild(frame);
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   on(root, 'click', '[data-to]', async (_e, el) => {
     const to = el.dataset.to as OrderStatus;
     let note = '';
@@ -183,7 +213,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
 };
 
 function actionsCard(o: SubOrder, canAct: boolean, forward: OrderStatus[], negative: OrderStatus[]): Raw {
-  const sim = api.DEMO_TOOLS && (o.status === 'ready_for_pickup' || o.status === 'in_transit');
+  const sim = api.DEMO_TOOLS && !o.backendId && (o.status === 'ready_for_pickup' || o.status === 'in_transit');
   if (!forward.length && !negative.length && !sim) return html``;
   return html`<section class="card card-accent">
     <h2 class="card-title">Next step</h2>
