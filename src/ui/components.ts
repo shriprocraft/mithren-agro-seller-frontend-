@@ -247,7 +247,7 @@ export function showFieldErrors(form: HTMLElement, errors: Record<string, string
 }
 
 // ---------- metric tile ----------
-export function metric(o: { label: string; value: string; definition: string; delta?: number | null; deltaGoodWhenUp?: boolean; href?: string; tone?: 'warn' }) {
+export function metric(o: { label: string; value: string; definition: string; delta?: number | null; deltaGoodWhenUp?: boolean; href?: string; tone?: 'warn'; note?: string }) {
   let deltaHtml: Raw | string = '';
   if (o.delta !== undefined && o.delta !== null && Number.isFinite(o.delta)) {
     const up = o.delta >= 0;
@@ -260,6 +260,7 @@ export function metric(o: { label: string; value: string; definition: string; de
       <button type="button" class="info-btn" aria-label="How is ${o.label} calculated?" data-tip="${o.definition}">${icon('info', 14)}</button>
     </div>
     <div class="metric-value">${o.value}</div>
+    ${o.note ? html`<div class="metric-note">${o.note}</div>` : ''}
     ${deltaHtml}`;
   return o.href
     ? html`<a class="metric ${o.tone === 'warn' ? 'metric-warn' : ''}" href="#${o.href}">${inner}</a>`

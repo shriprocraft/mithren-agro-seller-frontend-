@@ -4190,3 +4190,10 @@ textarea {
     scroll-margin-top: calc(var(--topbar-h) + 72px);
   }
 }
+
+/* A short secondary figure under a metric's value, e.g. average order value under Sales. */
+.metric-note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-2);
+}

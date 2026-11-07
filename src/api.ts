@@ -9,6 +9,7 @@ import { RPC_METHODS, DEMO_RPC_METHODS, type RpcName } from './rpc.js';
 import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, BankInput } from './application.js';
 import type { OrderStatus, SubOrder } from './types.js';
 import { BACKEND_STATUS, toSubOrder, type BackendOrder } from './backend-orders.js';
+import { toDashboardMetrics, type BackendDashboard } from './backend-analytics.js';
 
 export { ApiError };
 export type { DashboardMetrics, ProductFilter, ProductInput, OrderFilter, LedgerEntry, Settlement } from './api-core.js';
@@ -105,7 +106,12 @@ export const reportReview = rpc('reportReview');
 export const listDocuments = rpc('listDocuments');
 export const listNotifications = rpc('listNotifications');
 export const markNotificationsRead = rpc('markNotificationsRead');
-export const getDashboard = rpc('getDashboard');
+const localGetDashboard = rpc('getDashboard');
+/** Dashboard figures: from the FastAPI analytics when signed in there, otherwise the portal's own. */
+export const getDashboard = async (days: number): Promise<core.DashboardMetrics> =>
+  sellerSession.isSignedIn()
+    ? toDashboardMetrics(await backendRequest<BackendDashboard>('GET', `seller/analytics/dashboard?days=${days}`, undefined, () => undefined))
+    : localGetDashboard(days);
 export const _demoSimulateNewOrder = rpc('_demoSimulateNewOrder');
 export const _demoAdvanceDelivery = rpc('_demoAdvanceDelivery');
 

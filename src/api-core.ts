@@ -656,6 +656,8 @@ export interface DashboardMetrics {
   ratingCount: number;
   netEarnings: number;
   netEarningsPrev: number;
+  /** Sales divided by the orders that count towards them (not cancelled or rejected). */
+  averageOrderValue: number;
   series: { date: string; sales: number; orders: number }[];
   awaiting: number;
   certExpiringDays: number | null;
@@ -729,6 +731,7 @@ export function computeDashboard(data: DB, sellerId: string, days: number, nowMs
     ratingCount: reviews.length,
     netEarnings,
     netEarningsPrev,
+    averageOrderValue: round2(cur.filter(counted).length ? sales / cur.filter(counted).length : 0),
     series,
     awaiting: mine.filter((o) => o.status === 'awaiting_confirmation').length,
     certExpiringDays,
