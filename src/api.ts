@@ -207,16 +207,101 @@ type FieldFor = (loc: unknown[]) => string | undefined;
 const shopField: FieldFor = (loc) => SHOP_FIELD[String(loc[loc.length - 1])];
 
 /** Calls the FastAPI backend under /api/v1 and turns its errors into an ApiError with field errors. */
-async function backendRequest<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
+// ---------- seller session (FastAPI JWTs) ----------
+
+const TOKENS_KEY = 'mithren.sellerTokens';
+/** Fired on window when the server rejects the session and it can't be refreshed. */
+export const SESSION_EXPIRED_EVENT = 'seller-session-expired';
+
+interface StoredTokens {
+  access: string;
+  refresh: string;
+}
+
+/** The signed-in seller's access and refresh tokens, kept in localStorage. */
+export const sellerSession = {
+  tokens(): StoredTokens | null {
+    try {
+      const t = JSON.parse(localStorage.getItem(TOKENS_KEY) ?? 'null') as StoredTokens | null;
+      return t && typeof t.access === 'string' && typeof t.refresh === 'string' ? t : null;
+    } catch {
+      return null;
+    }
+  },
+  save(pair: { access_token: string; refresh_token: string }) {
+    try {
+      localStorage.setItem(TOKENS_KEY, JSON.stringify({ access: pair.access_token, refresh: pair.refresh_token }));
+    } catch {
+      /* private mode: the seller signs in again next visit */
+    }
+  },
+  clear() {
+    try {
+      localStorage.removeItem(TOKENS_KEY);
+    } catch {
+      /* ignore */
+    }
+  },
+  isSignedIn(): boolean {
+    return this.tokens() !== null;
+  },
+};
+
+let refreshing: Promise<boolean> | null = null;
+/** Swaps the refresh token for a new pair. Concurrent callers share one request. */
+function refreshTokens(): Promise<boolean> {
+  refreshing ??= (async () => {
+    const t = sellerSession.tokens();
+    if (!t) return false;
+    try {
+      const res = await fetch(`${OTP_API}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: t.refresh }),
+      });
+      if (!res.ok) return false;
+      sellerSession.save((await res.json()) as { access_token: string; refresh_token: string });
+      return true;
+    } catch {
+      return false;
+    }
+  })().finally(() => (refreshing = null));
+  return refreshing;
+}
+
+async function backendFetch(method: string, path: string, body: unknown): Promise<Response> {
+  const token = sellerSession.tokens()?.access;
+  return fetch(`${OTP_API}/api/v1/${path}`, {
+    method,
+    headers: {
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+/**
+ * Calls the FastAPI backend under /api/v1 with the seller's Bearer token, and turns its errors into
+ * an ApiError with field errors. A 401 refreshes the tokens once and retries; if that fails the
+ * session is cleared and SESSION_EXPIRED_EVENT sends the seller to sign in.
+ */
+async function backendRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${OTP_API}/api/v1/${path}`, {
-      method,
-      ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-    });
+    res = await backendFetch(method, path, body);
+    const sessionCall = !path.startsWith('auth/');
+    if (res.status === 401 && sessionCall && sellerSession.isSignedIn()) {
+      if (await refreshTokens()) res = await backendFetch(method, path, body);
+      if (res.status === 401) {
+        sellerSession.clear();
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+      }
+    }
   } catch {
     throw new ApiError(503, 'Can’t reach the server. Check that it is running and try again.');
   }
+  if (res.status === 204) return undefined as T;
   const json = (await res.json().catch(() => null)) as { detail?: unknown } | null;
   if (res.ok) return json as T;
   const d = json?.detail;
@@ -300,8 +385,7 @@ export const products = {
   update: (backendId: string, payload: import('./catalog.js').BackendProductUpdate) =>
     backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, payload, productField),
   /** DELETE /api/v1/products/{id}: soft delete, the product becomes inactive. */
-  remove: (backendId: string, sellerId: string) =>
-    backendRequest<BackendProductView>('DELETE', `products/${encodeURIComponent(backendId)}?seller_id=${encodeURIComponent(sellerId)}`, undefined, productField),
+  remove: (backendId: string) => backendRequest<BackendProductView>('DELETE', `products/${encodeURIComponent(backendId)}`, undefined, productField),
 };
 
 /**
@@ -320,10 +404,47 @@ async function currentEmail(): Promise<string> {
 
 // ---------- accounts ----------
 
+export interface SellerProfileView {
+  user_id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  seller_id: string | null;
+  shop_name: string | null;
+  approval_status: string | null;
+}
+interface AuthResponseView {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  seller: SellerProfileView;
+}
+
+const registerField: FieldFor = (loc) =>
+  ({ full_name: 'fullName', email: 'email', phone: 'phone', password: 'password' } as Record<string, string>)[String(loc[loc.length - 1])];
+const loginField: FieldFor = (loc) => ({ identifier: 'email', password: 'password' } as Record<string, string>)[String(loc[loc.length - 1])];
+
+/** Signs in to the FastAPI backend and keeps the tokens. Remembers the seller_id once Step 2 exists. */
+async function backendSignIn(email: string, password: string): Promise<SellerProfileView> {
+  const r = await backendRequest<AuthResponseView>('POST', 'auth/login', { identifier: email, password }, loginField);
+  sellerSession.save(r);
+  if (r.seller.seller_id) shopDetails.rememberSellerId(email, r.seller.seller_id);
+  return r.seller;
+}
+
 export const auth = {
   current: (): Promise<AccountView | null> => (local ? local.localAuth.current() : http<{ account: AccountView | null }>('GET', '/api/auth/me').then((r) => r.account)),
-  signUp: (input: { fullName: string; email: string; phone: string; password: string }): Promise<AccountView> =>
-    local ? local.localAuth.signUp(input) : http<{ account: AccountView }>('POST', '/api/auth/signup', input).then((r) => r.account),
+  /** Creates the seller account on the FastAPI backend (and signs in there), then in the portal. */
+  signUp: async (input: { fullName: string; email: string; phone: string; password: string }): Promise<AccountView> => {
+    const r = await backendRequest<AuthResponseView>(
+      'POST',
+      'auth/register',
+      { full_name: input.fullName, email: input.email, phone: input.phone, password: input.password },
+      registerField,
+    );
+    sellerSession.save(r);
+    return local ? local.localAuth.signUp(input) : http<{ account: AccountView }>('POST', '/api/auth/signup', input).then((x) => x.account);
+  },
   /** Email codes are sent by the FastAPI backend. The preview has no SMS provider, so it returns the phone code to display. */
   sendCode: async (channel: 'email' | 'phone'): Promise<{ previewCode?: string }> => {
     if (!local) return http('POST', '/api/auth/send-code', { channel });
@@ -341,9 +462,55 @@ export const auth = {
     }
     return local.localAuth.verifyCode(channel, code);
   },
-  signIn: (email: string, password: string): Promise<AccountView> =>
-    local ? local.localAuth.signIn(email, password) : http<{ account: AccountView }>('POST', '/api/auth/signin', { email, password }).then((r) => r.account),
-  signOut: (): Promise<void> => (local ? local.localAuth.signOut() : http<void>('POST', '/api/auth/signout')),
+  /**
+   * Signs in to the FastAPI backend, then the portal. The preview demo account, and accounts made
+   * before server sign-in existed, sign in to the portal only (no server session).
+   */
+  signIn: async (email: string, password: string): Promise<AccountView> => {
+    const portalSignIn = () =>
+      local ? local.localAuth.signIn(email, password) : http<{ account: AccountView }>('POST', '/api/auth/signin', { email, password }).then((r) => r.account);
+    sellerSession.clear();
+    const isDemo = !!PREVIEW_DEMO && email.trim().toLowerCase() === PREVIEW_DEMO.email;
+    if (isDemo) return portalSignIn();
+    let profile: SellerProfileView;
+    try {
+      profile = await backendSignIn(email, password);
+    } catch (e) {
+      // Not on the server (or the server is down): fall back to a portal-only account if there is one.
+      if (e instanceof ApiError && (e.status === 401 || e.status === 503)) {
+        try {
+          return await portalSignIn();
+        } catch {
+          throw e;
+        }
+      }
+      throw e;
+    }
+    try {
+      return await portalSignIn();
+    } catch (e) {
+      // Signed in on the server but this browser has no portal account yet: create it from the profile.
+      if (!local || !(e instanceof ApiError) || e.status !== 401) throw e;
+      try {
+        await local.localAuth.signUp({ fullName: profile.full_name, email: profile.email, phone: profile.phone.replace(/^\+91/, ''), password });
+      } catch {
+        sellerSession.clear();
+        throw new ApiError(409, 'This browser has a different password saved for this account. Sign in with that password.');
+      }
+      await local.localAuth.markVerified('email');
+      return local.localAuth.markVerified('phone');
+    }
+  },
+  /** Revokes the server session (best effort), forgets the tokens and signs out of the portal. */
+  signOut: async (): Promise<void> => {
+    const t = sellerSession.tokens();
+    sellerSession.clear();
+    if (t) await backendRequest<void>('POST', 'auth/logout', { refresh_token: t.refresh }, () => undefined).catch(() => undefined);
+    return local ? local.localAuth.signOut() : http<void>('POST', '/api/auth/signout');
+  },
+  /** The signed-in seller's server profile (GET /api/v1/auth/me), or null without a server session. */
+  me: (): Promise<SellerProfileView | null> =>
+    sellerSession.isSignedIn() ? backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined) : Promise.resolve(null),
 };
 
 // ---------- seller application ----------

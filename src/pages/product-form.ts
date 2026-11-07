@@ -49,7 +49,7 @@ const blankProduct = (): Product => ({
   updatedAt: new Date().toISOString(),
 });
 
-const page: Page = async ({ root, params, seller, account }) => {
+const page: Page = async ({ root, params, seller }) => {
   const isNew = !params.id;
   let product: Product;
   try {
@@ -72,8 +72,9 @@ const page: Page = async ({ root, params, seller, account }) => {
   const takenSkus = new Set(
     (await api.listProducts({ includeArchived: true })).filter((p) => p.id !== product.id).flatMap((p) => p.variants.map((v) => v.sku)),
   );
-  const sellerIdOnServer = () => (account ? api.shopDetails.savedSellerId(account.email) : null);
-  const NO_SERVER_SELLER = 'Your seller profile isn’t on the server yet. Complete Step 2 of seller registration, then add products.';
+  // Catalogue writes use the seller's server session (Bearer token); the server knows the seller.
+  const onServer = () => api.sellerSession.isSignedIn();
+  const NO_SERVER_SESSION = 'Sign in with your seller account to save products to the catalogue.';
   // Apparel and accessories are sold by size and have no organic or freshness fields.
   let apparel = categoryKind(product.category) === 'apparel';
   const variantHint = () =>
@@ -478,7 +479,6 @@ const page: Page = async ({ root, params, seller, account }) => {
       // The FastAPI catalogue is written first, after the same checks as saving, so a listing the
       // portal would refuse never reaches it. Publish sends it active; Save draft sends it inactive.
       api.checkProduct(input, submit);
-      const sellerId = sellerIdOnServer();
       const convert = <T>(build: () => T): T => {
         try {
           return build();
@@ -488,15 +488,15 @@ const page: Page = async ({ root, params, seller, account }) => {
       };
       let synced = false;
       if (product.backendId) {
-        if (!sellerId) throw new api.ApiError(409, NO_SERVER_SELLER);
-        await api.products.update(product.backendId, convert(() => toBackendUpdate(input, sellerId, submit)));
+        if (!onServer()) throw new api.ApiError(401, NO_SERVER_SESSION);
+        await api.products.update(product.backendId, convert(() => toBackendUpdate(input, submit)));
         synced = true;
-      } else if (sellerId) {
+      } else if (onServer()) {
         // New products, and older ones saved before the catalogue existed, are created there.
-        input.backendId = (await api.products.create(convert(() => toBackendProduct(input, sellerId, submit)))).id;
+        input.backendId = (await api.products.create(convert(() => toBackendProduct(input, submit)))).id;
         synced = true;
       } else if (isNew) {
-        throw new api.ApiError(409, NO_SERVER_SELLER);
+        throw new api.ApiError(401, NO_SERVER_SESSION);
       }
       const saved = await api.saveProduct(input, submit);
       releaseImages();
@@ -529,13 +529,12 @@ const page: Page = async ({ root, params, seller, account }) => {
     const errBox = $('#form-error', root)!;
     errBox.hidden = true;
     try {
-      const sellerId = sellerIdOnServer();
-      if (product.backendId && !sellerId) throw new api.ApiError(409, NO_SERVER_SELLER);
+      if (product.backendId && !onServer()) throw new api.ApiError(401, NO_SERVER_SESSION);
       // The portal goes first: it refuses while orders for this product are still open.
       await api.archiveProduct(product.id, true);
-      if (product.backendId && sellerId) {
+      if (product.backendId) {
         try {
-          await api.products.remove(product.backendId, sellerId);
+          await api.products.remove(product.backendId);
         } catch (err) {
           await api.archiveProduct(product.id, false); // keep both sides in step
           throw err;

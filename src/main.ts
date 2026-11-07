@@ -482,6 +482,23 @@ window.addEventListener('hashchange', () => {
     ($('#main h1') as HTMLElement | null)?.focus({ preventScroll: true });
   });
 });
+// The server rejected the seller's session and it couldn't be refreshed: sign out and go to sign-in,
+// coming back to the same page afterwards.
+let expiring = false;
+window.addEventListener(api.SESSION_EXPIRED_EVENT, () => {
+  if (expiring) return;
+  expiring = true;
+  const { path } = currentLocation();
+  void api.auth
+    .signOut()
+    .catch(() => undefined)
+    .finally(() => {
+      expiring = false;
+      toast('Your session has expired. Sign in again.', 'error');
+      navigate(`/seller/sign-in${path && path !== '/seller' && path !== '/seller/sign-in' ? `?next=${encodeURIComponent(path)}` : ''}`);
+      void render();
+    });
+});
 initTooltips();
 bindShell();
 void render();

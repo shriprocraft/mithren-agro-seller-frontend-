@@ -44,9 +44,8 @@ export interface BackendVariant {
   stock: number;
 }
 
-/** The body of POST /api/v1/products. */
+/** The body of POST /api/v1/products. The seller comes from the Bearer token. */
 export interface BackendProduct {
-  seller_id: string;
   title: string;
   description?: string;
   category: string;
@@ -66,7 +65,7 @@ interface FormProduct {
  * Maps the product form to the backend body. Rupee prices become integer paise with
  * rupeesToPaise; a price that can't convert exactly throws instead of being rounded.
  */
-export function toBackendProduct(p: FormProduct, sellerId: string, active: boolean): BackendProduct {
+export function toBackendProduct(p: FormProduct, active: boolean): BackendProduct {
   const apparel = categoryKind(p.category) === 'apparel';
   const paise = (rupees: number, what: string) => {
     const value = rupeesToPaise(rupees);
@@ -75,7 +74,6 @@ export function toBackendProduct(p: FormProduct, sellerId: string, active: boole
   };
   const description = p.description.trim();
   return {
-    seller_id: sellerId,
     title: p.name.trim(),
     ...(description ? { description } : {}),
     category: p.category,
@@ -100,8 +98,8 @@ export type BackendProductUpdate = Omit<BackendProduct, 'description' | 'images'
  * Maps the form to a PATCH body. Images are left out so photos stored on the server are kept,
  * and an empty description clears the stored one.
  */
-export function toBackendUpdate(p: FormProduct, sellerId: string, active: boolean): BackendProductUpdate {
-  const { images: _images, description, ...rest } = toBackendProduct(p, sellerId, active);
+export function toBackendUpdate(p: FormProduct, active: boolean): BackendProductUpdate {
+  const { images: _images, description, ...rest } = toBackendProduct(p, active);
   void _images;
   return { ...rest, description: description ?? null };
 }

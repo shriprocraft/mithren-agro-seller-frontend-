@@ -81,10 +81,9 @@ test('prices with more than two decimals are rejected before reaching the backen
 });
 
 test('apparel maps to a backend body with sizes and integer paise', () => {
-  const body = toBackendProduct(kurti({ variants: [{ ...kurti().variants[0], price: 799.5, mrp: 999 }] }), 'seller-1', true);
+  const body = toBackendProduct(kurti({ variants: [{ ...kurti().variants[0], price: 799.5, mrp: 999 }] }), true);
 
   assert.deepEqual(body, {
-    seller_id: 'seller-1',
     title: 'Cotton Kurti',
     description: 'Hand block printed cotton kurti, breathable for summer.',
     category: 'Women Apparel',
@@ -97,7 +96,7 @@ test('apparel maps to a backend body with sizes and integer paise', () => {
 test('produce maps pack size and unit, and drafts are sent inactive', () => {
   const mango = kurti({ name: ' Mango ', description: '  ', category: 'Fruits', variants: [{ id: 'v1', label: '1 kg', sku: 'gv-mng-1k', packSize: 1, unit: 'kg', size: 'M', price: 349, stock: 2 }] });
 
-  const body = toBackendProduct(mango, 'seller-1', false);
+  const body = toBackendProduct(mango, false);
 
   assert.equal(body.title, 'Mango');
   assert.equal('description' in body, false);
@@ -106,7 +105,7 @@ test('produce maps pack size and unit, and drafts are sent inactive', () => {
 });
 
 test('a price that is not whole paise is refused, not rounded', () => {
-  assert.throws(() => toBackendProduct(kurti({ variants: [{ ...kurti().variants[0], price: 799.999 }] }), 's', true), /at most 2 decimals/);
+  assert.throws(() => toBackendProduct(kurti({ variants: [{ ...kurti().variants[0], price: 799.999 }] }), true), /at most 2 decimals/);
 });
 
 // ---------- automatic SKUs and edit payloads ----------
@@ -130,10 +129,15 @@ test('generated SKUs avoid ones already in use and stay valid', () => {
 });
 
 test('edit payloads keep stored photos and clear an emptied description', () => {
-  const body = toBackendUpdate(kurti({ description: '  ' }), 'seller-1', false);
+  const body = toBackendUpdate(kurti({ description: '  ' }), false);
 
   assert.equal('images' in body, false);
   assert.equal(body.description, null);
   assert.equal(body.is_active, false);
   assert.equal(body.variants.length, 2);
+});
+
+test('product bodies never carry a seller id: the server takes it from the sign-in token', () => {
+  assert.equal('seller_id' in toBackendProduct(kurti(), true), false);
+  assert.equal('seller_id' in toBackendUpdate(kurti(), true), false);
 });
