@@ -43,7 +43,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     ${readOnly ? callout('error', 'Read-only', 'Settings can’t be changed while your account is suspended.') : ''}
     <div class="settings-layout">
       <nav class="settings-nav" aria-label="Settings sections">
-        <ul>${SECTIONS.map(([id, l]) => html`<li><a href="#/seller/store-settings" data-jump="${id}">${l}</a></li>`)}</ul>
+        <ul>${SECTIONS.map(([id, l], i) => html`<li><a href="#/seller/store-settings" data-jump="${id}" class="${i === 0 ? 'is-active' : ''}" ${i === 0 ? raw('aria-current="true"') : ''}>${l}</a></li>`)}</ul>
       </nav>
       <div class="stack">
         <form class="card" id="profile" data-section="profile" novalidate>
@@ -166,8 +166,53 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   if (readOnly) $$('input,select,textarea', root).forEach((el) => ((el as HTMLInputElement).disabled = true));
 
   bindPager(root, refresh);
+  // ---------- sub-navigation: highlight the section in view ----------
+  const navLinks = Array.from(root.querySelectorAll<HTMLAnchorElement>('[data-jump]'));
+  const setActive = (id: string) => {
+    for (const a of navLinks) {
+      const on = a.dataset.jump === id;
+      a.classList.toggle('is-active', on);
+      if (on) a.setAttribute('aria-current', 'true');
+      else a.removeAttribute('aria-current');
+    }
+    // Keep the active tab visible when the tabs scroll sideways on small screens.
+    navLinks.find((a) => a.dataset.jump === id)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+  let jumping = false;
+  const spy = () => {
+    if (jumping || !root.isConnected) return;
+    const offset = 60 + 16 + 24; // top bar + sticky gap + a little room
+    const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    let current = SECTIONS[0]![0];
+    for (const [id] of SECTIONS) {
+      const el = $(`#${id}`, root);
+      if (el && el.getBoundingClientRect().top - offset <= 0) current = id;
+    }
+    setActive(atBottom ? SECTIONS[SECTIONS.length - 1]![0] : current);
+  };
+  let ticking = false;
+  const onScroll = () => {
+    // The page may still be off-screen while the portal renders it; it listens once it's attached.
+    if (!root.isConnected || ticking) return;
+    ticking = true;
+    // A short timer rather than requestAnimationFrame, which pauses in background tabs.
+    window.setTimeout(() => {
+      ticking = false;
+      spy();
+    }, 60);
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  // Stop listening once the seller leaves this page.
+  window.addEventListener('hashchange', () => window.removeEventListener('scroll', onScroll), { once: true });
+
   on(root, 'click', '[data-jump]', (e, el) => {
     e.preventDefault();
+    setActive(el.dataset.jump!);
+    // The smooth scroll passes other sections; don't let the scroll spy flicker through them.
+    // The clicked tab stays highlighted until the seller scrolls again, even when a short section near
+    // the bottom can't reach the top of the screen.
+    jumping = true;
+    window.setTimeout(() => (jumping = false), 800);
     const target = $(`#${el.dataset.jump}`, root);
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     (target?.querySelector('input,textarea,button') as HTMLElement | null)?.focus({ preventScroll: true });

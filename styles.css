@@ -3994,3 +3994,199 @@ textarea {
 .pre-wrap {
   white-space: pre-wrap;
 }
+
+/* Product photos: upload state on form tiles, gallery on the details page */
+.image-tile {
+  position: relative;
+}
+.image-tile.is-uploading img {
+  opacity: 0.55;
+}
+.image-tile.is-failed {
+  outline: 2px solid var(--red);
+  outline-offset: -2px;
+}
+.image-state {
+  position: absolute;
+  left: 8px;
+  bottom: 44px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
+  font-size: 12px;
+  font-weight: 600;
+}
+.prod-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.gallery {
+  display: grid;
+  gap: 12px;
+}
+.gallery-main {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  aspect-ratio: 4 / 3;
+}
+.gallery-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.gallery-thumbs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.gallery-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-thumb.is-active {
+  border-color: var(--primary);
+}
+.gallery-thumb .image-primary {
+  font-size: 10px;
+}
+
+/* ---------- Store settings: vertical tabs and section cards ---------- */
+:root {
+  --topbar-h: 60px;
+}
+.settings-layout {
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 32px;
+}
+.settings-layout > .stack {
+  gap: 24px;
+}
+.settings-nav {
+  /* Sticks 1rem below the sticky top bar, so it scrolls with the content without hiding under it. */
+  position: sticky;
+  top: calc(var(--topbar-h) + 1rem);
+  align-self: start;
+}
+.settings-nav ul {
+  gap: 2px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 16 / 0.04), 0 8px 24px -12px rgb(16 24 16 / 0.18);
+}
+.settings-nav a {
+  position: relative;
+  padding: 10px 12px 10px 18px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.settings-nav a::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 3px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.settings-nav a:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  transform: none;
+}
+.settings-nav a.is-active {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary-hover);
+  font-weight: 600;
+}
+.settings-nav a.is-active::before {
+  background: var(--primary);
+}
+.settings-nav a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.settings-layout form.card,
+.settings-layout section.card {
+  padding: 24px 28px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 16 / 0.04), 0 6px 20px -12px rgb(16 24 16 / 0.16);
+  scroll-margin-top: calc(var(--topbar-h) + 1rem);
+}
+.settings-layout .card-title {
+  margin-bottom: 14px;
+  font-size: 17px;
+}
+.settings-layout .card .field + .field,
+.settings-layout .card .row-3 + .field,
+.settings-layout .card .field + .row-3 {
+  margin-top: 4px;
+}
+.settings-layout .card .sub-title {
+  margin-top: 24px;
+}
+@media (max-width: 1024px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .settings-nav {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 5;
+  }
+  .settings-nav ul {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 6px;
+    scrollbar-width: none;
+  }
+  .settings-nav a {
+    white-space: nowrap;
+    padding: 8px 12px;
+    background: transparent;
+    border: 0;
+  }
+  .settings-nav a::before {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 2px;
+    width: auto;
+    height: 3px;
+  }
+  .settings-layout form.card,
+  .settings-layout section.card {
+    padding: 20px;
+    scroll-margin-top: calc(var(--topbar-h) + 72px);
+  }
+}

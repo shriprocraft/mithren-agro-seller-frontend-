@@ -19,11 +19,19 @@ const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const IMAGE_MAX_COUNT = 6;
 
-/** An image the seller picked in this session. The first entry is the primary image. */
+/**
+ * A product photo. The first entry is the primary image. Picked files are uploaded straight away;
+ * `path` is set once the server has stored them (or when the photo was saved earlier).
+ */
 interface PickedImage {
   id: string;
-  file: File;
+  /** What the tile shows: a local preview of a picked file, or the stored image. */
   url: string;
+  name: string;
+  file?: File;
+  path?: string;
+  state: 'uploading' | 'saved' | 'failed' | 'local';
+  error?: string;
 }
 
 const blankProduct = (): Product => ({
@@ -126,7 +134,7 @@ const page: Page = async ({ root, params, seller }) => {
             <p class="field-error" id="f_images_err" hidden></p>
             <ul class="image-grid" id="image-grid" aria-label="Selected product images"></ul>
             <p class="hint">The first image is the primary image. Use “Make primary” to change it.</p>
-            <p class="hint warn-text" id="img-note" hidden>${icon('alert', 14)} Photo storage isn’t connected to the catalogue backend yet. Selected images appear in the preview but aren’t saved with the listing.</p>
+            <p class="hint warn-text" id="img-note" hidden>${icon('alert', 14)} Sign in with your seller account to save photos with the listing. Until then they only appear in this preview.</p>
           </section>
 
           <section class="card">
@@ -284,32 +292,69 @@ const page: Page = async ({ root, params, seller }) => {
   };
 
   // ---------- product images ----------
-  let images: PickedImage[] = [];
+  // Photos saved earlier come back from the stored paths; new ones are uploaded as they're picked.
+  let images: PickedImage[] = (product.images ?? []).map((path, i) => ({
+    id: `saved${i}`,
+    url: api.imageUrl(path),
+    name: path.split('/').pop() ?? `image ${i + 1}`,
+    path,
+    state: 'saved' as const,
+  }));
+  const canUpload = () => api.sellerSession.isSignedIn();
   const imageError = (msg: string) => {
     const err = $('#f_images_err', root)!;
     err.textContent = msg;
     err.hidden = !msg;
     $('#f_images', root)?.setAttribute('aria-invalid', String(!!msg));
   };
+  const stateLabel = (img: PickedImage) =>
+    img.state === 'uploading'
+      ? html`<span class="image-state">Uploading…</span>`
+      : img.state === 'failed'
+        ? html`<span class="image-state error-text">${img.error ?? 'Upload failed'}</span>`
+        : img.state === 'local'
+          ? html`<span class="image-state warn-text">Not saved</span>`
+          : '';
   const renderImages = () => {
     $('#img-count', root)!.textContent = images.length ? `${images.length} of ${IMAGE_MAX_COUNT}` : '';
-    $('#img-note', root)!.hidden = images.length === 0;
+    $('#img-note', root)!.hidden = !images.some((x) => x.state === 'local');
     $('#image-grid', root)!.innerHTML = images
       .map(
-        (img, i) => html`<li class="image-tile ${i === 0 ? 'is-primary' : ''}">
-          <img src="${img.url}" alt="Product image ${i + 1}: ${img.file.name}" />
+        (img, i) => html`<li class="image-tile ${i === 0 ? 'is-primary' : ''} ${img.state === 'uploading' ? 'is-uploading' : ''} ${img.state === 'failed' ? 'is-failed' : ''}">
+          <img src="${img.url}" alt="Product image ${i + 1}: ${img.name}" />
           ${i === 0 ? html`<span class="image-primary">Primary</span>` : ''}
+          ${stateLabel(img)}
           <div class="image-actions">
             ${i === 0 || readOnly ? '' : html`<button type="button" class="btn btn-sm" data-action="primary-image" data-id="${img.id}">Make primary</button>`}
-            ${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-danger-ghost" data-action="remove-image" data-id="${img.id}" aria-label="Remove image ${img.file.name}">${icon('close', 14)} Remove</button>`}
+            ${img.state === 'failed' && !readOnly ? html`<button type="button" class="btn btn-sm" data-action="retry-image" data-id="${img.id}">Retry</button>` : ''}
+            ${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-danger-ghost" data-action="remove-image" data-id="${img.id}" aria-label="Remove image ${img.name}">${icon('close', 14)} Remove</button>`}
           </div>
         </li>`.value,
       )
       .join('');
     renderPreview();
   };
+  const upload = async (img: PickedImage) => {
+    if (!img.file) return;
+    if (!canUpload()) {
+      img.state = 'local';
+      return renderImages();
+    }
+    img.state = 'uploading';
+    delete img.error;
+    renderImages();
+    try {
+      img.path = (await api.uploads.productImage(img.file)).path;
+      img.state = 'saved';
+    } catch (e) {
+      img.state = 'failed';
+      img.error = (e as Error).message;
+    }
+    if (images.includes(img)) renderImages();
+  };
   const addImages = (files: File[]) => {
     const problems: string[] = [];
+    const added: PickedImage[] = [];
     for (const file of files) {
       if (images.length >= IMAGE_MAX_COUNT) {
         problems.push(`You can add up to ${IMAGE_MAX_COUNT} images.`);
@@ -317,13 +362,24 @@ const page: Page = async ({ root, params, seller }) => {
       }
       if (!IMAGE_TYPES.includes(file.type)) problems.push(`${file.name}: use a PNG, JPG or WEBP image.`);
       else if (file.size > IMAGE_MAX_BYTES) problems.push(`${file.name}: images must be ${IMAGE_MAX_BYTES / 1048576} MB or smaller.`);
-      else if (images.some((x) => x.file.name === file.name && x.file.size === file.size && x.file.lastModified === file.lastModified)) problems.push(`${file.name}: already added.`);
-      else images.push({ id: `img${Date.now().toString(36)}${images.length}`, file, url: URL.createObjectURL(file) });
+      else if (images.some((x) => x.file && x.file.name === file.name && x.file.size === file.size && x.file.lastModified === file.lastModified)) problems.push(`${file.name}: already added.`);
+      else {
+        const img: PickedImage = { id: `img${Date.now().toString(36)}${images.length}`, file, url: URL.createObjectURL(file), name: file.name, state: 'uploading' };
+        images.push(img);
+        added.push(img);
+      }
     }
     imageError(problems.join(' '));
     renderImages();
+    for (const img of added) void upload(img);
   };
-  const releaseImages = () => images.forEach((x) => URL.revokeObjectURL(x.url));
+  const releaseImages = () => images.forEach((x) => x.file && URL.revokeObjectURL(x.url));
+  /** Paths of the stored photos in display order, or an error if some aren't stored yet. */
+  const imagePaths = (): string[] => {
+    if (images.some((x) => x.state === 'uploading')) throw new api.ApiError(409, 'Wait for the photos to finish uploading.');
+    if (images.some((x) => x.state === 'failed')) throw new api.ApiError(422, 'A photo didn’t upload. Retry or remove it, then save.', { images: 'Retry or remove the photos that didn’t upload.' });
+    return images.filter((x) => x.path).map((x) => x.path!);
+  };
 
   const renderPreview = () => {
     const p = readForm();
@@ -350,10 +406,14 @@ const page: Page = async ({ root, params, seller }) => {
   });
   on(root, 'click', '[data-action=remove-image]', (_e, el) => {
     const gone = images.find((x) => x.id === el.dataset.id);
-    if (gone) URL.revokeObjectURL(gone.url);
+    if (gone?.file) URL.revokeObjectURL(gone.url);
     images = images.filter((x) => x !== gone);
     imageError('');
     renderImages();
+  });
+  on(root, 'click', '[data-action=retry-image]', (_e, el) => {
+    const img = images.find((x) => x.id === el.dataset.id);
+    if (img) void upload(img);
   });
   on(root, 'click', '[data-action=primary-image]', (_e, el) => {
     const pick = images.find((x) => x.id === el.dataset.id);
@@ -475,7 +535,7 @@ const page: Page = async ({ root, params, seller }) => {
     const errBox = $('#form-error', root)!;
     errBox.hidden = true;
     try {
-      const input = readForm();
+      const input = { ...readForm(), images: imagePaths() };
       // The FastAPI catalogue is written first, after the same checks as saving, so a listing the
       // portal would refuse never reaches it. Publish sends it active; Save draft sends it inactive.
       api.checkProduct(input, submit);

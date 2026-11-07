@@ -58,6 +58,8 @@ interface FormProduct {
   name: string;
   description: string;
   category: string;
+  /** Uploaded image paths, primary first. */
+  images?: string[];
   variants: { label: string; sku: string; size?: ApparelSize; packSize: number; unit: string; price: number; mrp?: number; stock: number }[];
 }
 
@@ -85,22 +87,17 @@ export function toBackendProduct(p: FormProduct, active: boolean): BackendProduc
       ...(v.mrp !== undefined ? { mrp_paise: paise(v.mrp, `Variant ${i + 1} MRP`) } : {}),
       stock: v.stock,
     })),
-    // Picked photos stay in the browser until image upload exists.
-    images: [],
+    images: [...(p.images ?? [])],
     is_active: active,
   };
 }
 
-/** The body of PATCH /api/v1/products/{id}: the whole form, so variants replace the stored list. */
-export type BackendProductUpdate = Omit<BackendProduct, 'description' | 'images'> & { description: string | null };
+/** The body of PATCH /api/v1/products/{id}: the whole form, so variants and images replace the stored lists. */
+export type BackendProductUpdate = Omit<BackendProduct, 'description'> & { description: string | null };
 
-/**
- * Maps the form to a PATCH body. Images are left out so photos stored on the server are kept,
- * and an empty description clears the stored one.
- */
+/** Maps the form to a PATCH body. An empty description clears the stored one. */
 export function toBackendUpdate(p: FormProduct, active: boolean): BackendProductUpdate {
-  const { images: _images, description, ...rest } = toBackendProduct(p, active);
-  void _images;
+  const { description, ...rest } = toBackendProduct(p, active);
   return { ...rest, description: description ?? null };
 }
 

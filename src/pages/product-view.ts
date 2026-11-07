@@ -1,7 +1,7 @@
 // /seller/products/:id — a read-only view of one listing. Editing happens at /seller/products/:id/edit.
 
 import type { Page } from '../router.js';
-import { html, raw, type Raw } from '../ui/dom.js';
+import { html, raw, on, type Raw } from '../ui/dom.js';
 import { pageHeader, productBadge, icon, emptyState, badge, callout } from '../ui/components.js';
 import * as api from '../api.js';
 import { money, fmtDate } from '../lib.js';
@@ -43,6 +43,7 @@ const page: Page = async ({ root, params, seller }) => {
   const highest = prices.length ? Math.max(...prices) : 0;
   const totalStock = p.variants.reduce((n, v) => n + v.stock, 0);
   const editHref = `#/seller/products/${encodeURIComponent(p.id)}/edit`;
+  const photos = (p.images ?? []).map(api.imageUrl);
 
   const status = html`${p.archived ? badge('Archived') : productBadge(p.status)} ${p.available ? '' : badge('Hidden from customers', 'neutral')}`;
   const editButton = readOnly ? '' : html`<a class="btn btn-primary" href="${editHref}" data-action="edit-product">${icon('edit', 16)} Edit Product</a>`;
@@ -56,10 +57,25 @@ const page: Page = async ({ root, params, seller }) => {
       <div class="stack">
         <section class="card">
           <h2 class="card-title">Images</h2>
-          <div class="product-view-image" role="img" aria-label="${p.name}: no photos uploaded, showing the fallback icon">
-            <span aria-hidden="true">${p.emoji}</span>
-          </div>
-          <p class="muted small">Photos aren’t stored with listings yet, so customers see this icon.</p>
+          ${photos.length
+            ? html`<div class="gallery">
+                <figure class="gallery-main">
+                  <img id="gallery-main" src="${photos[0]}" alt="${p.name}, photo 1 of ${photos.length}" />
+                </figure>
+                ${photos.length > 1
+                  ? html`<ul class="gallery-thumbs" aria-label="All photos">
+                      ${photos.map(
+                        (src, i) => html`<li><button type="button" class="gallery-thumb ${i === 0 ? 'is-active' : ''}" data-photo="${i}" aria-label="Show photo ${i + 1}" aria-pressed="${String(i === 0)}">
+                          <img src="${src}" alt="" />${i === 0 ? html`<span class="image-primary">Primary</span>` : ''}
+                        </button></li>`,
+                      )}
+                    </ul>`
+                  : ''}
+              </div>`
+            : html`<div class="product-view-image" role="img" aria-label="${p.name}: no photos yet, showing the fallback icon">
+                <span aria-hidden="true">${p.emoji}</span>
+              </div>
+              <p class="muted small">No photos yet. ${readOnly ? '' : 'Add some with Edit Product; until then customers see this icon.'}</p>`}
         </section>
 
         <section class="card">
@@ -132,6 +148,19 @@ const page: Page = async ({ root, params, seller }) => {
 
       </aside>
     </div>`.value;
+
+  on(root, 'click', '[data-photo]', (_e, el) => {
+    const i = Number(el.dataset.photo);
+    const main = root.querySelector<HTMLImageElement>('#gallery-main');
+    if (!main || !photos[i]) return;
+    main.src = photos[i]!;
+    main.alt = `${p.name}, photo ${i + 1} of ${photos.length}`;
+    root.querySelectorAll<HTMLElement>('[data-photo]').forEach((b) => {
+      const active = b === el;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-pressed', String(active));
+    });
+  });
 };
 
 export default page;

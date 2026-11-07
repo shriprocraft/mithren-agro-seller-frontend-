@@ -128,10 +128,10 @@ test('generated SKUs avoid ones already in use and stay valid', () => {
   assert.match(long, /^[A-Z0-9][A-Z0-9-]{2,31}$/);
 });
 
-test('edit payloads keep stored photos and clear an emptied description', () => {
-  const body = toBackendUpdate(kurti({ description: '  ' }), false);
+test('edit payloads send the photo list and clear an emptied description', () => {
+  const body = toBackendUpdate(kurti({ description: '  ', images: ['/static/uploads/products/prod_a.png'] }), false);
 
-  assert.equal('images' in body, false);
+  assert.deepEqual(body.images, ['/static/uploads/products/prod_a.png']);
   assert.equal(body.description, null);
   assert.equal(body.is_active, false);
   assert.equal(body.variants.length, 2);
@@ -140,4 +140,10 @@ test('edit payloads keep stored photos and clear an emptied description', () => 
 test('product bodies never carry a seller id: the server takes it from the sign-in token', () => {
   assert.equal('seller_id' in toBackendProduct(kurti(), true), false);
   assert.equal('seller_id' in toBackendUpdate(kurti(), true), false);
+});
+
+test('uploaded photos are sent in display order, primary first', () => {
+  const paths = ['/static/uploads/products/prod_2.png', '/static/uploads/products/prod_1.webp'];
+  assert.deepEqual(toBackendProduct(kurti({ images: paths }), true).images, paths);
+  assert.deepEqual(toBackendProduct(kurti(), true).images, []);
 });

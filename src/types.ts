@@ -113,6 +113,8 @@ export interface Product {
   updatedAt: string;
   /** The product's id in the FastAPI catalogue (POST /api/v1/products), once it is there. */
   backendId?: string;
+  /** Uploaded photos as server paths (POST /api/v1/uploads/product-image), primary first. */
+  images?: string[];
 }
 
 export type AdjustmentReason =

@@ -271,13 +271,15 @@ function refreshTokens(): Promise<boolean> {
 
 async function backendFetch(method: string, path: string, body: unknown): Promise<Response> {
   const token = sellerSession.tokens()?.access;
+  // FormData sets its own multipart Content-Type (with the boundary); JSON bodies are encoded here.
+  const form = body instanceof FormData;
   return fetch(`${OTP_API}/api/v1/${path}`, {
     method,
     headers: {
-      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(body === undefined || form ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined ? {} : { body: form ? body : JSON.stringify(body) }),
   });
 }
 
@@ -387,6 +389,28 @@ export const products = {
   /** DELETE /api/v1/products/{id}: soft delete, the product becomes inactive. */
   remove: (backendId: string) => backendRequest<BackendProductView>('DELETE', `products/${encodeURIComponent(backendId)}`, undefined, productField),
 };
+
+// ---------- image uploads (FastAPI backend) ----------
+
+export interface UploadedImage {
+  image_url: string;
+  /** What products store in `images`, e.g. /static/uploads/products/prod_<id>.png */
+  path: string;
+  content_type: string;
+  size_bytes: number;
+}
+
+export const uploads = {
+  /** POST /api/v1/uploads/product-image (multipart, Bearer token). */
+  productImage: (file: File): Promise<UploadedImage> => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return backendRequest<UploadedImage>('POST', 'uploads/product-image', form, () => undefined);
+  },
+};
+
+/** A product image as a URL the browser can load: server paths are served by the FastAPI backend. */
+export const imageUrl = (pathOrUrl: string): string => (pathOrUrl.startsWith('/') ? `${OTP_API}${pathOrUrl}` : pathOrUrl);
 
 /**
  * Runs the same checks as saving, without saving, so nothing is sent to the backend that the

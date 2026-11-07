@@ -305,7 +305,7 @@ function row(p: Product, readOnly: boolean) {
   return html`<tr class="product-row ${open ? 'is-open' : ''}" data-view="${p.id}">
     <td>
       <a class="prod-cell" href="#/seller/products/${p.id}">
-        <span class="prod-thumb" aria-hidden="true">${p.emoji}</span>
+        <span class="prod-thumb" aria-hidden="true">${p.images?.length ? html`<img src="${api.imageUrl(p.images[0]!)}" alt="" loading="lazy" />` : p.emoji}</span>
         <span><strong>${p.name}</strong><span class="muted small">${p.category}${p.organicClaim === 'certified' ? ' · Certified organic' : p.organicClaim === 'in_conversion' ? ' · In conversion' : ''}</span></span>
       </a>
     </td>
