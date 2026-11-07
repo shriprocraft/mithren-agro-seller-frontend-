@@ -254,6 +254,12 @@ export const localAuth = {
     bindSession(u);
     return u ? toAccountView(accountOf(u)) : null;
   },
+  /** The signed-in account's unmasked name, email and phone, for creating its server login. */
+  async contact(): Promise<{ fullName: string; email: string; phone: string } | null> {
+    await ready;
+    const u = state.users.find((x) => x.id === state.sessionUserId);
+    return u ? { fullName: u.fullName, email: u.email, phone: u.phone } : null;
+  },
   async signUp(input: { fullName: string; email: string; phone: string; password: string }): Promise<AccountView> {
     await ready;
     const v = validateSignUp(input);

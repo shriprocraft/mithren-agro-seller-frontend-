@@ -407,6 +407,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
   async function createSeller(a: AccountView): Promise<string> {
     const created = await api.shopDetails.create(step2Fields());
     api.shopDetails.rememberSellerId(a.email, created.seller_id);
+    api.sellerSession.setShopName(created.shop_name);
     return created.seller_id;
   }
 

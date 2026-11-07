@@ -252,6 +252,7 @@ export const sellerSession = {
   clear() {
     try {
       localStorage.removeItem(TOKENS_KEY);
+      localStorage.removeItem(SHOP_NAME_KEY);
     } catch {
       /* ignore */
     }
@@ -259,7 +260,24 @@ export const sellerSession = {
   isSignedIn(): boolean {
     return this.tokens() !== null;
   },
+  /** The server's shop name for this session, for the header when this browser has none saved. */
+  shopName(): string {
+    try {
+      return this.tokens() ? (localStorage.getItem(SHOP_NAME_KEY) ?? '') : '';
+    } catch {
+      return '';
+    }
+  },
+  setShopName(name: string | null | undefined) {
+    try {
+      if (name) localStorage.setItem(SHOP_NAME_KEY, name);
+      else localStorage.removeItem(SHOP_NAME_KEY);
+    } catch {
+      /* ignore */
+    }
+  },
 };
+const SHOP_NAME_KEY = 'mithren.shopName';
 
 let refreshing: Promise<boolean> | null = null;
 /** Swaps the refresh token for a new pair. Concurrent callers share one request. */
@@ -365,6 +383,8 @@ export const shopDetails = {
       return null;
     }
   },
+  /** POST /api/v1/seller/claim/{seller_id}: moves a shop saved before sign-in existed onto this account. */
+  claim: (sellerId: string) => backendRequest<ShopDetailsView>('POST', `seller/claim/${encodeURIComponent(sellerId)}`, undefined, () => undefined),
   rememberSellerId(owner: string, sellerId: string) {
     try {
       localStorage.setItem(sellerIdKey(owner), sellerId);
@@ -509,8 +529,37 @@ const loginField: FieldFor = (loc) => ({ identifier: 'email', password: 'passwor
 async function backendSignIn(email: string, password: string): Promise<SellerProfileView> {
   const r = await backendRequest<AuthResponseView>('POST', 'auth/login', { identifier: email, password }, loginField);
   sellerSession.save(r);
+  sellerSession.setShopName(r.seller.shop_name);
   if (r.seller.seller_id) shopDetails.rememberSellerId(email, r.seller.seller_id);
   return r.seller;
+}
+
+/**
+ * For a portal account made before server sign-in existed: creates its server login with the
+ * password just checked, and moves the shop this browser saved onto it. Best effort: on failure
+ * the seller stays signed in to the portal only and the product form says photos can't be saved.
+ */
+async function connectToServer(password: string): Promise<void> {
+  const who = local ? await local.localAuth.contact() : null;
+  if (!who) return;
+  try {
+    const r = await backendRequest<AuthResponseView>(
+      'POST',
+      'auth/register',
+      { full_name: who.fullName, email: who.email, phone: who.phone.replace(/^\+91/, ''), password },
+      registerField,
+    );
+    sellerSession.save(r);
+  } catch {
+    return; // e.g. 409: a server login with another password exists for this email or phone
+  }
+  const legacy = shopDetails.savedSellerId(who.email);
+  if (!legacy) return;
+  try {
+    sellerSession.setShopName((await shopDetails.claim(legacy)).shop_name);
+  } catch {
+    /* not this account's shop: Step 2 can be saved again from Store Settings */
+  }
 }
 
 export const auth = {
@@ -559,11 +608,14 @@ export const auth = {
     } catch (e) {
       // Not on the server (or the server is down): fall back to a portal-only account if there is one.
       if (e instanceof ApiError && (e.status === 401 || e.status === 503)) {
+        let account: AccountView;
         try {
-          return await portalSignIn();
+          account = await portalSignIn();
         } catch {
           throw e;
         }
+        if (e.status === 401 && !isDemo) await connectToServer(password);
+        return account;
       }
       throw e;
     }

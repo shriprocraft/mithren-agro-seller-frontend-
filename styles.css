@@ -4045,6 +4045,19 @@ textarea {
   font-size: 12px;
   font-weight: 600;
 }
+.account-label {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-state.is-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--green-soft);
+  color: var(--green);
+}
 .prod-thumb img {
   width: 100%;
   height: 100%;

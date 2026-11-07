@@ -69,6 +69,11 @@ const PUBLIC_PATHS = ['/seller/sign-in', '/seller/login', '/seller/register'];
 /** Placeholder for the shell while nobody is signed in (no seller data is shown). */
 const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2e7d32', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
 
+/** The header shows the shop's name once Step 2 has one, otherwise the account holder's name. */
+function headerName(seller: Pick<Seller, 'shopName'>, account: Pick<AccountView, 'fullName'>): string {
+  return seller.shopName.trim() || api.sellerSession.shopName().trim() || account.fullName.trim() || 'Account';
+}
+
 function shell(seller: Seller, navKey: string | undefined, bare: boolean, account: AccountView | null) {
   return html`
     <a class="skip-link" href="#main" data-skip>Skip to content</a>
@@ -118,9 +123,9 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
                       </div>
                     </div>`}
                 <div class="account-wrap">
-                  <button class="account-trigger" type="button" data-action="account" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu for ${account.fullName}" title="${account.fullName}">
+                  <button class="account-trigger" type="button" data-action="account" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu for ${headerName(seller, account)}" title="${headerName(seller, account)}">
                     <span class="account-avatar" aria-hidden="true">${icon('user', 22)}</span>
-                    <span class="account-label">Account</span>
+                    <span class="account-label">${headerName(seller, account)}</span>
                     <span class="account-chevron" aria-hidden="true">${icon('chevronDown', 18)}</span>
                   </button>
                   <div class="account-menu" id="account-menu" hidden>

@@ -134,7 +134,7 @@ const page: Page = async ({ root, params, seller }) => {
             <p class="field-error" id="f_images_err" hidden></p>
             <ul class="image-grid" id="image-grid" aria-label="Selected product images"></ul>
             <p class="hint">The first image is the primary image. Use “Make primary” to change it.</p>
-            <p class="hint warn-text" id="img-note" hidden>${icon('alert', 14)} Sign in with your seller account to save photos with the listing. Until then they only appear in this preview.</p>
+            <p class="hint warn-text" id="img-note" hidden>${icon('alert', 14)} This account isn’t connected to the Mithren server yet, so photos can’t be saved and only appear in this preview. Sign out and sign in again with your password to connect it.</p>
           </section>
 
           <section class="card">
@@ -301,6 +301,13 @@ const page: Page = async ({ root, params, seller }) => {
     state: 'saved' as const,
   }));
   const canUpload = () => api.sellerSession.isSignedIn();
+  /** A short reason for the tile. The server's message is kept for 4xx answers (type, size, shop). */
+  const uploadError = (e: unknown): string => {
+    if (!(e instanceof api.ApiError)) return 'Couldn’t reach the server. Retry.';
+    if (e.status === 401) return 'Signed out. Sign in again.';
+    if (e.status === 403) return 'Save your shop details first.';
+    return e.message || 'Upload failed';
+  };
   const imageError = (msg: string) => {
     const err = $('#f_images_err', root)!;
     err.textContent = msg;
@@ -316,7 +323,7 @@ const page: Page = async ({ root, params, seller }) => {
           ? canUpload()
             ? html`<span class="image-state">Preview (will save on submit)</span>`
             : html`<span class="image-state warn-text">Not saved</span>`
-          : '';
+          : html`<span class="image-state is-saved">${icon('check', 12)} Saved</span>`;
   const renderImages = () => {
     $('#img-count', root)!.textContent = images.length ? `${images.length} of ${IMAGE_MAX_COUNT}` : '';
     // The sign-in warning is only for sellers without a server session; signed-in sellers' photos
@@ -352,7 +359,7 @@ const page: Page = async ({ root, params, seller }) => {
       img.state = 'saved';
     } catch (e) {
       img.state = 'failed';
-      img.error = (e as Error).message;
+      img.error = uploadError(e);
     }
     if (images.includes(img)) renderImages();
   };
