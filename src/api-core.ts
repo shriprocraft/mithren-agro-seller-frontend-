@@ -302,13 +302,19 @@ function validateProduct(input: ProductInput, submitting: boolean): Record<strin
  * Save a product. `submit` sends it for moderation; otherwise it is saved as a draft
  * (or, for an already-approved product, only non-moderated fields change).
  */
+/** Throws the ApiError that saveProduct would, without saving anything. */
+export function checkProduct(input: ProductInput, submit: boolean): void {
+  const s = me();
+  if (s.status === 'suspended') throw new ApiError(403, 'Your account is suspended. Listings are read-only.');
+  if (submit && s.status !== 'approved') throw new ApiError(403, 'You can save drafts now, but listings can only be submitted for approval once your seller account is approved.');
+  const errors = validateProduct(input, submit);
+  if (Object.keys(errors).length) throw new ApiError(422, 'Please fix the highlighted fields.', errors);
+}
+
 export function saveProduct(input: ProductInput, submit: boolean) {
   return call(() => {
+    checkProduct(input, submit);
     const s = me();
-    if (s.status === 'suspended') throw new ApiError(403, 'Your account is suspended. Listings are read-only.');
-    if (submit && s.status !== 'approved') throw new ApiError(403, 'You can save drafts now, but listings can only be submitted for approval once your seller account is approved.');
-    const errors = validateProduct(input, submit);
-    if (Object.keys(errors).length) throw new ApiError(422, 'Please fix the highlighted fields.', errors);
 
     let p = input.id ? ownedProduct(input.id) : undefined;
     const { id: _ignored, ...fields } = input;

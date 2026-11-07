@@ -9,7 +9,7 @@ import * as api from '../api.js';
 import { slugify, money, fmtDate, UNIT_LABEL } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
-import { APPAREL_SIZES, categoryKind, type ApparelSize } from '../catalog.js';
+import { APPAREL_SIZES, categoryKind, toBackendProduct, type ApparelSize } from '../catalog.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UNITS: Unit[] = ['g', 'kg', 'bunch', 'piece', 'box'];
@@ -49,7 +49,7 @@ const blankProduct = (): Product => ({
   updatedAt: new Date().toISOString(),
 });
 
-const page: Page = async ({ root, params, seller }) => {
+const page: Page = async ({ root, params, seller, account }) => {
   const isNew = !params.id;
   let product: Product;
   try {
@@ -435,12 +435,31 @@ const page: Page = async ({ root, params, seller }) => {
     const errBox = $('#form-error', root)!;
     errBox.hidden = true;
     try {
-      const saved = await api.saveProduct(readForm(), submit);
+      const input = readForm();
+      if (isNew) {
+        // New listings go to the FastAPI catalogue first, after the same checks as saving, so a
+        // listing the portal would refuse never reaches the backend. Drafts are sent inactive.
+        api.checkProduct(input, submit);
+        const sellerId = account ? api.shopDetails.savedSellerId(account.email) : null;
+        if (!sellerId) throw new api.ApiError(409, 'Your seller profile isn’t on the server yet. Complete Step 2 of seller registration, then add products.');
+        let payload;
+        try {
+          payload = toBackendProduct(input, sellerId, submit);
+        } catch (convert) {
+          throw new api.ApiError(422, (convert as Error).message);
+        }
+        await api.products.create(payload);
+      }
+      const saved = await api.saveProduct(input, submit);
       releaseImages();
-      toast(submit ? (saved.status === 'pending' ? (product.status === 'approved' ? 'Changes saved — sent for re-approval' : 'Sent for approval') : 'Changes saved') : 'Draft saved');
+      toast(
+        isNew
+          ? `${submit ? 'Sent for approval' : 'Draft saved'} and added to the catalogue`
+          : submit ? (saved.status === 'pending' ? (product.status === 'approved' ? 'Changes saved — sent for re-approval' : 'Sent for approval') : 'Changes saved') : 'Draft saved',
+      );
       navigate(`/seller/products/${saved.id}`, isNew);
     } catch (err) {
-      const ae = err as api.ApiError;
+      const ae = err instanceof api.ApiError ? err : new api.ApiError(500, 'Something went wrong. Try again.');
       errBox.textContent = ae.message;
       errBox.hidden = false;
       if (ae.fieldErrors) showFieldErrors(form, ae.fieldErrors);

@@ -203,10 +203,14 @@ const SHOP_FIELD: Record<string, string> = {
   account_number: 'accountNumber',
 };
 
-async function sellerRequest<T>(method: 'POST' | 'PATCH', path: string, body: unknown): Promise<T> {
+type FieldFor = (loc: unknown[]) => string | undefined;
+const shopField: FieldFor = (loc) => SHOP_FIELD[String(loc[loc.length - 1])];
+
+/** Calls the FastAPI backend under /api/v1 and turns its errors into an ApiError with field errors. */
+async function backendRequest<T>(method: 'POST' | 'PATCH', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${OTP_API}/api/v1/seller/${path}`, {
+    res = await fetch(`${OTP_API}/api/v1/${path}`, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -221,15 +225,18 @@ async function sellerRequest<T>(method: 'POST' | 'PATCH', path: string, body: un
   let message = `Request failed (${res.status}).`;
   if (Array.isArray(d)) {
     // FastAPI validation errors: [{ loc: ['body', 'pincode'], msg: '...' }]
+    const general: string[] = [];
     for (const e of d as { loc?: unknown[]; msg?: string }[]) {
-      const field = SHOP_FIELD[String(e.loc?.[e.loc.length - 1])];
-      const msg = String(e.msg ?? 'Invalid value').replace(/^Value error, /, '');
-      if (field && !fieldErrors[field]) fieldErrors[field] = msg.endsWith('.') ? msg : `${msg}.`;
+      const field = fieldFor(e.loc ?? []);
+      let msg = String(e.msg ?? 'Invalid value').replace(/^Value error, /, '');
+      if (!msg.endsWith('.')) msg += '.';
+      if (field) fieldErrors[field] ??= msg;
+      else general.push(msg);
     }
-    message = 'Please fix the highlighted fields.';
+    message = general.length ? general.join(' ') : 'Please fix the highlighted fields.';
   } else if (d && typeof d === 'object' && 'message' in d) {
     message = String((d as { message: unknown }).message);
-    const field = SHOP_FIELD[String((d as { field?: unknown }).field)];
+    const field = fieldFor([(d as { field?: unknown }).field]);
     if (field) fieldErrors[field] = message;
   }
   throw new ApiError(res.status, message, fieldErrors);
@@ -239,13 +246,13 @@ const sellerIdKey = (owner: string) => `mithren.sellerId:${owner.toLowerCase()}`
 
 export const shopDetails = {
   /** Step 2: POST /api/v1/seller/shop-details. Creates the seller and returns its seller_id. */
-  create: (input: ShopDetailsStep2) => sellerRequest<ShopDetailsView>('POST', 'shop-details', input),
+  create: (input: ShopDetailsStep2) => backendRequest<ShopDetailsView>('POST', 'seller/shop-details', input, shopField),
   /** Steps 3 and 5 (and a revisited Step 2): PATCH /api/v1/seller/shop-details/{seller_id}. */
   update: (sellerId: string, patch: ShopDetailsPatch) =>
-    sellerRequest<ShopDetailsView>('PATCH', `shop-details/${encodeURIComponent(sellerId)}`, patch),
+    backendRequest<ShopDetailsView>('PATCH', `seller/shop-details/${encodeURIComponent(sellerId)}`, patch, shopField),
   /** Step 6: POST /api/v1/seller/bank-details/{seller_id}. Creates or replaces the payout account. */
   saveBank: (sellerId: string, input: BankDetailsInput) =>
-    sellerRequest<BankDetailsView>('POST', `bank-details/${encodeURIComponent(sellerId)}`, input),
+    backendRequest<BankDetailsView>('POST', `seller/bank-details/${encodeURIComponent(sellerId)}`, input, shopField),
   /** The seller_id is kept in this browser, per signed-in account, until seller sign-in exists. */
   savedSellerId(owner: string): string | null {
     try {
@@ -261,6 +268,43 @@ export const shopDetails = {
       /* private mode: the seller is created again on the next step */
     }
   },
+};
+
+// ---------- products (FastAPI backend) ----------
+
+export type { BackendProduct, BackendVariant } from './catalog.js';
+export interface BackendProductView {
+  id: string;
+  seller_id: string;
+  title: string;
+  category: string;
+  price_paise: number;
+  stock: number;
+  is_active: boolean;
+  variants: { id: string; label: string; sku: string; size: string | null; price_paise: number; stock: number }[];
+}
+
+/** Backend field path -> product form field, so errors highlight the right input. */
+const productField: FieldFor = (loc) => {
+  const [, first, index, key] = loc.map(String);
+  if (first === 'variants' && index !== undefined && key !== undefined) {
+    const k = { price_paise: 'price', mrp_paise: 'mrp', pack_size: 'packSize' }[key] ?? key;
+    return `variant_${index}_${k}`;
+  }
+  return first === undefined ? undefined : ({ title: 'name', description: 'description', category: 'category' } as Record<string, string>)[first];
+};
+
+export const products = {
+  /** POST /api/v1/products. Prices must already be integer paise (see toBackendProduct). */
+  create: (payload: import('./catalog.js').BackendProduct) => backendRequest<BackendProductView>('POST', 'products', payload, productField),
+};
+
+/**
+ * Runs the same checks as saving, without saving, so nothing is sent to the backend that the
+ * portal would then refuse. The Node server checks again when it saves.
+ */
+export const checkProduct = (input: core.ProductInput, submit: boolean): void => {
+  if (!REMOTE) core.checkProduct(input, submit);
 };
 
 async function currentEmail(): Promise<string> {

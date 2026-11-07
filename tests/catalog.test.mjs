@@ -3,7 +3,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import * as api from '../dist/api-core.js';
 import { SELLER_A } from '../dist/data/seed.js';
-import { categoryKind, rupeesToPaise, APPAREL_SIZES } from '../dist/catalog.js';
+import { categoryKind, rupeesToPaise, toBackendProduct, APPAREL_SIZES } from '../dist/catalog.js';
 
 beforeEach(() => {
   api.resetDemoData();
@@ -78,4 +78,33 @@ test('produce still requires origin and storage to submit', async () => {
 test('prices with more than two decimals are rejected before reaching the backend', async () => {
   const bad = kurti({ variants: [{ ...kurti().variants[0], price: 799.995 }] });
   await assert.rejects(api.saveProduct(bad, false), (e) => e.status === 422 && /2 decimal/.test(e.fieldErrors.variant_0_price));
+});
+
+test('apparel maps to a backend body with sizes and integer paise', () => {
+  const body = toBackendProduct(kurti({ variants: [{ ...kurti().variants[0], price: 799.5, mrp: 999 }] }), 'seller-1', true);
+
+  assert.deepEqual(body, {
+    seller_id: 'seller-1',
+    title: 'Cotton Kurti',
+    description: 'Hand block printed cotton kurti, breathable for summer.',
+    category: 'Women Apparel',
+    variants: [{ label: 'Size M', sku: 'GV-KRT-M', size: 'M', price_paise: 79950, mrp_paise: 99900, stock: 5 }],
+    images: [],
+    is_active: true,
+  });
+});
+
+test('produce maps pack size and unit, and drafts are sent inactive', () => {
+  const mango = kurti({ name: ' Mango ', description: '  ', category: 'Fruits', variants: [{ id: 'v1', label: '1 kg', sku: 'gv-mng-1k', packSize: 1, unit: 'kg', size: 'M', price: 349, stock: 2 }] });
+
+  const body = toBackendProduct(mango, 'seller-1', false);
+
+  assert.equal(body.title, 'Mango');
+  assert.equal('description' in body, false);
+  assert.equal(body.is_active, false);
+  assert.deepEqual(body.variants, [{ label: '1 kg', sku: 'GV-MNG-1K', pack_size: 1, unit: 'kg', price_paise: 34900, stock: 2 }]);
+});
+
+test('a price that is not whole paise is refused, not rounded', () => {
+  assert.throws(() => toBackendProduct(kurti({ variants: [{ ...kurti().variants[0], price: 799.999 }] }), 's', true), /at most 2 decimals/);
 });

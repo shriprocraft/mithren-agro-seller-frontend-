@@ -30,3 +30,65 @@ export function rupeesToPaise(rupees: number): number | null {
   if (Math.abs(rupees * 100 - paise) > 1e-6 || !Number.isSafeInteger(paise)) return null;
   return paise;
 }
+
+// ---------- FastAPI product payload ----------
+
+export interface BackendVariant {
+  label: string;
+  sku: string;
+  size?: ApparelSize;
+  pack_size?: number;
+  unit?: string;
+  price_paise: number;
+  mrp_paise?: number;
+  stock: number;
+}
+
+/** The body of POST /api/v1/products. */
+export interface BackendProduct {
+  seller_id: string;
+  title: string;
+  description?: string;
+  category: string;
+  variants: BackendVariant[];
+  images: string[];
+  is_active: boolean;
+}
+
+interface FormProduct {
+  name: string;
+  description: string;
+  category: string;
+  variants: { label: string; sku: string; size?: ApparelSize; packSize: number; unit: string; price: number; mrp?: number; stock: number }[];
+}
+
+/**
+ * Maps the product form to the backend body. Rupee prices become integer paise with
+ * rupeesToPaise; a price that can't convert exactly throws instead of being rounded.
+ */
+export function toBackendProduct(p: FormProduct, sellerId: string, active: boolean): BackendProduct {
+  const apparel = categoryKind(p.category) === 'apparel';
+  const paise = (rupees: number, what: string) => {
+    const value = rupeesToPaise(rupees);
+    if (value === null || value < 1) throw new Error(`${what} must be a rupee amount with at most 2 decimals.`);
+    return value;
+  };
+  const description = p.description.trim();
+  return {
+    seller_id: sellerId,
+    title: p.name.trim(),
+    ...(description ? { description } : {}),
+    category: p.category,
+    variants: p.variants.map((v, i) => ({
+      label: v.label.trim(),
+      sku: v.sku.trim().toUpperCase(),
+      ...(apparel ? { size: v.size } : { pack_size: v.packSize, unit: v.unit }),
+      price_paise: paise(v.price, `Variant ${i + 1} price`),
+      ...(v.mrp !== undefined ? { mrp_paise: paise(v.mrp, `Variant ${i + 1} MRP`) } : {}),
+      stock: v.stock,
+    })),
+    // Picked photos stay in the browser until image upload exists.
+    images: [],
+    is_active: active,
+  };
+}
