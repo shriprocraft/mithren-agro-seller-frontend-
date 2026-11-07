@@ -82,7 +82,7 @@ const page: Page = async ({ root, params, seller }) => {
   );
   // Catalogue writes use the seller's server session (Bearer token); the server knows the seller.
   const onServer = () => api.sellerSession.isSignedIn();
-  const NO_SERVER_SESSION = 'Sign in with your seller account to save products to the catalogue.';
+  const NO_SERVER_SESSION = 'Connect your account to the Mithren server first: enter your password in the banner at the top of the page.';
   // Apparel and accessories are sold by size and have no organic or freshness fields.
   let apparel = categoryKind(product.category) === 'apparel';
   const variantHint = () =>
@@ -134,7 +134,7 @@ const page: Page = async ({ root, params, seller }) => {
             <p class="field-error" id="f_images_err" hidden></p>
             <ul class="image-grid" id="image-grid" aria-label="Selected product images"></ul>
             <p class="hint">The first image is the primary image. Use “Make primary” to change it.</p>
-            <p class="hint warn-text" id="img-note" hidden>${icon('alert', 14)} This account isn’t connected to the Mithren server yet, so photos can’t be saved and only appear in this preview. Sign out and sign in again with your password to connect it.</p>
+            <p class="hint warn-text" id="img-note" hidden>${icon('alert', 14)} Photos are saved once your account is connected (see the banner at the top of the page).</p>
           </section>
 
           <section class="card">
@@ -414,6 +414,17 @@ const page: Page = async ({ root, params, seller }) => {
 
   renderVariants();
   renderImages();
+
+  // Connected from the banner while this form is open: upload the photos picked so far and clear
+  // the "connect first" error, keeping everything typed in the form.
+  const onConnected = () => {
+    if (!root.isConnected) return window.removeEventListener(api.SESSION_CONNECTED_EVENT, onConnected);
+    const errBox = $('#form-error', root);
+    if (errBox?.textContent === NO_SERVER_SESSION) errBox.hidden = true;
+    void Promise.all(images.filter((x) => x.state === 'local').map((x) => upload(x)));
+    renderImages();
+  };
+  window.addEventListener(api.SESSION_CONNECTED_EVENT, onConnected);
 
   on(root, 'change', '#f_images', (_e, el) => {
     const input = el as HTMLInputElement;

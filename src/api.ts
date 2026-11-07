@@ -226,6 +226,8 @@ const shopField: FieldFor = (loc) => SHOP_FIELD[String(loc[loc.length - 1])];
 const TOKENS_KEY = 'mithren.sellerTokens';
 /** Fired on window when the server rejects the session and it can't be refreshed. */
 export const SESSION_EXPIRED_EVENT = 'seller-session-expired';
+/** Fired when a signed-in seller connects to the server, so open pages can enable saving. */
+export const SESSION_CONNECTED_EVENT = 'seller-session-connected';
 
 interface StoredTokens {
   access: string;
@@ -640,6 +642,50 @@ export const auth = {
     sellerSession.clear();
     if (t) await backendRequest<void>('POST', 'auth/logout', { refresh_token: t.refresh }, () => undefined).catch(() => undefined);
     return local ? local.localAuth.signOut() : http<void>('POST', '/api/auth/signout');
+  },
+  /**
+   * True when someone is signed in to the portal but has no server session, so nothing can be saved
+   * to the catalogue: accounts made before server sign-in existed, or a session from before the
+   * fix. The preview demo account never has one.
+   */
+  needsConnection: (account: AccountView | null): boolean =>
+    !!local && !!account && !sellerSession.isSignedIn() && !(PREVIEW_DEMO && account.email.toLowerCase() === PREVIEW_DEMO.email),
+  /**
+   * Connects the signed-in portal account to the server with its password: signs in there, or for
+   * an account the server doesn't know, creates its login and claims the shop this browser saved.
+   */
+  connect: async (password: string): Promise<void> => {
+    const who = local ? await local.localAuth.contact() : null;
+    if (!who) throw new ApiError(401, 'Sign in again to continue.');
+    try {
+      await backendSignIn(who.email, password);
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 401) throw e;
+      // Check the password against this browser's account before creating a server login with it.
+      try {
+        await local!.localAuth.signIn(who.email, password);
+      } catch {
+        throw new ApiError(401, 'That password is incorrect.', { password: 'That password is incorrect.' });
+      }
+      await connectToServer(password);
+      if (!sellerSession.isSignedIn())
+        throw new ApiError(409, 'A server login with a different password already exists for this email or mobile number. Enter that password.');
+    }
+    window.dispatchEvent(new CustomEvent(SESSION_CONNECTED_EVENT));
+  },
+  /**
+   * Checks the stored tokens with the server once per page load (refreshing them if needed) and
+   * updates the shop name. Tokens the server no longer accepts end the session (SESSION_EXPIRED_EVENT).
+   */
+  verifySession: async (): Promise<boolean> => {
+    if (!sellerSession.isSignedIn()) return false;
+    try {
+      const me = await backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined);
+      sellerSession.setShopName(me.shop_name);
+      return true;
+    } catch {
+      return sellerSession.isSignedIn(); // a network error keeps the tokens; a rejected session cleared them
+    }
   },
   /** The signed-in seller's server profile (GET /api/v1/auth/me), or null without a server session. */
   me: (): Promise<SellerProfileView | null> =>

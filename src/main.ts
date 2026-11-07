@@ -125,7 +125,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
                 <div class="account-wrap">
                   <button class="account-trigger" type="button" data-action="account" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu for ${headerName(seller, account)}" title="${headerName(seller, account)}">
                     <span class="account-avatar" aria-hidden="true">${icon('user', 22)}</span>
-                    <span class="account-label">${headerName(seller, account)}</span>
+                    <span class="account-label" ${seller.shopName.trim() ? raw('data-local-shop') : ''}>${headerName(seller, account)}</span>
                     <span class="account-chevron" aria-hidden="true">${icon('chevronDown', 18)}</span>
                   </button>
                   <div class="account-menu" id="account-menu" hidden>
@@ -159,6 +159,24 @@ function statusBanner(s: Seller) {
   );
 }
 
+/** Shown while the portal session has no server session: one password entry connects it. */
+function connectBanner() {
+  return html`<div id="connect-banner">${callout(
+    'warn',
+    'Connect your account to the Mithren server',
+    'Enter your password once to finish signing in. Until then products and photos can’t be saved.',
+    html`<form class="connect-form" data-role="connect-form" novalidate>
+      <label class="sr-only" for="connect-password">Password</label>
+      <input id="connect-password" name="password" type="password" autocomplete="current-password" placeholder="Password" required />
+      <button type="submit" class="btn btn-sm btn-primary">Connect</button>
+      <p class="form-error small" role="alert" hidden data-role="connect-error"></p>
+    </form>`,
+  )}</div>`;
+}
+
+// Tokens are checked with the server once per page load, so a stored but rejected session ends.
+let sessionChecked = false;
+
 async function render() {
   const token = ++renderToken;
   const { path, query } = currentLocation();
@@ -188,7 +206,11 @@ async function render() {
   const main = $('#main')!;
   document.title = `${m?.route.title ?? 'Not found'} · Mithren Agro Seller Portal`;
 
-  const banner = bare || !account || path === '/seller' ? '' : statusBanner(seller);
+  if (account && !sessionChecked && api.sellerSession.isSignedIn()) {
+    sessionChecked = true;
+    void api.auth.verifySession();
+  }
+  const banner = html`${!bare && api.auth.needsConnection(account) ? connectBanner() : ''}${bare || !account || path === '/seller' ? '' : statusBanner(seller)}`;
   if (!m) {
     main.innerHTML = html`${banner}<div class="page">${emptyState('Page not found', `There is no seller page at ${path}.`, html`<a class="btn btn-primary" href="#/seller/dashboard">Go to dashboard</a>`)}</div>`.value;
     return;
@@ -504,6 +526,35 @@ window.addEventListener(api.SESSION_EXPIRED_EVENT, () => {
       navigate(`/seller/sign-in${path && path !== '/seller' && path !== '/seller/sign-in' ? `?next=${encodeURIComponent(path)}` : ''}`);
       void render();
     });
+});
+on(document.body, 'submit', '[data-role=connect-form]', async (e, el) => {
+  e.preventDefault();
+  const form = el as HTMLFormElement;
+  const input = form.elements.namedItem('password') as HTMLInputElement;
+  const err = $('[data-role=connect-error]', form)!;
+  const btn = $('button[type=submit]', form) as HTMLButtonElement;
+  err.hidden = true;
+  if (!input.value) {
+    err.textContent = 'Enter your password.';
+    err.hidden = false;
+    return input.focus();
+  }
+  btn.disabled = true;
+  try {
+    await api.auth.connect(input.value);
+    $('#connect-banner')?.remove();
+    // Without a shop name saved in this browser, the header can now use the server's.
+    const label = $('.account-label');
+    const shop = api.sellerSession.shopName();
+    if (label && shop && !label.hasAttribute('data-local-shop')) label.textContent = shop;
+    toast('Account connected. You can save products and photos now.');
+  } catch (ex) {
+    err.textContent = (ex as Error).message;
+    err.hidden = false;
+    input.select();
+  } finally {
+    btn.disabled = false;
+  }
 });
 initTooltips();
 bindShell();
