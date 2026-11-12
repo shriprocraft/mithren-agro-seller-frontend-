@@ -3087,6 +3087,11 @@ td a:hover {
 .verify-row.verified > .icon {
   color: var(--green);
 }
+.verify-row .otp-timer {
+  grid-column: 2;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Document slots */
 .doc-slots {
@@ -3201,7 +3206,8 @@ td a:hover {
   .verify-row {
     grid-template-columns: minmax(0, 1fr);
   }
-  .verify-row .row-wrap {
+  .verify-row .row-wrap,
+  .verify-row .otp-timer {
     grid-column: 1;
   }
   .wizard-actions {

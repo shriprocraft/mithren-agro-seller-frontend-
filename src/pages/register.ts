@@ -37,7 +37,8 @@ const page: Page = async ({ root, account: initialAccount }) => {
   let view: ApplicationView | null = null;
   let data: ApplicationData;
   let step = 1;
-  let previewCodes: Partial<Record<'email' | 'phone', string>> = {};
+  // When each code was sent and when it expires (from the backend's expiresInSeconds), for the countdown.
+  const otpExpiresAt: Partial<Record<'email' | 'phone', number>> = {};
   let busy = false;
 
   if (account) {
@@ -145,21 +146,44 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${field({ name: 'password2', label: 'Confirm password', type: 'password', reveal: true, required: true, placeholder: 'Re-enter your password', attrs: 'autocomplete="new-password" maxlength="200"' })}
     </div>`;
 
+  // Email and mobile verification look and behave the same: send, enter the 6-digit code with a live
+  // "Your OTP expires in MM:SS" countdown, then the same green "Your OTP verified successfully" state.
+  const remaining = (channel: 'email' | 'phone') => Math.max(0, Math.ceil(((otpExpiresAt[channel] ?? 0) - Date.now()) / 1000));
+  const countdown = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  const timerText = (channel: 'email' | 'phone') => {
+    const left = remaining(channel);
+    return left > 0 ? `Your OTP expires in ${countdown(left)}` : 'Your OTP has expired. Send a new code.';
+  };
+
   const verifyBlock = (channel: 'email' | 'phone', verified: boolean, target: string) => {
     const label = channel === 'email' ? 'Email' : 'Mobile number';
-    if (verified) return html`<div class="verify-row verified">${icon('check', 16)} <span><strong>${label} verified</strong><span class="muted small block">${target}</span></span></div>`;
+    if (verified)
+      return html`<div class="verify-row verified" role="status">${icon('check', 16)} <span><strong>Your OTP verified successfully</strong><span class="muted small block">${label} · ${target}</span></span></div>`;
+    const sent = otpExpiresAt[channel] !== undefined;
     return html`<div class="verify-row">
       <div class="verify-target"><strong>${label}</strong><span class="muted small block">${target}</span></div>
-      ${field({ name: `${channel}Code`, label: `${channel === 'email' ? 'Email' : 'SMS'} code`, hint: channel === 'email' ? `Enter the 6-digit code we emailed to ${target}. Check your spam folder if it doesn’t arrive.` : previewCodes.phone ? `Preview only, no SMS is sent: your code is ${previewCodes.phone}` : 'Enter the 6-digit code we sent.', placeholder: 'Enter the 6-digit code', attrs: 'inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*"' })}
+      ${field({ name: `${channel}Code`, label: 'OTP', hint: sent ? `Enter the 6-digit OTP sent to ${target}.` : `Send an OTP to ${target}.`, placeholder: 'Enter the 6-digit OTP', attrs: 'inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*"' })}
       <div class="row-wrap">
-        <button type="button" class="btn btn-sm btn-primary" data-verify="${channel}">Verify</button>
-        <button type="button" class="btn btn-sm btn-ghost" data-send="${channel}">Send a new code</button>
+        <button type="button" class="btn btn-sm btn-primary" data-verify="${channel}" ${sent ? '' : raw('disabled')}>Verify</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-send="${channel}">${sent ? 'Resend OTP' : 'Send OTP'}</button>
       </div>
+      ${sent ? html`<p class="otp-timer small ${remaining(channel) > 0 ? 'muted' : 'error-text'}" data-otp-timer="${channel}" aria-live="off">${timerText(channel)}</p>` : ''}
     </div>`;
   };
 
+  // One ticker updates every visible countdown each second; it stops when the page is left.
+  const ticker = window.setInterval(() => {
+    if (!root.isConnected) return window.clearInterval(ticker);
+    root.querySelectorAll<HTMLElement>('[data-otp-timer]').forEach((el) => {
+      const ch = el.dataset.otpTimer as 'email' | 'phone';
+      el.textContent = timerText(ch);
+      el.classList.toggle('muted', remaining(ch) > 0);
+      el.classList.toggle('error-text', remaining(ch) === 0);
+    });
+  }, 1000);
+
   const stepVerify = (a: AccountView) => html`
-    <p class="muted">Verify your email and mobile number to continue. Codes expire after 10 minutes.</p>
+    <p class="muted">Verify your email and mobile number with the OTPs we send you to continue.</p>
     <div class="stack">
       ${verifyBlock('email', a.emailVerified, a.email)}
       ${verifyBlock('phone', a.phoneVerified, a.phoneMasked)}
@@ -468,7 +492,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       if ((ch === 'email' && account.emailVerified) || (ch === 'phone' && account.phoneVerified)) continue;
       try {
         const r = await api.auth.sendCode(ch);
-        if (r.previewCode) previewCodes[ch] = r.previewCode;
+        otpExpiresAt[ch] = Date.now() + r.expiresInSeconds * 1000;
       } catch {
         /* the seller can request again */
       }
@@ -528,9 +552,9 @@ const page: Page = async ({ root, account: initialAccount }) => {
     void guarded(el as HTMLButtonElement, 'Sending…', async () => {
       const ch = el.dataset.send as 'email' | 'phone';
       const r = await api.auth.sendCode(ch);
-      if (r.previewCode) previewCodes[ch] = r.previewCode;
+      otpExpiresAt[ch] = Date.now() + r.expiresInSeconds * 1000;
       render();
-      toast(`New code sent to your ${ch === 'email' ? 'email' : 'phone'}`);
+      toast(`OTP sent to your ${ch === 'email' ? 'email' : 'mobile number'}`);
     }),
   );
   on(root, 'click', '[data-verify]', (_e, el) =>
@@ -538,10 +562,11 @@ const page: Page = async ({ root, account: initialAccount }) => {
       const ch = el.dataset.verify as 'email' | 'phone';
       const code = ($(`#f_${ch}Code`, root) as HTMLInputElement).value.trim();
       if (!/^\d{6}$/.test(code)) return showError('Enter the 6-digit code.', { [`${ch}Code`]: 'Enter the 6-digit code.' });
+      if (remaining(ch) === 0) return showError('This OTP has expired. Send a new one.', { [`${ch}Code`]: 'This OTP has expired. Send a new one.' });
       account = await api.auth.verifyCode(ch, code);
-      delete previewCodes[ch];
+      delete otpExpiresAt[ch];
       render();
-      toast(ch === 'email' ? 'Email verified' : 'Mobile number verified');
+      toast('Your OTP verified successfully');
     }),
   );
 

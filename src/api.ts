@@ -134,10 +134,11 @@ export function clearAllData() {
 /** FastAPI backend that sends real email OTPs. Override with <meta name="otp-api" content="...">. */
 export const OTP_API = (meta('otp-api') ?? 'http://127.0.0.1:8000').replace(/\/+$/, '');
 
-async function otpPost<T>(path: string, body: unknown): Promise<T> {
+/** POST /api/v1/auth/{email|phone}-otp/{send|verify}: the backend emails or texts (Fast2SMS) the code. */
+async function otpPost<T>(channel: 'email' | 'phone', path: 'send' | 'verify', body: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${OTP_API}/api/v1/auth/email-otp/${path}`, {
+    res = await fetch(`${OTP_API}/api/v1/auth/${channel}-otp/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -154,7 +155,7 @@ async function otpPost<T>(path: string, body: unknown): Promise<T> {
         : Array.isArray(d) && d[0]?.msg
           ? String(d[0].msg).replace(/^Value error, /, '')
           : `Request failed (${res.status}).`;
-    throw new ApiError(res.status, message, { emailCode: message });
+    throw new ApiError(res.status, message, { [`${channel}Code`]: message });
   }
   return json as T;
 }
@@ -499,6 +500,13 @@ export const checkProduct = (input: core.ProductInput, submit: boolean): void =>
   if (!REMOTE) core.checkProduct(input, submit);
 };
 
+/** The signed-in account's full mobile number (the account view only has it masked). */
+async function currentPhone(): Promise<string> {
+  const who = await local!.localAuth.contact();
+  if (!who) throw new ApiError(401, 'Sign in again to continue.');
+  return who.phone;
+}
+
 async function currentEmail(): Promise<string> {
   const a = await local!.localAuth.current();
   if (!a) throw new ApiError(401, 'Sign in again to continue.');
@@ -578,21 +586,23 @@ export const auth = {
     return local ? local.localAuth.signUp(input) : http<{ account: AccountView }>('POST', '/api/auth/signup', input).then((x) => x.account);
   },
   /** Email codes are sent by the FastAPI backend. The preview has no SMS provider, so it returns the phone code to display. */
-  sendCode: async (channel: 'email' | 'phone'): Promise<{ previewCode?: string }> => {
+  /**
+   * Sends a 6-digit code by email or SMS (both through the FastAPI backend). The code is never returned:
+   * the seller reads it from their inbox or phone. Resolves to how long the code lasts.
+   */
+  sendCode: async (channel: 'email' | 'phone'): Promise<{ expiresInSeconds: number }> => {
     if (!local) return http('POST', '/api/auth/send-code', { channel });
-    if (channel === 'email') {
-      await otpPost('send', { email: await currentEmail() });
-      return {};
-    }
-    return local.localAuth.sendCode(channel);
+    const r = await otpPost<{ expiresInSeconds?: number }>(
+      channel,
+      'send',
+      channel === 'email' ? { email: await currentEmail() } : { phone: await currentPhone() },
+    );
+    return { expiresInSeconds: r.expiresInSeconds ?? 600 };
   },
   verifyCode: async (channel: 'email' | 'phone', code: string): Promise<AccountView> => {
     if (!local) return http<{ account: AccountView }>('POST', '/api/auth/verify', { channel, code }).then((r) => r.account);
-    if (channel === 'email') {
-      await otpPost('verify', { email: await currentEmail(), code });
-      return local.localAuth.markVerified('email');
-    }
-    return local.localAuth.verifyCode(channel, code);
+    await otpPost(channel, 'verify', channel === 'email' ? { email: await currentEmail(), code } : { phone: await currentPhone(), code });
+    return local.localAuth.markVerified(channel);
   },
   /**
    * Signs in to the FastAPI backend, then the portal. The preview demo account, and accounts made
