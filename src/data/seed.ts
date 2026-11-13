@@ -37,9 +37,10 @@ export interface DB {
 
 // 4: empty dataset by default. 5: unified seller status model (v4 data is migrated, not discarded).
 // 6: the preview ships with sample data again (saved data with records is kept).
-export const DB_VERSION = 6;
-export const SELLER_A = 's_greenvalley';
-export const SELLER_B = 's_sunrise';
+// 7: removed hardcoded demo sellers (Green Valley Organics, Sunrise Fruits) for clean slate.
+export const DB_VERSION = 7;
+export const SELLER_A = 's_demo_a';
+export const SELLER_B = 's_demo_b';
 const DAY = 86_400_000;
 
 function rng(seed: number) {
@@ -91,84 +92,13 @@ export function createSeed(now = new Date()): DB {
   const iso = (msAgo: number) => new Date(t - msAgo).toISOString();
   const dateOnly = (daysFromNow: number) => new Date(t + daysFromNow * DAY).toISOString().slice(0, 10);
 
-  const sellers: Seller[] = [
-    {
-      id: SELLER_A,
-      shopName: 'Green Valley Organics',
-      slug: 'green-valley-organics',
-      ownerName: 'Ananya Kulkarni',
-      email: 'ananya@greenvalley.example',
-      phone: '+91 98•••••210',
-      emailVerified: true,
-      phoneVerified: true,
-      status: 'approved',
-      description:
-        'Family-run farm cluster in the Mulshi valley growing seasonal fruits, leafy greens and heirloom vegetables. Harvested to order, packed the same morning.',
-      address: 'Survey 42, Mulshi Road, Pirangut, Pune 412115',
-      pickupAddress: 'Packhouse 2, Survey 42, Mulshi Road, Pirangut, Pune 412115',
-      serviceAreas: ['Kothrud', 'Baner', 'Aundh', 'Bavdhan', 'Pashan', 'Wakad', 'Model Colony', 'Deccan Gymkhana', 'Sus', 'Balewadi'],
-      productTypes: ['Fruits', 'Vegetables', 'Leafy Greens', 'Herbs'],
-      gstin: '27ABCDE1234F1Z5',
-      pan: 'ABCDE1234F',
-      bank: { accountName: 'Green Valley Organics', last4: '4821', ifsc: 'HDFC0001234', verified: true },
-      brandColor: '#2e7d32',
-      bannerTagline: 'Harvested this morning, at your door by evening.',
-      workingHours: defaultHours(),
-      holidays: [{ id: 'h1', date: dateOnly(18), note: 'Farm maintenance day' }],
-      fulfilment: { autoAccept: false, acceptWindowMins: 30, packingTimeMins: 45, minOrderValue: 199 },
-      notifications: defaultNotifications(),
-      staff: [
-        { id: 'st1', name: 'Rahul Patil', email: 'rahul@greenvalley.example', role: 'packer', invitedAt: iso(60 * DAY), active: true },
-        { id: 'st2', name: 'Sunita Jadhav', email: 'sunita@greenvalley.example', role: 'manager', invitedAt: iso(150 * DAY), active: true },
-        { id: 'st3', name: 'Ganesh More', email: 'ganesh@greenvalley.example', role: 'packer', invitedAt: iso(200 * DAY), active: false },
-      ],
-      supportEmail: 'seller-support@marketplace.example',
-      payoutRequestsEnabled: true,
-      joinedAt: iso(240 * DAY),
-    },
-    {
-      id: SELLER_B,
-      shopName: 'Sunrise Farm Co.',
-      slug: 'sunrise-farm-co',
-      ownerName: 'Vikram Shah',
-      email: 'vikram@sunrise.example',
-      phone: '+91 99•••••771',
-      emailVerified: true,
-      phoneVerified: true,
-      status: 'approved',
-      description: 'Hydroponic exotics and microgreens.',
-      address: 'Plot 9, Hinjewadi Phase 3, Pune',
-      pickupAddress: 'Plot 9, Hinjewadi Phase 3, Pune',
-      serviceAreas: ['Hinjewadi', 'Wakad'],
-      productTypes: ['Exotic'],
-      bank: { accountName: 'Sunrise Farm Co', last4: '0093', ifsc: 'ICIC0004321', verified: true },
-      brandColor: '#c2410c',
-      bannerTagline: '',
-      workingHours: defaultHours(),
-      holidays: [],
-      fulfilment: { autoAccept: true, acceptWindowMins: 20, packingTimeMins: 30, minOrderValue: 249 },
-      notifications: defaultNotifications(),
-      staff: [],
-      supportEmail: 'seller-support@marketplace.example',
-      payoutRequestsEnabled: false,
-      joinedAt: iso(120 * DAY),
-    },
-  ];
+  // Empty sellers array - all demo data removed for clean slate.
+  // Users will register their own sellers through the signup flow.
+  const sellers: Seller[] = [];
 
-  const P = (p: Omit<Product, 'sellerId' | 'archived' | 'updatedAt' | 'minQty' | 'maxQty' | 'available'> & Partial<Product>): Product => ({
-    sellerId: SELLER_A,
-    archived: false,
-    updatedAt: iso(3 * DAY),
-    minQty: 1,
-    maxQty: 10,
-    available: true,
-    ...p,
-  });
-
-  const products: Product[] = [
-    P({ id: 'p_alphonso', name: 'Alphonso Mango', slug: 'alphonso-mango', category: 'Fruits', emoji: '🥭', description: 'Naturally ripened Ratnagiri Alphonso. No carbide.', origin: 'Ratnagiri, Maharashtra', seasonality: 'seasonal', seasonMonths: [3, 4, 5, 6], storage: 'Store at room temperature until ripe, then refrigerate up to 3 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 10, harvestDate: dateOnly(-2), packedDate: dateOnly(-1),
-      variants: [v('v1', '1 kg', 'GV-MNG-1K', 1, 'kg', 649, 42, 749), v('v2', '1 box (12 pcs)', 'GV-MNG-BX12', 12, 'piece', 1499, 6, 1699)] }),
-    P({ id: 'p_spinach', name: 'Baby Spinach', slug: 'baby-spinach', category: 'Leafy Greens', emoji: '🥬', description: 'Tender baby spinach leaves, triple washed.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate at 2–4 °C. Best within 3 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 15,
+  // Products array is empty - demo sellers have been removed.
+  // Users will add their products after registration.
+  const products: Product[] = [ name: 'Baby Spinach', slug: 'baby-spinach', category: 'Leafy Greens', emoji: '🥬', description: 'Tender baby spinach leaves, triple washed.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate at 2–4 °C. Best within 3 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 15,
       variants: [v('v1', '250 g', 'GV-SPN-250', 250, 'g', 59, 8), v('v2', '500 g', 'GV-SPN-500', 500, 'g', 109, 4)] }),
     P({ id: 'p_tomato', name: 'Heirloom Tomatoes', slug: 'heirloom-tomatoes', category: 'Vegetables', emoji: '🍅', description: 'Mixed heirloom varieties — Cherokee Purple, Brandywine and local desi.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Keep at room temperature, away from sunlight.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 12,
       variants: [v('v1', '500 g', 'GV-TOM-500', 500, 'g', 89, 64), v('v2', '1 kg', 'GV-TOM-1K', 1, 'kg', 169, 31, 189)] }),
