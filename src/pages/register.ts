@@ -155,13 +155,35 @@ const page: Page = async ({ root, account: initialAccount }) => {
     // Kept with sentTo so a reload still shows the real countdown.
     expiresAt: Partial<Record<Channel, number>>;
   }
+  // Saved Step 1 input may be missing, from an older version or edited by hand: keep only well-formed values.
   const step1: Step1State = (() => {
-    const empty: Step1State = { fullName: '', email: '', phone: '', sentTo: {}, verified: {}, expiresAt: {} };
+    const str = (v: unknown) => (typeof v === 'string' ? v : '');
+    const byChannel = <T,>(v: unknown, ok: (x: unknown) => x is T): Partial<Record<Channel, T>> => {
+      const out: Partial<Record<Channel, T>> = {};
+      if (v && typeof v === 'object')
+        for (const ch of ['email', 'phone'] as const) {
+          const x = (v as Record<string, unknown>)[ch];
+          if (ok(x)) out[ch] = x;
+        }
+      return out;
+    };
+    const isStr = (x: unknown): x is string => typeof x === 'string' && x !== '';
+    const isTime = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+    let saved: Record<string, unknown> = {};
     try {
-      return { ...empty, ...JSON.parse(sessionStorage.getItem(STEP1_KEY) ?? '{}') };
+      const parsed: unknown = JSON.parse(sessionStorage.getItem(STEP1_KEY) ?? '{}');
+      if (parsed && typeof parsed === 'object') saved = parsed as Record<string, unknown>;
     } catch {
-      return empty;
+      /* storage unavailable or unreadable: start empty */
     }
+    return {
+      fullName: str(saved.fullName),
+      email: str(saved.email),
+      phone: str(saved.phone),
+      sentTo: byChannel(saved.sentTo, isStr),
+      verified: byChannel(saved.verified, isStr),
+      expiresAt: byChannel(saved.expiresAt, isTime),
+    };
   })();
   const saveStep1 = () => {
     try {

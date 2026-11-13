@@ -60,5 +60,7 @@ export function loadAppConfig() {
     adminTokens: adminTokens(),
     deliverCode: codeDelivery(),
     demoTools: env.DEMO_TOOLS === '1',
+    // FastAPI backend that verifies seller OTPs; its /auth/me is the source of truth for verification.
+    backendUrl: (env.BACKEND_URL ?? 'http://127.0.0.1:8000').replace(/\/+$/, ''),
   };
 }

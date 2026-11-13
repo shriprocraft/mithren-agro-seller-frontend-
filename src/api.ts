@@ -530,17 +530,36 @@ export const checkProduct = (input: core.ProductInput, submit: boolean): void =>
   if (!REMOTE) core.checkProduct(input, submit);
 };
 
-/** The signed-in account's full mobile number (the account view only has it masked). */
-async function currentPhone(): Promise<string> {
-  const who = await local!.localAuth.contact();
+/**
+ * The signed-in seller's email and full mobile number (account views only have it masked): this
+ * browser's account in the preview, otherwise the FastAPI profile.
+ */
+async function currentContact(): Promise<{ email: string; phone: string }> {
+  const who = local ? await local.localAuth.contact() : await backendProfile();
   if (!who) throw new ApiError(401, 'Sign in again to continue.');
-  return who.phone;
+  return { email: who.email, phone: who.phone };
+}
+const otpTarget = async (channel: 'email' | 'phone') => {
+  const c = await currentContact();
+  return channel === 'email' ? { email: c.email } : { phone: c.phone };
+};
+
+async function backendProfile(): Promise<SellerProfileView | null> {
+  return sellerSession.isSignedIn() ? backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined).catch(() => null) : null;
 }
 
-async function currentEmail(): Promise<string> {
-  const a = await local!.localAuth.current();
-  if (!a) throw new ApiError(401, 'Sign in again to continue.');
-  return a.email;
+/**
+ * Server mode: the Node server copies the email/mobile verification recorded by the FastAPI backend
+ * onto the portal account (it checks the backend itself). Null without a backend session.
+ */
+async function syncServerVerification(): Promise<AccountView | null> {
+  if (local || !(await backendProfile())) return null; // also refreshes an expired access token
+  const t = sellerSession.tokens();
+  if (!t) return null;
+  return http<{ account: AccountView }>('POST', '/api/auth/sync-verification', { accessToken: t.access }).then(
+    (r) => r.account,
+    () => null,
+  );
 }
 
 // ---------- accounts ----------
@@ -623,11 +642,7 @@ export const auth = {
    * the seller reads it from their inbox or phone. Resolves to how long the code lasts.
    */
   sendCode: async (channel: 'email' | 'phone'): Promise<{ expiresInSeconds: number }> => {
-    const r = await otpPost<{ expiresInSeconds?: number }>(
-      channel,
-      'send',
-      channel === 'email' ? { email: await currentEmail() } : { phone: await currentPhone() },
-    );
+    const r = await otpPost<{ expiresInSeconds?: number }>(channel, 'send', await otpTarget(channel));
     return { expiresInSeconds: r.expiresInSeconds ?? 600 };
   },
   /** Step 1, before the account exists: send an OTP to the email or mobile number typed in the form. */
@@ -642,35 +657,13 @@ export const auth = {
   /** Records that the signed-in account's email or mobile number was verified (inline, before sign-up). */
   markVerified: async (channel: 'email' | 'phone'): Promise<AccountView> => {
     if (local) return local.localAuth.markVerified(channel);
-    // Server mode: fetch updated account from backend
-    const me = await backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined);
-    return {
-      userId: me.user_id,
-      sellerId: me.seller_id || '',
-      fullName: me.full_name,
-      email: me.email,
-      phoneMasked: `+91 •••••• ${me.phone.slice(-4)}`,
-      emailVerified: me.email_verified,
-      phoneVerified: me.phone_verified,
-    };
+    const account = (await syncServerVerification()) ?? (await auth.current());
+    if (!account) throw new ApiError(401, 'Sign in again to continue.');
+    return account;
   },
   verifyCode: async (channel: 'email' | 'phone', code: string): Promise<AccountView> => {
-    if (local) {
-      await otpPost(channel, 'verify', channel === 'email' ? { email: await currentEmail(), code } : { phone: await currentPhone(), code });
-      return local.localAuth.markVerified(channel);
-    }
-    // Server mode: verify with backend and fetch updated account
-    await otpPost(channel, 'verify', channel === 'email' ? { email: await currentEmail(), code } : { phone: await currentPhone(), code });
-    const me = await backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined);
-    return {
-      userId: me.user_id,
-      sellerId: me.seller_id || '',
-      fullName: me.full_name,
-      email: me.email,
-      phoneMasked: `+91 •••••• ${me.phone.slice(-4)}`,
-      emailVerified: me.email_verified,
-      phoneVerified: me.phone_verified,
-    };
+    await otpPost(channel, 'verify', { ...(await otpTarget(channel)), code });
+    return auth.markVerified(channel);
   },
   /**
    * Signs in to the FastAPI backend, then the portal. The preview demo account, and accounts made
@@ -701,7 +694,7 @@ export const auth = {
     }
     try {
       const account = await portalSignIn();
-      return (await applyServerVerification(profile)) ?? account;
+      return (await applyServerVerification(profile)) ?? (await syncServerVerification()) ?? account;
     } catch (e) {
       // Signed in on the server but this browser has no portal account yet: create it from the profile.
       if (!local || !(e instanceof ApiError) || e.status !== 401) throw e;
@@ -740,9 +733,10 @@ export const auth = {
       await backendSignIn(who.email, password);
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) throw e;
+      if (!local) throw e;
       // Check the password against this browser's account before creating a server login with it.
       try {
-        await local!.localAuth.signIn(who.email, password);
+        await local.localAuth.signIn(who.email, password);
       } catch {
         throw new ApiError(401, 'That password is incorrect.', { password: 'That password is incorrect.' });
       }
@@ -772,10 +766,8 @@ export const auth = {
    */
   refreshVerification: async (account: AccountView): Promise<AccountView> => {
     if (account.emailVerified && account.phoneVerified) return account;
-    const profile = sellerSession.isSignedIn()
-      ? await backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined).catch(() => null)
-      : null;
-    return (await applyServerVerification(profile)) ?? account;
+    if (!local) return (await syncServerVerification()) ?? account;
+    return (await applyServerVerification(await backendProfile())) ?? account;
   },
   /** The signed-in seller's server profile (GET /api/v1/auth/me), or null without a server session. */
   me: (): Promise<SellerProfileView | null> =>

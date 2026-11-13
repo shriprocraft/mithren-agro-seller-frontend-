@@ -255,6 +255,42 @@ export function createApp(config) {
     return { account: toAccountView(rowToAccount(userRowById(row.id))) };
   });
 
+  // Copies email/mobile verification from the FastAPI backend, which sends and checks the OTPs. The
+  // backend is asked directly with the seller's token, so the browser can't claim a verification.
+  route('POST', /^\/api\/auth\/sync-verification$/, async (req) => {
+    checkCsrf(req);
+    const { row } = requireUser(req);
+    const { accessToken } = await readJson(req);
+    if (typeof accessToken !== 'string' || !accessToken || accessToken.length > 4096) fail(422, 'Sign in again to continue.');
+    if (!config.backendUrl) fail(503, 'Verification server is not configured.');
+    let res;
+    try {
+      res = await fetch(`${config.backendUrl}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(8000) });
+    } catch {
+      fail(503, 'Can’t reach the verification server. Try again shortly.');
+    }
+    if (!res.ok) fail(res.status === 401 ? 401 : 502, 'Sign in again to continue.');
+    const profile = await res.json().catch(() => null);
+    const sameEmail = typeof profile?.email === 'string' && profile.email.toLowerCase() === row.email.toLowerCase();
+    const samePhone = typeof profile?.phone === 'string' && profile.phone === row.phone;
+    const now = new Date().toISOString();
+    const updates = [];
+    if (sameEmail && profile.email_verified === true && !row.email_verified_at) updates.push('email');
+    if (samePhone && profile.phone_verified === true && !row.phone_verified_at) updates.push('phone');
+    if (updates.length) {
+      store.transaction(() => {
+        for (const ch of updates) {
+          db.prepare(`UPDATE users SET ${ch === 'email' ? 'email_verified_at' : 'phone_verified_at'} = ? WHERE id = ?`).run(now, row.id);
+          db.prepare('DELETE FROM verification_codes WHERE user_id = ? AND channel = ?').run(row.id, ch);
+        }
+        const app = store.getApplicationByUser(row.id);
+        if (app) service.syncWorkspace(app);
+        for (const ch of updates) store.audit({ actorType: 'seller', actorId: row.id, action: `account.${ch}_verified`, applicationId: app?.id ?? null });
+      });
+    }
+    return { account: toAccountView(rowToAccount(userRowById(row.id))) };
+  });
+
   route('POST', /^\/api\/auth\/signin$/, async (req, res) => {
     checkCsrf(req);
     rateLimit(req, 'signin', config.rateLimits?.signin ?? 20, 15 * 60_000);
