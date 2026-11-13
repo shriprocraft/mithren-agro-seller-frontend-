@@ -3,7 +3,7 @@
 import type { Page } from '../router.js';
 import { navigate } from '../router.js';
 import { html, on, formValues } from '../ui/dom.js';
-import { field, callout, showFieldErrors } from '../ui/components.js';
+import { field, showFieldErrors } from '../ui/components.js';
 import * as api from '../api.js';
 
 const page: Page = ({ root, query }) => {
