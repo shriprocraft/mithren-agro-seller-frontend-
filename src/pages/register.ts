@@ -134,13 +134,82 @@ const page: Page = async ({ root, account: initialAccount }) => {
     }
   };
 
+  // ---------- Step 1 before the account exists: details with inline email and mobile OTPs ----------
+  // Name, email and mobile (never the passwords) and which of them were verified are kept for this
+  // browser tab, so an accidental reload doesn't lose them.
+  type Channel = 'email' | 'phone';
+  const STEP1_KEY = 'mithren.register.step1';
+  const normalize = (ch: Channel, value: string) =>
+    ch === 'email' ? value.trim().toLowerCase() : (/^(?:\+?91)?([6-9]\d{9})$/.exec(value.replace(/[\s-]/g, ''))?.[1] ?? '');
+  const valid = (ch: Channel, value: string) =>
+    ch === 'email' ? /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) : /^[6-9]\d{9}$/.test(value);
+  interface Step1State {
+    fullName: string;
+    email: string;
+    phone: string;
+    sentTo: Partial<Record<Channel, string>>;
+    verified: Partial<Record<Channel, string>>;
+  }
+  const step1: Step1State = (() => {
+    const empty: Step1State = { fullName: '', email: '', phone: '', sentTo: {}, verified: {} };
+    try {
+      return { ...empty, ...JSON.parse(sessionStorage.getItem(STEP1_KEY) ?? '{}') };
+    } catch {
+      return empty;
+    }
+  })();
+  const saveStep1 = () => {
+    try {
+      sessionStorage.setItem(STEP1_KEY, JSON.stringify(step1));
+    } catch {
+      /* storage unavailable: nothing is kept across reloads */
+    }
+  };
+  const isVerified = (ch: Channel) => !!step1.verified[ch] && step1.verified[ch] === normalize(ch, step1[ch]);
+  const isSent = (ch: Channel) => !!step1.sentTo[ch] && step1.sentTo[ch] === normalize(ch, step1[ch]);
+  const shown = (ch: Channel, value: string | undefined) => (ch === 'email' ? value ?? '' : `+91 ${value ?? ''}`);
+
+  const inlinePanel = (ch: Channel) => {
+    if (isVerified(ch)) {
+      return html`<div class="verify-row verified inline-otp" role="status">${icon('check', 16)} <span><strong>Your OTP verified successfully</strong><span class="muted small block">${ch === 'email' ? 'Email' : 'Mobile number'} · ${shown(ch, step1.verified[ch])}</span></span></div>`;
+    }
+    if (!isSent(ch)) return '';
+    return html`<div class="inline-otp">
+      ${field({ name: `${ch}Code`, label: `Enter the 6-digit OTP sent to ${shown(ch, step1.sentTo[ch])}`, placeholder: 'Enter the 6-digit OTP', attrs: 'inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*"' })}
+      <div class="row-wrap">
+        <button type="button" class="btn btn-sm btn-primary" data-inline-verify="${ch}">Verify</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-inline-send="${ch}">Resend OTP</button>
+      </div>
+      <p class="otp-timer small ${remaining(ch) > 0 ? 'muted' : 'error-text'}" data-otp-timer="${ch}" aria-live="off">${timerText(ch)}</p>
+    </div>`;
+  };
+
+  const contactField = (ch: Channel) => html`
+    <div class="otp-contact">
+      <div class="field-with-action">
+        ${ch === 'email'
+          ? field({ name: 'email', label: 'Email', type: 'email', required: true, value: step1.email, placeholder: 'Enter your email address', attrs: 'autocomplete="email" maxlength="120"' })
+          : field({ name: 'phone', label: 'Mobile number', type: 'tel', required: true, value: step1.phone, placeholder: 'Enter your 10-digit mobile number', attrs: 'autocomplete="tel" maxlength="16"' })}
+        <button type="button" class="btn btn-sm" data-inline-send="${ch}" ${isVerified(ch) ? raw('hidden') : ''}>${isSent(ch) ? 'Resend OTP' : 'Send OTP'}</button>
+      </div>
+      <div data-inline-panel="${ch}">${inlinePanel(ch)}</div>
+    </div>`;
+
+  // Updates just one channel's panel and button, so nothing typed elsewhere on the form is lost.
+  const refreshInline = (ch: Channel) => {
+    const panel = root.querySelector<HTMLElement>(`[data-inline-panel="${ch}"]`);
+    if (panel) panel.innerHTML = html`${inlinePanel(ch)}`.value;
+    const button = root.querySelector<HTMLButtonElement>(`.field-with-action [data-inline-send="${ch}"]`);
+    if (button) {
+      button.hidden = isVerified(ch);
+      button.textContent = isSent(ch) ? 'Resend OTP' : 'Send OTP';
+    }
+  };
+
   const stepCreateAccount = () => html`
-    <p class="muted">This creates a <strong>seller</strong> account. Admin accounts can’t be created through public registration.</p>
-    ${field({ name: 'fullName', label: 'Your full name', required: true, placeholder: 'Enter your full name', attrs: 'autocomplete="name" autofocus maxlength="80"' })}
-    <div class="row-2">
-      ${field({ name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'Enter your email address', hint: 'We’ll send a verification code.', attrs: 'autocomplete="email" maxlength="120"' })}
-      ${field({ name: 'phone', label: 'Mobile number', type: 'tel', required: true, placeholder: 'Enter your 10-digit mobile number', hint: 'Indian mobile number. We’ll send an OTP.', attrs: 'autocomplete="tel" maxlength="16"' })}
-    </div>
+    ${field({ name: 'fullName', label: 'Your full name', required: true, value: step1.fullName, placeholder: 'Enter your full name', attrs: 'autocomplete="name" autofocus maxlength="80"' })}
+    ${contactField('email')}
+    ${contactField('phone')}
     <div class="row-2">
       ${field({ name: 'password', label: 'Password', type: 'password', reveal: true, required: true, placeholder: 'Create a strong password', hint: 'At least 10 characters, with letters and numbers.', attrs: 'autocomplete="new-password" maxlength="200"' })}
       ${field({ name: 'password2', label: 'Confirm password', type: 'password', reveal: true, required: true, placeholder: 'Re-enter your password', attrs: 'autocomplete="new-password" maxlength="200"' })}
@@ -514,10 +583,20 @@ const page: Page = async ({ root, account: initialAccount }) => {
       if (pw.length < 10) errors.password = 'Use at least 10 characters.';
       else if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) errors.password = 'Use both letters and numbers.';
       else if (pw !== f.password2) errors.password2 = 'Passwords don’t match.';
+      if (!errors.email && !isVerified('email')) errors.email = 'Verify your email with the OTP first.';
+      if (!errors.phone && !isVerified('phone')) errors.phone = 'Verify your mobile number with the OTP first.';
       if (Object.keys(errors).length) return showError('Please fix the highlighted fields.', errors);
       return guarded(btn, 'Creating account…', async () => {
         account = await api.auth.signUp({ fullName: f.fullName!.trim(), email: f.email!.trim(), phone: f.phone!.trim(), password: pw });
-        toast('Account created. Check your email and phone for verification codes.');
+        // Both were verified inline above, so the new account starts verified.
+        await api.auth.markVerified('email');
+        account = await api.auth.markVerified('phone');
+        try {
+          sessionStorage.removeItem(STEP1_KEY);
+        } catch {
+          /* ignore */
+        }
+        toast('Account created. Your email and mobile number are verified.');
         // Re-render the whole portal so the header reflects the signed-in account.
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       });
@@ -547,6 +626,52 @@ const page: Page = async ({ root, account: initialAccount }) => {
     }),
   );
   on(root, 'click', '[data-goto]', (_e, el) => void guarded(null, '', () => goTo(Number(el.dataset.goto), false)));
+
+  // Step 1 inputs are remembered as they're typed; changing the email or mobile number after sending
+  // or verifying an OTP means verifying the new one.
+  on(root, 'input', 'form[data-role=step] input', (_e, el) => {
+    if (account) return;
+    const input = el as HTMLInputElement;
+    if (input.name === 'fullName' || input.name === 'email' || input.name === 'phone') {
+      step1[input.name] = input.value;
+      saveStep1();
+      if (input.name === 'email' || input.name === 'phone') refreshInline(input.name);
+    }
+  });
+  // guarded() puts the button's old label back when it finishes, so the labels are refreshed after it.
+  on(root, 'click', '[data-inline-send]', (_e, el) =>
+    void guarded(el as HTMLButtonElement, 'Sending…', async () => {
+      const ch = el.dataset.inlineSend as Channel;
+      const value = normalize(ch, step1[ch]);
+      if (!valid(ch, value)) {
+        const message = ch === 'email' ? 'Enter a valid email address.' : 'Enter a 10-digit Indian mobile number.';
+        return showError(message, { [ch]: message });
+      }
+      const r = await api.auth.sendCodeTo(ch, value);
+      step1.sentTo[ch] = value;
+      delete step1.verified[ch];
+      otpExpiresAt[ch] = Date.now() + r.expiresInSeconds * 1000;
+      saveStep1();
+      refreshInline(ch);
+      root.querySelector<HTMLInputElement>(`#f_${ch}Code`)?.focus();
+      toast(`OTP sent to your ${ch === 'email' ? 'email' : 'mobile number'}`);
+    }).then(() => refreshInline(el.dataset.inlineSend as Channel)),
+  );
+  on(root, 'click', '[data-inline-verify]', (_e, el) =>
+    void guarded(el as HTMLButtonElement, 'Checking…', async () => {
+      const ch = el.dataset.inlineVerify as Channel;
+      const code = ($(`#f_${ch}Code`, root) as HTMLInputElement).value.trim();
+      if (!/^\d{6}$/.test(code)) return showError('Enter the 6-digit OTP.', { [`${ch}Code`]: 'Enter the 6-digit OTP.' });
+      if (remaining(ch) === 0) return showError('This OTP has expired. Send a new one.', { [`${ch}Code`]: 'This OTP has expired. Send a new one.' });
+      await api.auth.verifyCodeFor(ch, step1.sentTo[ch]!, code);
+      step1.verified[ch] = step1.sentTo[ch];
+      delete otpExpiresAt[ch];
+      saveStep1();
+      refreshInline(ch);
+      $('.form-error', root)!.hidden = true;
+      toast('Your OTP verified successfully');
+    }).then(() => refreshInline(el.dataset.inlineVerify as Channel)),
+  );
 
   on(root, 'click', '[data-send]', (_e, el) =>
     void guarded(el as HTMLButtonElement, 'Sending…', async () => {

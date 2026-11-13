@@ -347,6 +347,96 @@ export function saveProduct(input: ProductInput, submit: boolean) {
   }, true);
 }
 
+/** A product as GET /api/v1/seller/me/products returns it (prices in paise). */
+export interface BackendCatalogProduct {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  price_paise: number;
+  stock: number;
+  images: string[];
+  is_active: boolean;
+  updated_at: string;
+  variants: {
+    label: string;
+    sku: string;
+    size: string | null;
+    pack_size: string | number | null;
+    unit: string | null;
+    price_paise: number;
+    mrp_paise: number | null;
+    stock: number;
+  }[];
+}
+
+/**
+ * Brings the seller's products saved on the backend (Neon) into this browser's list, so they show
+ * on any device, address or after the browser's data is cleared. Matched by backendId: existing
+ * products get the backend's name, description, category, photos and variants; missing ones are
+ * added (active ones as pending review, inactive ones as drafts). Portal-only fields are kept.
+ */
+export function syncBackendProducts(items: BackendCatalogProduct[]) {
+  return call(() => {
+    const s = me();
+    let added = 0;
+    for (const b of items) {
+      const existing = db.products.find((p) => p.sellerId === s.id && p.backendId === b.id);
+      const source = b.variants.length
+        ? b.variants
+        : [{ label: 'Standard', sku: '', size: null, pack_size: null, unit: null, price_paise: b.price_paise, mrp_paise: null, stock: b.stock }];
+      const variants: Variant[] = source.map((v) => ({
+        id: existing?.variants.find((x) => x.sku && x.sku === v.sku)?.id ?? uid('v'),
+        label: v.label,
+        sku: v.sku,
+        packSize: v.pack_size == null ? 1 : Number(v.pack_size),
+        unit: (v.unit ?? 'piece') as Variant['unit'],
+        price: v.price_paise / 100,
+        ...(v.mrp_paise != null ? { mrp: v.mrp_paise / 100 } : {}),
+        stock: v.stock,
+        ...(v.size ? { size: v.size as Variant['size'] } : {}),
+      }));
+      if (existing) {
+        Object.assign(existing, {
+          name: b.title,
+          description: b.description ?? existing.description,
+          category: b.category,
+          images: b.images,
+          variants,
+          updatedAt: b.updated_at > existing.updatedAt ? b.updated_at : existing.updatedAt,
+        });
+      } else {
+        db.products.unshift({
+          id: uid('p'),
+          sellerId: s.id,
+          name: b.title,
+          slug: slugify(b.title),
+          description: b.description ?? '',
+          category: b.category,
+          emoji: '📦',
+          variants,
+          origin: '',
+          seasonality: 'year_round',
+          seasonMonths: [],
+          storage: '',
+          organicClaim: 'none',
+          status: b.is_active ? 'pending' : 'draft',
+          available: true,
+          minQty: 1,
+          maxQty: 10,
+          lowStockThreshold: 10,
+          archived: false,
+          updatedAt: b.updated_at,
+          backendId: b.id,
+          images: b.images,
+        });
+        added += 1;
+      }
+    }
+    return { synced: items.length, added };
+  }, true);
+}
+
 export function setProductAvailability(id: string, available: boolean) {
   return call(() => {
     requireApproved('change availability');

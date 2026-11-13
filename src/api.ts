@@ -77,7 +77,37 @@ function rpc<K extends RpcName>(name: K): (typeof core)[K] {
 // ---------- business API ----------
 export const getSeller = rpc('getSeller');
 export const updateSeller = rpc('updateSeller');
-export const listProducts = rpc('listProducts');
+const listLocalProducts = rpc('listProducts');
+let productsSyncedAt = 0;
+/**
+ * The seller's products saved on the backend (Neon), merged into this browser's list before listing,
+ * so they appear on any device or address and after the browser's data is cleared. At most every 15 s;
+ * without a server session (or before Step 2, when there is no shop) the local list is used as is.
+ */
+async function syncProductsFromBackend(): Promise<void> {
+  if (REMOTE || !sellerSession.isSignedIn() || Date.now() - productsSyncedAt < 15_000) return;
+  productsSyncedAt = Date.now();
+  try {
+    const items: core.BackendCatalogProduct[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await backendRequest<{ items: core.BackendCatalogProduct[]; total: number }>(
+        'GET',
+        `seller/me/products?limit=100&offset=${offset}`,
+        undefined,
+        () => undefined,
+      );
+      items.push(...page.items);
+      if (items.length >= page.total || page.items.length === 0) break;
+    }
+    await core.syncBackendProducts(items);
+  } catch {
+    productsSyncedAt = 0; // offline or no shop yet: try again next time
+  }
+}
+export const listProducts: typeof listLocalProducts = (async (...args: Parameters<typeof listLocalProducts>) => {
+  await syncProductsFromBackend();
+  return listLocalProducts(...args);
+}) as typeof listLocalProducts;
 export const getProduct = rpc('getProduct');
 export const saveProduct = rpc('saveProduct');
 export const setProductAvailability = rpc('setProductAvailability');
@@ -340,7 +370,7 @@ async function sendWithRefresh(method: string, path: string, body: unknown): Pro
   }
 }
 
-async function backendRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
+async function backendRequest<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body: unknown, fieldFor: FieldFor): Promise<T> {
   const res = await sendWithRefresh(method, path, body);
   if (res.status === 204) return undefined as T;
   const json = (await res.json().catch(() => null)) as { detail?: unknown } | null;
@@ -599,6 +629,18 @@ export const auth = {
     );
     return { expiresInSeconds: r.expiresInSeconds ?? 600 };
   },
+  /** Step 1, before the account exists: send an OTP to the email or mobile number typed in the form. */
+  sendCodeTo: async (channel: 'email' | 'phone', destination: string): Promise<{ expiresInSeconds: number }> => {
+    const r = await otpPost<{ expiresInSeconds?: number }>(channel, 'send', { [channel]: destination });
+    return { expiresInSeconds: r.expiresInSeconds ?? 600 };
+  },
+  /** Step 1, before the account exists: check the OTP for that email or mobile number. */
+  verifyCodeFor: async (channel: 'email' | 'phone', destination: string, code: string): Promise<void> => {
+    await otpPost(channel, 'verify', { [channel]: destination, code });
+  },
+  /** Records that the signed-in account's email or mobile number was verified (inline, before sign-up). */
+  markVerified: (channel: 'email' | 'phone'): Promise<AccountView> =>
+    local ? local.localAuth.markVerified(channel) : http<{ account: AccountView }>('POST', '/api/auth/verify', { channel }).then((r) => r.account),
   verifyCode: async (channel: 'email' | 'phone', code: string): Promise<AccountView> => {
     if (!local) return http<{ account: AccountView }>('POST', '/api/auth/verify', { channel, code }).then((r) => r.account);
     await otpPost(channel, 'verify', channel === 'email' ? { email: await currentEmail(), code } : { phone: await currentPhone(), code });
@@ -703,10 +745,51 @@ export const auth = {
 };
 
 // ---------- seller application ----------
+interface ServerDraft {
+  current_step: number;
+  data: Record<string, unknown>;
+  updated_at: string;
+}
+
+/** Saves the wizard's progress on the backend too (best effort), so it survives cleared browser data. */
+async function saveServerDraft(view: ApplicationView): Promise<void> {
+  if (!sellerSession.isSignedIn() || !view.editable) return;
+  const step = Math.min(8, Math.max(1, view.currentStep));
+  await backendRequest('PUT', 'seller/registration-draft', { current_step: step, data: view.data }, () => undefined).catch(() => undefined);
+}
+
 export const application = {
-  get: (): Promise<ApplicationView> => (local ? local.localApplication.get() : http('GET', '/api/application')),
-  saveDraft: (data: unknown, nextStep: number, validateStep: number | null): Promise<ApplicationView> =>
-    local ? local.localApplication.saveDraft(data, nextStep, validateStep) : http('PUT', '/api/application', { data, nextStep, validateStep }),
+  /**
+   * The application in this browser. When the backend has newer progress (another device, or this
+   * browser's data was cleared), it is restored into this browser first.
+   */
+  get: async (): Promise<ApplicationView> => {
+    if (!local) return http('GET', '/api/application');
+    const view = await local.localApplication.get();
+    if (!sellerSession.isSignedIn() || !view.editable) return view;
+    try {
+      const remote = await backendRequest<ServerDraft>('GET', 'seller/registration-draft', undefined, () => undefined);
+      // A copy this browser has never saved (just recreated after its data was cleared) always yields to the server's.
+      const pristine = Date.parse(view.updatedAt) <= Date.parse(view.createdAt);
+      const newer = pristine || Date.parse(remote.updated_at) > Date.parse(view.updatedAt) || remote.current_step > view.currentStep;
+      if (newer) {
+        return await local.localApplication.saveDraft(
+          { ...(view.data as unknown as Record<string, unknown>), ...remote.data },
+          Math.max(remote.current_step, view.currentStep),
+          null,
+        );
+      }
+    } catch {
+      /* nothing saved on the server yet, or offline: keep this browser's copy */
+    }
+    return view;
+  },
+  saveDraft: async (data: unknown, nextStep: number, validateStep: number | null): Promise<ApplicationView> => {
+    if (!local) return http('PUT', '/api/application', { data, nextStep, validateStep });
+    const view = await local.localApplication.saveDraft(data, nextStep, validateStep);
+    await saveServerDraft(view);
+    return view;
+  },
   saveBank: (input: BankInput): Promise<ApplicationView> => (local ? local.localApplication.saveBank(input) : http('PUT', '/api/application/bank', input)),
   uploadDocument: (kind: ApplicationDocKind, file: File, cert?: Record<string, string>): Promise<ApplicationView> => {
     if (local) return local.localApplication.uploadDocument(kind, file, cert);
