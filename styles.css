@@ -231,6 +231,9 @@ code {
 }
 .brand-inline {
   padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
 }
 .brand img {
   display: block;
@@ -242,6 +245,9 @@ code {
   align-items: flex-start;
   gap: 2px;
   padding: 0 8px 10px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
 }
 .brand-logo span,
 .brand-inline span {

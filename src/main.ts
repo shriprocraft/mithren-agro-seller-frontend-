@@ -69,6 +69,17 @@ const PUBLIC_PATHS = ['/seller/sign-in', '/seller/login', '/seller/register'];
 /** Placeholder for the shell while nobody is signed in (no seller data is shown). */
 const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2e7d32', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
 
+/** Map backend approval_status to frontend seller status. */
+function mapSellerStatus(profile: any): Partial<Seller> {
+  // Handle backend response: map approval_status → status
+  const status = profile.approval_status ? profile.approval_status : profile.status;
+  return {
+    ...profile,
+    shopName: profile.shop_name || profile.shopName,
+    status: status || 'incomplete',
+  };
+}
+
 /** The header shows the shop's name once Step 2 has one, otherwise the account holder's name. */
 function headerName(seller: Pick<Seller, 'shopName'>, account: Pick<AccountView, 'fullName'>): string {
   return seller.shopName.trim() || api.sellerSession.shopName().trim() || account.fullName.trim() || 'Account';
@@ -81,10 +92,10 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
       ${bare
         ? ''
         : html`<aside class="sidebar" id="sidebar" aria-label="Seller navigation">
-            <div class="brand brand-logo">
+            <a href="#/seller" class="brand brand-logo" title="Home">
               <img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="168" height="70" />
               <span>Seller Portal</span>
-            </div>
+            </a>
             <nav>
               ${NAV.map(
                 (g) => html`<div class="nav-group">
@@ -105,7 +116,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
           <div class="scrim" data-action="close-nav" hidden></div>`}
       <div class="main-col">
         <header class="topbar">
-          ${bare ? html`<div class="brand brand-inline"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="36" /><span>Seller Portal</span></div>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
+          ${bare ? html`<a href="#/seller" class="brand brand-inline" title="Home"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="36" /><span>Seller Portal</span></a>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
           ${account
             ? html`<div class="topbar-shop">
                 <span class="shop-avatar" style="background:${seller.brandColor}" aria-hidden="true">${(seller.shopName || account.fullName).slice(0, 1)}</span>
@@ -185,7 +196,10 @@ async function render() {
   let seller: Seller = GUEST;
   try {
     account = await api.auth.current();
-    if (account) seller = await api.getSeller();
+    if (account) {
+      const profile = await api.getSeller();
+      seller = { ...GUEST, ...mapSellerStatus(profile) } as Seller;
+    }
   } catch (e) {
     if (e instanceof api.ApiError && e.status === 401) account = null;
     else {
@@ -232,7 +246,11 @@ async function render() {
     const fresh = document.createElement('div');
     fresh.className = 'page';
     const newAccount = await api.auth.current();
-    const newSeller = newAccount ? await api.getSeller() : GUEST;
+    let newSeller = GUEST;
+    if (newAccount) {
+      const profile = await api.getSeller();
+      newSeller = { ...GUEST, ...mapSellerStatus(profile) } as Seller;
+    }
     const c2: PageContext = { ...ctx, root: fresh, seller: newSeller, account: newAccount, query: currentLocation().query };
     try {
       await page(c2);
