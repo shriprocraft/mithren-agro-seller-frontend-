@@ -550,6 +550,8 @@ export interface SellerProfileView {
   full_name: string;
   email: string;
   phone: string;
+  email_verified: boolean;
+  phone_verified: boolean;
   seller_id: string | null;
   shop_name: string | null;
   approval_status: string | null;
@@ -621,7 +623,6 @@ export const auth = {
    * the seller reads it from their inbox or phone. Resolves to how long the code lasts.
    */
   sendCode: async (channel: 'email' | 'phone'): Promise<{ expiresInSeconds: number }> => {
-    if (!local) return http('POST', '/api/auth/send-code', { channel });
     const r = await otpPost<{ expiresInSeconds?: number }>(
       channel,
       'send',
@@ -639,12 +640,37 @@ export const auth = {
     await otpPost(channel, 'verify', { [channel]: destination, code });
   },
   /** Records that the signed-in account's email or mobile number was verified (inline, before sign-up). */
-  markVerified: (channel: 'email' | 'phone'): Promise<AccountView> =>
-    local ? local.localAuth.markVerified(channel) : http<{ account: AccountView }>('POST', '/api/auth/verify', { channel }).then((r) => r.account),
+  markVerified: async (channel: 'email' | 'phone'): Promise<AccountView> => {
+    if (local) return local.localAuth.markVerified(channel);
+    // Server mode: fetch updated account from backend
+    const me = await backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined);
+    return {
+      userId: me.user_id,
+      sellerId: me.seller_id || '',
+      fullName: me.full_name,
+      email: me.email,
+      phoneMasked: `+91 •••••• ${me.phone.slice(-4)}`,
+      emailVerified: me.email_verified,
+      phoneVerified: me.phone_verified,
+    };
+  },
   verifyCode: async (channel: 'email' | 'phone', code: string): Promise<AccountView> => {
-    if (!local) return http<{ account: AccountView }>('POST', '/api/auth/verify', { channel, code }).then((r) => r.account);
+    if (local) {
+      await otpPost(channel, 'verify', channel === 'email' ? { email: await currentEmail(), code } : { phone: await currentPhone(), code });
+      return local.localAuth.markVerified(channel);
+    }
+    // Server mode: verify with backend and fetch updated account
     await otpPost(channel, 'verify', channel === 'email' ? { email: await currentEmail(), code } : { phone: await currentPhone(), code });
-    return local.localAuth.markVerified(channel);
+    const me = await backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined);
+    return {
+      userId: me.user_id,
+      sellerId: me.seller_id || '',
+      fullName: me.full_name,
+      email: me.email,
+      phoneMasked: `+91 •••••• ${me.phone.slice(-4)}`,
+      emailVerified: me.email_verified,
+      phoneVerified: me.phone_verified,
+    };
   },
   /**
    * Signs in to the FastAPI backend, then the portal. The preview demo account, and accounts made

@@ -7,15 +7,12 @@ import type {
   CommissionRule,
   InventoryAdjustment,
   LedgerEntry,
-  OrderItem,
-  OrderStatus,
   PayoutRequest,
   Product,
   Review,
   Seller,
   SellerDocument,
   Settlement,
-  StatusEvent,
   SubOrder,
 } from '../types.js';
 
@@ -41,14 +38,6 @@ export const DB_VERSION = 7;
 export const SELLER_A = 's_demo_a';
 export const SELLER_B = 's_demo_b';
 const DAY = 86_400_000;
-
-function rng(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 2 ** 32;
-  };
-}
 
 export const COMMISSION_RULES: CommissionRule[] = [
   { category: 'Fruits', ratePct: 8 },
@@ -79,112 +68,9 @@ export function createSeed(now = new Date()): DB {
   const products: Product[] = [];
 
   // ---- Orders ----
-  const r = rng(20261024);
-  const firstNames = ['Priya', 'Arjun', 'Meera', 'Karan', 'Sneha', 'Rohan', 'Isha', 'Aditya', 'Neha', 'Siddharth', 'Pooja', 'Varun', 'Tanvi', 'Nikhil',
-    'Ananya', 'Rahul', 'Kavya', 'Vikram', 'Shruti', 'Aniket', 'Gauri', 'Omkar', 'Farah', 'Joseph', 'Harpreet', 'Lakshmi', 'Imran', 'Rutuja', 'Devika', 'Sameer'];
-  const areas = sellers[0]!.serviceAreas;
-  // Out-of-season or out-of-stock items still appear in older orders.
-  const sellable = products.filter((p) => p.sellerId === SELLER_A && ['approved'].includes(p.status) && p.id !== 'p_papaya');
+  // Orders are empty - demo data removed. Users will create orders through transactions.
   const orders: SubOrder[] = [];
-  const pick = <T,>(arr: T[]) => arr[Math.floor(r() * arr.length)]!;
 
-  const flow: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit', 'delivered'];
-  const actorFor = (s: OrderStatus) =>
-    s === 'awaiting_confirmation' ? 'Customer checkout' : s === 'in_transit' || s === 'delivered' ? 'Delivery partner' : 'Ananya K. (seller)';
-
-  for (let i = 0; i < 260; i++) {
-    // The newest few orders are pinned so there is always a live queue to work through.
-    const recentMins = [18, 52, 150, 290, 470, 1050];
-    const randomAge = Math.floor(Math.pow(r(), 1.25) * 88 * DAY) + 20 * 60_000;
-    const ageMs = i < recentMins.length ? recentMins[i]! * 60_000 : randomAge;
-    const placed = t - ageMs;
-    const nItems = 1 + Math.floor(r() * 3);
-    const items: OrderItem[] = [];
-    const used = new Set<string>();
-    for (let k = 0; k < nItems; k++) {
-      const p = pick(sellable);
-      if (used.has(p.id)) continue;
-      used.add(p.id);
-      const vr = pick(p.variants);
-      items.push({ productId: p.id, variantId: vr.id, name: p.name, variantLabel: vr.label, sku: vr.sku, qty: 1 + Math.floor(r() * 3), unitPrice: vr.price });
-    }
-    const subtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
-    const discount = r() < 0.3 ? Math.round(subtotal * 0.1) : 0;
-
-    let status: OrderStatus;
-    const ageH = ageMs / 3_600_000;
-    if (ageH < 1.5) status = 'awaiting_confirmation';
-    else if (ageH < 4) status = pick(['accepted', 'packed', 'awaiting_confirmation']);
-    else if (ageH < 10) status = pick(['packed', 'ready_for_pickup', 'in_transit']);
-    else if (ageH < 24) status = pick(['in_transit', 'delivered', 'delivered']);
-    else {
-      const x = r();
-      status = x < 0.84 ? 'delivered' : x < 0.91 ? 'cancelled' : x < 0.95 ? 'rejected' : x < 0.975 ? 'returned' : 'return_requested';
-    }
-    if (status === 'return_requested' && ageMs > 9 * DAY) status = 'returned';
-
-    const history: StatusEvent[] = [];
-    let at = placed;
-    const terminalIndex = flow.indexOf(status);
-    const pushStep = (s: OrderStatus, note?: string) => {
-      history.push({ status: s, at: new Date(at).toISOString(), actor: actorFor(s), ...(note ? { note } : {}) });
-      at += (15 + r() * 90) * 60_000;
-    };
-    let reason: string | undefined;
-    if (terminalIndex >= 0) {
-      for (let k = 0; k <= terminalIndex; k++) pushStep(flow[k]!);
-    } else if (status === 'cancelled') {
-      pushStep('awaiting_confirmation');
-      pushStep('accepted');
-      reason = pick(['Customer cancelled before packing', 'Delivery slot unavailable']);
-      pushStep('cancelled', reason);
-    } else if (status === 'rejected') {
-      pushStep('awaiting_confirmation');
-      reason = pick(['Item out of stock at harvest', 'Outside service hours']);
-      pushStep('rejected', reason);
-    } else {
-      for (const s of flow) pushStep(s);
-      reason = pick(['Bruised fruit on arrival', 'Wrong variant delivered']);
-      pushStep('return_requested', reason);
-      if (status === 'returned') pushStep('returned', 'Return approved by platform support');
-    }
-
-    const online = r() < 0.75;
-    const refunded = status === 'cancelled' || status === 'rejected' || status === 'returned';
-    orders.push({
-      id: `SO-${(48210 + i).toString()}-GV`,
-      parentOrderId: `ORD-${(48210 + i).toString()}`,
-      sellerId: SELLER_A,
-      placedAt: new Date(placed).toISOString(),
-      deliverySlot: pick(['7–9 AM', '9–11 AM', '5–7 PM', '7–9 PM']),
-      customer: {
-        firstName: pick(firstNames),
-        area: pick(areas),
-        phoneMasked: `+91 •••••• ${Math.floor(1000 + r() * 8999)}`,
-        address: `Flat ${Math.floor(101 + r() * 900)}, ${pick(['Sai Residency', 'Green Meadows', 'Lotus Towers', 'Palm Grove', 'Kumar Pebble Park', 'Nyati Elysia', 'Rohan Mithila', 'Paranjape Gulmohar', 'Kalpataru Splendour', 'Sukhwani Coronet'])}`,
-        ...(r() < 0.3 ? { instructions: pick(['Leave with security', 'Call on arrival', 'No plastic bags please', 'Ring the bell twice', 'Deliver after 6 PM', 'Don’t call, use the intercom']) } : {}),
-      },
-      items,
-      discountAllocation: discount,
-      deliveryAdjustment: r() < 0.2 ? -20 : 0,
-      status,
-      paymentMethod: online ? 'online' : 'cod',
-      paymentStatus: refunded ? (online ? 'refunded' : 'refunded') : status === 'return_requested' ? 'refund_pending' : online || status === 'delivered' ? 'paid' : 'cod_pending',
-      history,
-      ...(reason ? { reason } : {}),
-      otherSellerCount: r() < 0.35 ? 1 + Math.floor(r() * 2) : 0,
-    });
-  }
-  orders.sort((a, b) => b.placedAt.localeCompare(a.placedAt));
-
-  // A couple of Seller B orders for isolation checks
-  orders.push({
-    id: 'SO-48300-SR', parentOrderId: 'ORD-48300', sellerId: SELLER_B, placedAt: iso(2 * 3_600_000), deliverySlot: '5–7 PM',
-    customer: { firstName: 'Kavya', area: 'Wakad', phoneMasked: '+91 •••••• 4410', address: 'Flat 22, Blue Ridge' },
-    items: [{ productId: 'p_sr_kale', variantId: 'v1', name: 'Curly Kale', variantLabel: '200 g', sku: 'SR-KAL-200', qty: 2, unitPrice: 120 }],
-    discountAllocation: 0, deliveryAdjustment: 0, status: 'accepted', paymentStatus: 'paid', paymentMethod: 'online',
-    history: [{ status: 'awaiting_confirmation', at: iso(2 * 3_600_000), actor: 'Customer checkout' }], otherSellerCount: 1,
-  });
 
   // ---- Ledger & settlements ----
   const rateFor = (cat: string) => COMMISSION_RULES.find((c) => c.category === cat)?.ratePct ?? 8;
@@ -247,77 +133,7 @@ export function createSeed(now = new Date()): DB {
   ];
 
   // ---- Reviews ----
-  // [rating, title, body, product the review is about (null: whatever the order contained)]
-  const reviewTexts: [number, string, string, string | null][] = [
-    [5, 'Oranges were juicy', 'Sweet and easy to peel. My kids finished the box in two days.', 'p_orange'],
-    [4, 'Good pomegranates', 'Seeds were deep red and sweet. One fruit was slightly dry inside.', 'p_pomegranate'],
-    [5, 'Methi was spotless', 'No mud, no yellow leaves. Made lovely theplas.', 'p_methi'],
-    [5, 'Fragrant curry leaves', 'Still fresh after a week in the fridge.', 'p_curry'],
-    [3, 'Broccoli was small', 'Tasted fine but the 250 g pack had small florets.', 'p_broccoli'],
-    [5, 'Strawberries!', 'Sweetest strawberries we’ve had this season. Not a single squashed one.', 'p_strawberry'],
-    [4, 'Nice cauliflower', 'Clean and fresh. Would love a smaller size option.', 'p_cauliflower'],
-    [2, 'Mint wilted quickly', 'It was limp by the next morning even though I refrigerated it.', 'p_mint'],
-    [5, 'Consistent quality', 'Third month ordering weekly. Packaging is always neat and plastic-free.', null],
-    [4, 'Sweet potatoes', 'Creamy and sweet when roasted. A couple were small.', 'p_sweetpotato'],
-    [5, 'Great for sambar', 'Drumsticks were tender and long. Exactly what I wanted.', 'p_drumstick'],
-    [1, 'Wrong item delivered', 'Received bottle gourd instead of brinjal. Support resolved it the same day though.', 'p_brinjal'],
-    [5, 'Cherry tomatoes are addictive', 'Sweet and firm. Half the box was gone before dinner.', 'p_cherrytomato'],
-    [4, 'Fresh amaranth', 'Lovely colour, a little sand on the roots.', 'p_amaranth'],
-    [5, 'Guava with crunch', 'Just the way I like them — crisp, not overripe.', 'p_guava'],
-    [3, 'Delivery slot missed', 'Arrived 40 minutes late, but the produce itself was excellent.', null],
-    [5, 'Loved the packaging', 'Paper bags and cloth ties. Zero plastic. Thank you!', null],
-    [4, 'Bharta brinjals', 'Big and smoky after roasting. Good value.', 'p_brinjal'],
-    [5, 'Organic and tasty', 'You can taste the difference in the heirloom tomatoes.', 'p_tomato'],
-    [4, 'Good bottle gourd', 'Tender with very few seeds.', 'p_bottlegourd'],
-    [5, 'Best mangoes this season', 'Sweet, fragrant and perfectly ripe. Packed beautifully.', 'p_alphonso'],
-    [5, 'Super fresh spinach', 'Lasted almost a week in the fridge. No yellow leaves.', 'p_spinach'],
-    [4, 'Good tomatoes', 'Great flavour, a couple were slightly soft.', 'p_tomato'],
-    [5, 'Coriander smells amazing', 'You can tell it was picked the same day.', 'p_coriander'],
-    [3, 'Bananas were unripe', 'Took 4 days to ripen. Taste was fine eventually.', 'p_banana'],
-    [5, 'Reliable every week', 'Have ordered 10+ times. Always on time.', null],
-    [2, 'Okra was fibrous', 'Half the okra was too mature to cook.', 'p_okra'],
-    [4, 'Nice carrots', 'Sweet and crunchy, would buy again.', 'p_carrot'],
-    [5, 'Basil for pesto', 'Very aromatic, made great pesto.', 'p_basil'],
-    [4, 'Fresh but small bunch', 'Quality is good, quantity could be better.', 'p_methi'],
-    [1, 'Late delivery', 'Arrived 2 hours after slot. Greens had wilted.', null],
-    [5, 'Lovely heirloom mix', 'The colours and flavours are fantastic.', 'p_tomato'],
-  ];
-  const delivered = orders.filter((o) => o.sellerId === SELLER_A && o.status === 'delivered');
-  const used = new Set<string>();
-  const reviews: Review[] = reviewTexts.map(([rating, title, body, productId], i) => {
-    // A delivered order that actually contains the reviewed product (one review per order).
-    const o =
-      delivered.find((x) => !used.has(x.id) && (!productId || x.items.some((it) => it.productId === productId)) && new Date(x.placedAt).getTime() < t - 3 * DAY) ??
-      delivered.find((x) => !used.has(x.id))!;
-    used.add(o.id);
-    const placed = new Date(o.placedAt).getTime();
-    const reviewedAt = Math.min(placed + 2 * DAY, t - 6 * 3_600_000);
-    return {
-      id: `rv${i + 1}`,
-      sellerId: SELLER_A,
-      productId: productId && o.items.some((it) => it.productId === productId) ? productId : o.items[0]!.productId,
-      subOrderId: o.id,
-      rating,
-      title,
-      body,
-      customerFirstName: o.customer.firstName,
-      date: new Date(reviewedAt).toISOString(),
-      ...(rating <= 3 || i % 4 === 0
-        ? {
-            reply: {
-              body:
-                rating <= 2
-                  ? 'We’re sorry about this. We’ve shared it with our packing team and issued a credit to your account. Please write to us if anything else goes wrong.'
-                  : rating === 3
-                    ? 'Thanks for the honest feedback — we’re adjusting harvest timing and grading so this doesn’t happen again.'
-                    : 'Thank you! It means a lot to our farm team.',
-              at: new Date(Math.min(reviewedAt + DAY, t - 3_600_000)).toISOString(),
-            },
-          }
-        : {}),
-    };
-  });
-  reviews.push({ id: 'rv_sr1', sellerId: SELLER_B, productId: 'p_sr_kale', subOrderId: 'SO-48300-SR', rating: 4, title: 'Crisp kale', body: 'Good.', customerFirstName: 'Kavya', date: iso(1 * DAY) });
+  const reviews: Review[] = [];
 
   // ---- Documents ----
   const documents: SellerDocument[] = [
