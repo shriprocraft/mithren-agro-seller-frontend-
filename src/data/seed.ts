@@ -17,7 +17,6 @@ import type {
   Settlement,
   StatusEvent,
   SubOrder,
-  Variant,
 } from '../types.js';
 
 export interface DB {
@@ -66,27 +65,6 @@ export const COMMISSION_RULES: CommissionRule[] = [
 
 export const CATEGORIES = COMMISSION_RULES.map((r) => r.category);
 
-const defaultHours = (): Seller['workingHours'] =>
-  (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const).map((day) => ({
-    day,
-    open: '07:00',
-    close: day === 'Sat' ? '14:00' : '19:00',
-    closed: day === 'Sun',
-  }));
-
-const defaultNotifications = (): Seller['notifications'] => ({
-  new_order: { email: true, sms: true, push: true },
-  order_update: { email: false, sms: false, push: true },
-  moderation: { email: true, sms: false, push: true },
-  settlement: { email: true, sms: false, push: false },
-  low_stock: { email: true, sms: false, push: true },
-  support: { email: true, sms: false, push: false },
-});
-
-function v(id: string, label: string, sku: string, packSize: number, unit: Variant['unit'], price: number, stock: number, mrp?: number): Variant {
-  return { id, label, sku, packSize, unit, price, stock, ...(mrp ? { mrp } : {}) };
-}
-
 export function createSeed(now = new Date()): DB {
   const t = now.getTime();
   const iso = (msAgo: number) => new Date(t - msAgo).toISOString();
@@ -98,70 +76,7 @@ export function createSeed(now = new Date()): DB {
 
   // Products array is empty - demo sellers have been removed.
   // Users will add their products after registration.
-  const products: Product[] = [ name: 'Baby Spinach', slug: 'baby-spinach', category: 'Leafy Greens', emoji: '🥬', description: 'Tender baby spinach leaves, triple washed.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate at 2–4 °C. Best within 3 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 15,
-      variants: [v('v1', '250 g', 'GV-SPN-250', 250, 'g', 59, 8), v('v2', '500 g', 'GV-SPN-500', 500, 'g', 109, 4)] }),
-    P({ id: 'p_tomato', name: 'Heirloom Tomatoes', slug: 'heirloom-tomatoes', category: 'Vegetables', emoji: '🍅', description: 'Mixed heirloom varieties — Cherokee Purple, Brandywine and local desi.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Keep at room temperature, away from sunlight.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 12,
-      variants: [v('v1', '500 g', 'GV-TOM-500', 500, 'g', 89, 64), v('v2', '1 kg', 'GV-TOM-1K', 1, 'kg', 169, 31, 189)] }),
-    P({ id: 'p_coriander', name: 'Fresh Coriander', slug: 'fresh-coriander', category: 'Herbs', emoji: '🌿', description: 'Fragrant coriander bunches with roots on.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Wrap roots in damp cloth and refrigerate.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 20,
-      variants: [v('v1', '1 bunch', 'GV-COR-1B', 1, 'bunch', 25, 0)] }),
-    P({ id: 'p_banana', name: 'Elaichi Banana', slug: 'elaichi-banana', category: 'Fruits', emoji: '🍌', description: 'Small, sweet cardamom bananas.', origin: 'Jalgaon, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Hang at room temperature.', organicClaim: 'in_conversion', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '6 pieces', 'GV-BAN-6P', 6, 'piece', 69, 55), v('v2', '12 pieces', 'GV-BAN-12P', 12, 'piece', 129, 22)] }),
-    P({ id: 'p_carrot', name: 'Ooty Carrots', slug: 'ooty-carrots', category: 'Root Vegetables', emoji: '🥕', description: 'Crunchy, sweet carrots.', origin: 'Nilgiris, Tamil Nadu', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate in a breathable bag up to 2 weeks.', organicClaim: 'none', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '500 g', 'GV-CAR-500', 500, 'g', 49, 80), v('v2', '1 kg', 'GV-CAR-1K', 1, 'kg', 92, 40)] }),
-    P({ id: 'p_okra', name: 'Tender Okra', slug: 'tender-okra', category: 'Vegetables', emoji: '🫛', description: 'Young okra pods, picked before they turn fibrous.', origin: 'Mulshi, Pune', seasonality: 'seasonal', seasonMonths: [6, 7, 8, 9, 10], storage: 'Refrigerate dry, use within 3 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '250 g', 'GV-OKR-250', 250, 'g', 39, 9), v('v2', '500 g', 'GV-OKR-500', 500, 'g', 72, 26)] }),
-    P({ id: 'p_basil', name: 'Italian Basil', slug: 'italian-basil', category: 'Herbs', emoji: '🌱', description: 'Genovese basil, great for pesto.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Keep stems in water at room temperature.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 8,
-      variants: [v('v1', '100 g', 'GV-BSL-100', 100, 'g', 79, 18)] }),
-    P({ id: 'p_papaya', name: 'Red Lady Papaya', slug: 'red-lady-papaya', category: 'Fruits', emoji: '🍈', description: 'Sweet, deep-orange flesh.', origin: 'Satara, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Ripen at room temperature.', organicClaim: 'none', status: 'inactive', available: false, lowStockThreshold: 5,
-      variants: [v('v1', '1 piece (~1.2 kg)', 'GV-PAP-1P', 1, 'piece', 119, 0)] }),
-    P({ id: 'p_avocado', name: 'Hass Avocado', slug: 'hass-avocado', category: 'Exotic', emoji: '🥑', description: 'Creamy Hass avocados.', origin: 'Coorg, Karnataka', seasonality: 'seasonal', seasonMonths: [7, 8, 9, 10, 11], storage: 'Ripen at room temperature, refrigerate when soft.', organicClaim: 'certified', status: 'rejected', moderationNote: 'Certified organic claim needs a certificate that covers Coorg-sourced produce. Your uploaded certificate scope is limited to the Mulshi farm cluster. Either upload the supplier’s certificate or change the claim to “No organic claim”.', lowStockThreshold: 5,
-      variants: [v('v1', '2 pieces', 'GV-AVO-2P', 2, 'piece', 299, 20)] }),
-    P({ id: 'p_beet', name: 'Beetroot', slug: 'beetroot', category: 'Root Vegetables', emoji: '🫜', description: 'Earthy, sweet beetroot with greens.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate, greens separately.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'pending', lowStockThreshold: 10,
-      variants: [v('v1', '500 g', 'GV-BET-500', 500, 'g', 45, 50)] }),
-    P({ id: 'p_microgreens', name: 'Sunflower Microgreens', slug: 'sunflower-microgreens', category: 'Leafy Greens', emoji: '🌻', description: 'Draft — description to be written.', origin: '', seasonality: 'year_round', seasonMonths: [], storage: '', organicClaim: 'none', status: 'draft', lowStockThreshold: 5,
-      variants: [v('v1', '100 g', 'GV-MCG-100', 100, 'g', 99, 0)] }),
-    P({ id: 'p_orange', name: 'Nagpur Oranges', slug: 'nagpur-oranges', category: 'Fruits', emoji: '🍊', description: 'Juicy, easy-peel Nagpur mandarins with a sweet-tart balance. Hand-picked and sorted by size.', origin: 'Nagpur, Maharashtra', seasonality: 'seasonal', seasonMonths: [11, 12, 1, 2], storage: 'Keep in a cool, airy place for up to a week.', organicClaim: 'none', status: 'approved', lowStockThreshold: 12, harvestDate: dateOnly(-3),
-      variants: [v('v1', '1 kg', 'GV-ORG-1K', 1, 'kg', 119, 74, 140), v('v2', '3 kg box', 'GV-ORG-3K', 3, 'kg', 329, 18, 399)] }),
-    P({ id: 'p_pomegranate', name: 'Bhagwa Pomegranate', slug: 'bhagwa-pomegranate', category: 'Fruits', emoji: '🍎', description: 'Deep-red Bhagwa pomegranates with soft seeds and high juice content.', origin: 'Solapur, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate for up to 2 weeks.', organicClaim: 'in_conversion', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '500 g', 'GV-POM-500', 500, 'g', 99, 46), v('v2', '1 kg', 'GV-POM-1K', 1, 'kg', 189, 28, 210)] }),
-    P({ id: 'p_guava', name: 'Allahabad Safeda Guava', slug: 'allahabad-safeda-guava', category: 'Fruits', emoji: '🍐', description: 'Crisp white-fleshed guavas, picked just before full ripeness.', origin: 'Mulshi, Pune', seasonality: 'seasonal', seasonMonths: [8, 9, 10, 11, 12, 1], storage: 'Room temperature for 2–3 days, then refrigerate.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '1 kg', 'GV-GUA-1K', 1, 'kg', 89, 7)] }),
-    P({ id: 'p_strawberry', name: 'Mahabaleshwar Strawberries', slug: 'mahabaleshwar-strawberries', category: 'Fruits', emoji: '🍓', description: 'Sweet Winter Dawn strawberries from partner growers in Mahabaleshwar, packed in ventilated punnets.', origin: 'Mahabaleshwar, Maharashtra', seasonality: 'seasonal', seasonMonths: [12, 1, 2, 3], storage: 'Refrigerate unwashed. Best within 2 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 8,
-      variants: [v('v1', '200 g punnet', 'GV-STR-200', 200, 'g', 120, 24), v('v2', '2 × 200 g', 'GV-STR-400', 400, 'g', 229, 9, 240)] }),
-    P({ id: 'p_methi', name: 'Fresh Methi', slug: 'fresh-methi', category: 'Leafy Greens', emoji: '🌿', description: 'Tender fenugreek leaves, ideal for thepla, parathas and methi aloo.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate wrapped in paper. Use within 2 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 15,
-      variants: [v('v1', '1 bunch', 'GV-MTH-1B', 1, 'bunch', 30, 42)] }),
-    P({ id: 'p_amaranth', name: 'Red Amaranth (Lal Math)', slug: 'red-amaranth', category: 'Leafy Greens', emoji: '🥬', description: 'Iron-rich red amaranth with tender stems. Great stir-fried with garlic.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate. Best within 2 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 12,
-      variants: [v('v1', '1 bunch', 'GV-AMR-1B', 1, 'bunch', 28, 11)] }),
-    P({ id: 'p_mint', name: 'Mint (Pudina)', slug: 'mint-pudina', category: 'Herbs', emoji: '🌱', description: 'Cool, aromatic mint for chutneys, raita and chaas.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Stems in water, refrigerated.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 20,
-      variants: [v('v1', '1 bunch', 'GV-MNT-1B', 1, 'bunch', 20, 65)] }),
-    P({ id: 'p_curry', name: 'Curry Leaves', slug: 'curry-leaves', category: 'Herbs', emoji: '🍃', description: 'Glossy, fragrant curry leaves picked on the stem.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate in a zip bag for up to 10 days.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 15,
-      variants: [v('v1', '100 g', 'GV-CUR-100', 100, 'g', 25, 38)] }),
-    P({ id: 'p_bottlegourd', name: 'Bottle Gourd (Dudhi)', slug: 'bottle-gourd', category: 'Vegetables', emoji: '🥒', description: 'Young, pale-green bottle gourd with soft skin and few seeds.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Room temperature for 3 days or refrigerate for a week.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 8,
-      variants: [v('v1', '1 piece (~800 g)', 'GV-BTG-1P', 1, 'piece', 45, 30)] }),
-    P({ id: 'p_brinjal', name: 'Bharta Brinjal', slug: 'bharta-brinjal', category: 'Vegetables', emoji: '🍆', description: 'Large, glossy brinjals with few seeds, ideal for roasting.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Cool, dry place. Use within 4 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '500 g', 'GV-BRJ-500', 500, 'g', 45, 52), v('v2', '1 kg', 'GV-BRJ-1K', 1, 'kg', 85, 20)] }),
-    P({ id: 'p_cauliflower', name: 'Cauliflower', slug: 'cauliflower', category: 'Vegetables', emoji: '🥦', description: 'Tight, creamy-white heads with fresh green jackets.', origin: 'Junnar, Pune', seasonality: 'seasonal', seasonMonths: [10, 11, 12, 1, 2, 3], storage: 'Refrigerate in a perforated bag for up to 5 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 8,
-      variants: [v('v1', '1 head (~600 g)', 'GV-CAU-1P', 1, 'piece', 55, 33)] }),
-    P({ id: 'p_drumstick', name: 'Drumsticks (Shevga)', slug: 'drumsticks', category: 'Vegetables', emoji: '🫛', description: 'Long, tender moringa pods for sambar and curries.', origin: 'Baramati, Pune', seasonality: 'seasonal', seasonMonths: [2, 3, 4, 5, 6], storage: 'Refrigerate. Use within 5 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '250 g', 'GV-DRM-250', 250, 'g', 40, 0)] }),
-    P({ id: 'p_sweetpotato', name: 'Sweet Potato', slug: 'sweet-potato', category: 'Root Vegetables', emoji: '🍠', description: 'Purple-skinned sweet potatoes with creamy white flesh. Roast, steam or bake.', origin: 'Mulshi, Pune', seasonality: 'seasonal', seasonMonths: [10, 11, 12, 1, 2], storage: 'Cool, dark and dry. Don’t refrigerate.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 10,
-      variants: [v('v1', '1 kg', 'GV-SWP-1K', 1, 'kg', 79, 41)] }),
-    P({ id: 'p_broccoli', name: 'Broccoli', slug: 'broccoli', category: 'Exotic', emoji: '🥦', description: 'Compact, deep-green broccoli crowns from partner polyhouses.', origin: 'Nashik, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate. Best within 4 days.', organicClaim: 'none', status: 'approved', lowStockThreshold: 6,
-      variants: [v('v1', '250 g', 'GV-BRC-250', 250, 'g', 79, 19), v('v2', '500 g', 'GV-BRC-500', 500, 'g', 149, 5)] }),
-    P({ id: 'p_cherrytomato', name: 'Cherry Tomatoes', slug: 'cherry-tomatoes', category: 'Exotic', emoji: '🍅', description: 'Sweet red cherry tomatoes, great for salads and snacking.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Room temperature, out of sunlight.', organicClaim: 'certified', certificateId: 'd_cert1', status: 'approved', lowStockThreshold: 8,
-      variants: [v('v1', '250 g', 'GV-CHT-250', 250, 'g', 69, 27)] }),
-    P({ id: 'p_zucchini', name: 'Green Zucchini', slug: 'green-zucchini', category: 'Exotic', emoji: '🥒', description: 'Firm, glossy zucchini. Pending listing review.', origin: 'Nashik, Maharashtra', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate for up to a week.', organicClaim: 'none', status: 'pending', lowStockThreshold: 6,
-      variants: [v('v1', '500 g', 'GV-ZUC-500', 500, 'g', 89, 22)] }),
-    P({ id: 'p_seasonalbox', name: 'Weekly Seasonal Veg Box', slug: 'weekly-seasonal-veg-box', category: 'Vegetables', emoji: '🧺', description: 'Draft: 5–6 kg of this week’s harvest for a family of four.', origin: 'Mulshi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'See individual items.', organicClaim: 'none', status: 'draft', lowStockThreshold: 3,
-      variants: [v('v1', '1 box', 'GV-BOX-WK', 1, 'box', 699, 0)] }),
-    // Seller B products, used to verify isolation
-    { id: 'p_sr_kale', sellerId: SELLER_B, name: 'Curly Kale', slug: 'curly-kale', category: 'Exotic', emoji: '🥬', description: 'Hydroponic curly kale.', origin: 'Hinjewadi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate.', organicClaim: 'none', status: 'approved', available: true, minQty: 1, maxQty: 5, lowStockThreshold: 5, archived: false, updatedAt: iso(2 * DAY),
-      variants: [v('v1', '200 g', 'SR-KAL-200', 200, 'g', 120, 30)] },
-    { id: 'p_sr_lettuce', sellerId: SELLER_B, name: 'Iceberg Lettuce', slug: 'iceberg-lettuce', category: 'Exotic', emoji: '🥬', description: 'Crisp hydroponic iceberg lettuce.', origin: 'Hinjewadi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate.', organicClaim: 'none', status: 'approved', available: true, minQty: 1, maxQty: 5, lowStockThreshold: 5, archived: false, updatedAt: iso(3 * DAY),
-      variants: [v('v1', '1 head', 'SR-LET-1H', 1, 'piece', 90, 24)] },
-    { id: 'p_sr_microgreens', sellerId: SELLER_B, name: 'Radish Microgreens', slug: 'radish-microgreens', category: 'Leafy Greens', emoji: '🌱', description: 'Peppery radish microgreens.', origin: 'Hinjewadi, Pune', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate.', organicClaim: 'none', status: 'approved', available: true, minQty: 1, maxQty: 5, lowStockThreshold: 5, archived: false, updatedAt: iso(5 * DAY),
-      variants: [v('v1', '50 g', 'SR-MCG-50', 50, 'g', 80, 40)] },
-  ];
+  const products: Product[] = [];
 
   // ---- Orders ----
   const r = rng(20261024);

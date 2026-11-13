@@ -234,7 +234,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${field({ name: `${channel}Code`, label: 'OTP', hint: sent ? `Enter the 6-digit OTP sent to ${target}.` : `Send an OTP to ${target}.`, placeholder: 'Enter the 6-digit OTP', attrs: 'inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*"' })}
       <div class="row-wrap">
         <button type="button" class="btn btn-sm btn-primary" data-verify="${channel}" ${sent ? '' : raw('disabled')}>Verify</button>
-        <button type="button" class="btn btn-sm btn-ghost" data-send="${channel}">${sent ? 'Resend OTP' : 'Send OTP'}</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-send="${channel}" ${verified ? raw('hidden') : ''}>${sent ? 'Resend OTP' : 'Send OTP'}</button>
       </div>
       ${sent ? html`<p class="otp-timer small ${remaining(channel) > 0 ? 'muted' : 'error-text'}" data-otp-timer="${channel}" aria-live="off">${timerText(channel)}</p>` : ''}
     </div>`;
@@ -675,6 +675,10 @@ const page: Page = async ({ root, account: initialAccount }) => {
   on(root, 'click', '[data-send]', (_e, el) =>
     void guarded(el as HTMLButtonElement, 'Sending…', async () => {
       const ch = el.dataset.send as 'email' | 'phone';
+      if (account && (ch === 'email' ? account.emailVerified : account.phoneVerified)) {
+        toast('This channel is already verified.');
+        return;
+      }
       const r = await api.auth.sendCode(ch);
       otpExpiresAt[ch] = Date.now() + r.expiresInSeconds * 1000;
       render();
