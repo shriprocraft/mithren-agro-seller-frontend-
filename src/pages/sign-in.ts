@@ -22,9 +22,6 @@ const page: Page = ({ root, query }) => {
         <button type="submit" class="btn btn-primary btn-block">Sign in</button>
         <p class="muted small center">New to Mithren Agro? <a href="#/seller/register">Create a seller account</a></p>
       </form>
-      ${api.PREVIEW_DEMO
-        ? callout('info', 'Preview demo account', html`This preview runs without a server. Sign in as the demo seller with <strong>${api.PREVIEW_DEMO.email}</strong> and password <strong>${api.PREVIEW_DEMO.password}</strong>, or create a new account.`)
-        : ''}
     </div>`.value;
 
   on(root, 'submit', '[data-role=sign-in]', async (e, el) => {

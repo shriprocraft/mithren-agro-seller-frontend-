@@ -271,8 +271,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${field({ name: 'altPhone', label: 'Alternate phone', type: 'tel', value: data.altPhone, placeholder: 'Enter an alternate phone number', hint: 'Optional.', attrs: 'maxlength="16"' })}
     </div>
     ${textarea({ name: 'description', label: 'Business description', value: data.description, required: true, rows: 4, placeholder: 'Describe your business: what you grow or sell, where, and how', hint: 'What you grow or sell, where, and how. At least 30 characters.', attrs: 'maxlength="800"' })}
-    <h3 class="sub-title">Store logo <span class="muted small">(optional)</span></h3>
-    ${docSlot('logo', false, 'Upload your logo: PNG or JPG, up to 2 MB.')}`;
+    ${docSlot('logo', false, 'PNG or JPG, up to 2 MB.')}`;
 
   const stepAddress = () => html`
     ${field({ name: 'addressLine1', label: 'Building and street', value: data.addressLine1, required: true, placeholder: 'Enter your complete business address', attrs: 'maxlength="120" autocomplete="address-line1" autofocus' })}
