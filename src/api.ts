@@ -700,7 +700,8 @@ export const auth = {
       throw e;
     }
     try {
-      return await portalSignIn();
+      const account = await portalSignIn();
+      return (await applyServerVerification(profile)) ?? account;
     } catch (e) {
       // Signed in on the server but this browser has no portal account yet: create it from the profile.
       if (!local || !(e instanceof ApiError) || e.status !== 401) throw e;
@@ -765,10 +766,30 @@ export const auth = {
       return sellerSession.isSignedIn(); // a network error keeps the tokens; a rejected session cleared them
     }
   },
+  /**
+   * Copies the server's email/mobile verification onto this browser's account, so a seller who
+   * verified once is not asked for OTPs again. Returns the account (updated or not).
+   */
+  refreshVerification: async (account: AccountView): Promise<AccountView> => {
+    if (account.emailVerified && account.phoneVerified) return account;
+    const profile = sellerSession.isSignedIn()
+      ? await backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined).catch(() => null)
+      : null;
+    return (await applyServerVerification(profile)) ?? account;
+  },
   /** The signed-in seller's server profile (GET /api/v1/auth/me), or null without a server session. */
   me: (): Promise<SellerProfileView | null> =>
     sellerSession.isSignedIn() ? backendRequest<SellerProfileView>('GET', 'auth/me', undefined, () => undefined) : Promise.resolve(null),
 };
+
+async function applyServerVerification(profile: SellerProfileView | null): Promise<AccountView | null> {
+  if (!local || !profile) return null;
+  let account = await local.localAuth.current();
+  if (!account || account.email.toLowerCase() !== profile.email.toLowerCase()) return null;
+  if (profile.email_verified && !account.emailVerified) account = await local.localAuth.markVerified('email');
+  if (profile.phone_verified && !account.phoneVerified) account = await local.localAuth.markVerified('phone');
+  return account;
+}
 
 // ---------- seller application ----------
 interface ServerDraft {

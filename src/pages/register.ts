@@ -37,11 +37,14 @@ const page: Page = async ({ root, account: initialAccount }) => {
   let view: ApplicationView | null = null;
   let data: ApplicationData;
   let step = 1;
-  // When each code was sent and when it expires (from the backend's expiresInSeconds), for the countdown.
+  // When each code expires (from the backend's expiresInSeconds), for the countdown.
   const otpExpiresAt: Partial<Record<'email' | 'phone', number>> = {};
+  const expiryFrom = (r: { expiresInSeconds?: number }) =>
+    Date.now() + (Number.isFinite(r.expiresInSeconds) && r.expiresInSeconds! > 0 ? r.expiresInSeconds! : 600) * 1000;
   let busy = false;
 
   if (account) {
+    account = await api.auth.refreshVerification(account);
     view = await api.application.get();
     if (!view.editable) return navigate('/seller', true);
     data = view.data;
@@ -149,9 +152,11 @@ const page: Page = async ({ root, account: initialAccount }) => {
     phone: string;
     sentTo: Partial<Record<Channel, string>>;
     verified: Partial<Record<Channel, string>>;
+    // Kept with sentTo so a reload still shows the real countdown.
+    expiresAt: Partial<Record<Channel, number>>;
   }
   const step1: Step1State = (() => {
-    const empty: Step1State = { fullName: '', email: '', phone: '', sentTo: {}, verified: {} };
+    const empty: Step1State = { fullName: '', email: '', phone: '', sentTo: {}, verified: {}, expiresAt: {} };
     try {
       return { ...empty, ...JSON.parse(sessionStorage.getItem(STEP1_KEY) ?? '{}') };
     } catch {
@@ -166,7 +171,8 @@ const page: Page = async ({ root, account: initialAccount }) => {
     }
   };
   const isVerified = (ch: Channel) => !!step1.verified[ch] && step1.verified[ch] === normalize(ch, step1[ch]);
-  const isSent = (ch: Channel) => !!step1.sentTo[ch] && step1.sentTo[ch] === normalize(ch, step1[ch]);
+  const isSent = (ch: Channel) => !!step1.sentTo[ch] && step1.sentTo[ch] === normalize(ch, step1[ch]) && otpExpiresAt[ch] !== undefined;
+  if (!account) Object.assign(otpExpiresAt, step1.expiresAt);
   const shown = (ch: Channel, value: string | undefined) => (ch === 'email' ? value ?? '' : `+91 ${value ?? ''}`);
 
   const inlinePanel = (ch: Channel) => {
@@ -560,7 +566,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       if ((ch === 'email' && account.emailVerified) || (ch === 'phone' && account.phoneVerified)) continue;
       try {
         const r = await api.auth.sendCode(ch);
-        otpExpiresAt[ch] = Date.now() + r.expiresInSeconds * 1000;
+        otpExpiresAt[ch] = expiryFrom(r);
       } catch {
         /* the seller can request again */
       }
@@ -649,7 +655,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       const r = await api.auth.sendCodeTo(ch, value);
       step1.sentTo[ch] = value;
       delete step1.verified[ch];
-      otpExpiresAt[ch] = Date.now() + r.expiresInSeconds * 1000;
+      otpExpiresAt[ch] = step1.expiresAt[ch] = expiryFrom(r);
       saveStep1();
       refreshInline(ch);
       root.querySelector<HTMLInputElement>(`#f_${ch}Code`)?.focus();
@@ -665,6 +671,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       await api.auth.verifyCodeFor(ch, step1.sentTo[ch]!, code);
       step1.verified[ch] = step1.sentTo[ch];
       delete otpExpiresAt[ch];
+      delete step1.expiresAt[ch];
       saveStep1();
       refreshInline(ch);
       $('.form-error', root)!.hidden = true;
@@ -680,7 +687,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
         return;
       }
       const r = await api.auth.sendCode(ch);
-      otpExpiresAt[ch] = Date.now() + r.expiresInSeconds * 1000;
+      otpExpiresAt[ch] = expiryFrom(r);
       render();
       toast(`OTP sent to your ${ch === 'email' ? 'email' : 'mobile number'}`);
     }),
