@@ -22,7 +22,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
 
   const finished = orders.filter((o) => ['delivered', 'cancelled', 'rejected', 'returned', 'return_requested'].includes(o.status));
   const delivered = orders.filter((o) => o.status === 'delivered').length;
-  const fulfilment = finished.length ? delivered / finished.length : 0;
+  const fulfilment = finished.length ? delivered / finished.length : null;
   const sellerCancels = orders.filter((o) => o.status === 'rejected' || (o.status === 'cancelled' && o.history.some((h) => h.status === 'cancelled' && h.actor.includes('seller')))).length;
   const canReply = seller.status === 'approved';
 
@@ -41,9 +41,9 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       <section class="card" aria-labelledby="pf-h">
         <h2 id="pf-h" class="card-title">Performance</h2>
         <dl class="kv">
-          <div><dt data-tip="Delivered orders as a share of all completed, cancelled, rejected or returned orders.">Fulfilment rate</dt><dd>${(fulfilment * 100).toFixed(1)}%</dd></div>
+          <div><dt data-tip="Delivered orders as a share of all completed, cancelled, rejected or returned orders.">Fulfilment rate</dt><dd>${fulfilment === null ? '—' : `${(fulfilment * 100).toFixed(1)}%`}</dd></div>
           <div><dt data-tip="Orders you rejected or cancelled.">Seller cancellations</dt><dd>${sellerCancels}</dd></div>
-          <div><dt>Reply rate</dt><dd>${total ? Math.round((replied / total) * 100) : 0}%</dd></div>
+          <div><dt>Reply rate</dt><dd>${total ? `${Math.round((replied / total) * 100)}%` : '—'}</dd></div>
           <div><dt>Acceptance window</dt><dd>${seller.fulfilment.acceptWindowMins} min</dd></div>
         </dl>
       </section>

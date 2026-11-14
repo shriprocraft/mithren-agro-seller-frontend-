@@ -72,7 +72,8 @@ function refine(list: Product[], query: URLSearchParams) {
   const pmin = numParam(query, 'pmin');
   const pmax = numParam(query, 'pmax');
   return list.filter((p) => {
-    if (stock && stockLevel(p) !== stock) return false;
+    // "In stock" means any stock at all; "Low stock" is the part of that at or under the alert level.
+    if (stock && (stock === 'in' ? totalStock(p) === 0 : stockLevel(p) !== stock)) return false;
     if (avail === 'available' && !p.available) return false;
     if (avail === 'hidden' && p.available) return false;
     // Variant and price criteria must hold for the same variant, so "500 g under ₹100" means one pack.
@@ -127,7 +128,13 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const q = query.get('q') ?? '';
   const category = query.get('category') ?? '';
   const sort = query.get('sort') ?? 'updated';
-  const [all, fetched] = await Promise.all([api.listProducts({ includeArchived: true }), api.listProducts({ status, q, category })]);
+  // One request for every product (archived too): the tab counts and the filtered list both come from it.
+  const all = await api.listProducts({ includeArchived: true });
+  const needle = q.toLowerCase();
+  const fetched = all
+    .filter((p) => (status === 'archived' ? p.archived : !p.archived && (!status || p.status === status)))
+    .filter((p) => !category || p.category === category)
+    .filter((p) => !needle || p.name.toLowerCase().includes(needle) || p.variants.some((v) => v.sku.toLowerCase().includes(needle)));
   const countFor = (s: string) => (s === '' ? all.filter((p) => !p.archived).length : s === 'archived' ? all.filter((p) => p.archived).length : all.filter((p) => !p.archived && p.status === s).length);
   const readOnly = seller.status === 'suspended';
 

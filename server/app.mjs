@@ -25,6 +25,8 @@ const JSON_LIMIT = 64 * 1024;
 
 const STATIC_TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml' };
 const STATIC_ROOTS = ['dist/', 'assets/'];
+const FAVICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 4 13c0-6 6-10 16-10 0 10-4 16-10 16"/><path d="M4 21c3-6 7-9 12-11"/></svg>';
 const STATIC_FILES = ['styles.css', 'robots.txt'];
 
 /**
@@ -549,6 +551,12 @@ export function createApp(config) {
   let indexHtml = null;
   async function serveStatic(req, res, pathname) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+    // Pages use the leaf icon from index.html; this answers browsers that ask for /favicon.ico directly.
+    if (pathname === '/favicon.ico') {
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' });
+      res.end(req.method === 'HEAD' ? undefined : FAVICON_SVG);
+      return true;
+    }
     if (pathname === '/' || pathname === '/index.html') {
       indexHtml ??= (await readFile(join(rootDir, 'index.html'), 'utf8')).replace(
         '<meta name="robots"',
