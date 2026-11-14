@@ -51,7 +51,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       <div class="stack">
         <form class="card" id="profile" data-section="profile" novalidate>
           ${sectionHead('Shop profile', readOnly)}
-          <fieldset class="section-fields" disabled>
+          <div class="section-fields" inert>
           <div class="banner-preview" id="banner-preview" style="--brand:${seller.brandColor}">
             <span class="banner-logo" aria-hidden="true">${seller.shopName.slice(0, 1)}</span>
             <div><strong data-preview="name">${seller.shopName}</strong><span data-preview="tagline">${seller.bannerTagline}</span></div>
@@ -63,14 +63,19 @@ const page: Page = async ({ root, query, seller, refresh }) => {
             <label for="f_brandColor">Brand colour</label>
             <input type="color" id="f_brandColor" name="brandColor" value="${seller.brandColor}" />
           </div>
-          ${textarea({ name: 'description', label: 'About your shop', value: seller.description, rows: 4, placeholder: 'Describe your shop, what you grow and how you sell', attrs: 'maxlength="800"' })}
-          </fieldset>
+          </div>
+          <div class="field-edit-wrap">
+            ${readOnly ? '' : editButton('About your shop', 'Shop profile')}
+            <div class="section-fields" inert>
+              ${textarea({ name: 'description', label: 'About your shop', value: seller.description, rows: 4, placeholder: 'Describe your shop, what you grow and how you sell', attrs: 'maxlength="800"' })}
+            </div>
+          </div>
           ${saveRow(readOnly)}
         </form>
 
         <form class="card" id="pickup" data-section="pickup" novalidate>
           ${sectionHead('Pickup & service areas', readOnly)}
-          <fieldset class="section-fields" disabled>
+          <div class="section-fields" inert>
           ${textarea({ name: 'pickupAddress', label: 'Pickup address', value: seller.pickupAddress, rows: 2, required: true, placeholder: 'Enter the complete address where orders are collected', hint: 'Where the delivery partner collects orders.' })}
           <div class="field" id="f_serviceAreas" tabindex="-1">
             <label for="area-input">Service areas</label>
@@ -81,13 +86,13 @@ const page: Page = async ({ root, query, seller, refresh }) => {
             </div>
             <p class="field-error" id="f_serviceAreas_err" hidden></p>
           </div>
-          </fieldset>
+          </div>
           ${saveRow(readOnly)}
         </form>
 
         <form class="card" id="hours" data-section="hours" novalidate>
           ${sectionHead('Working hours', readOnly)}
-          <fieldset class="section-fields" disabled>
+          <div class="section-fields" inert>
           <div class="table-wrap"><table class="table table-compact hours">
             <thead><tr><th scope="col">Day</th><th scope="col">Open</th><th scope="col">Opens</th><th scope="col">Closes</th></tr></thead>
             <tbody>${seller.workingHours.map(
@@ -107,26 +112,26 @@ const page: Page = async ({ root, query, seller, refresh }) => {
             <label class="sr-only" for="hol-note">Note</label><input type="text" id="hol-note" placeholder="Add a note, e.g. Diwali break (optional)" maxlength="60" />
             <button type="button" class="btn btn-sm" data-action="add-holiday">Add holiday</button>
           </div>
-          </fieldset>
+          </div>
           ${saveRow(readOnly)}
         </form>
 
         <form class="card" id="fulfilment" data-section="fulfilment" novalidate>
           ${sectionHead('Fulfilment', readOnly)}
-          <fieldset class="section-fields" disabled>
+          <div class="section-fields" inert>
           <label class="check-row"><input type="checkbox" name="autoAccept" ${seller.fulfilment.autoAccept ? raw('checked') : ''} /> <span><strong>Auto-accept orders</strong><span class="muted small block">Orders skip “awaiting confirmation” when every item is in stock.</span></span></label>
           <div class="row-3">
             ${field({ name: 'acceptWindowMins', label: 'Acceptance window (min)', type: 'number', value: seller.fulfilment.acceptWindowMins, placeholder: 'e.g. 30', attrs: 'min="5" max="120"' })}
             ${field({ name: 'packingTimeMins', label: 'Packing time (min)', type: 'number', value: seller.fulfilment.packingTimeMins, placeholder: 'e.g. 45', attrs: 'min="5" max="240"' })}
             ${field({ name: 'minOrderValue', label: 'Minimum order (₹)', type: 'number', value: seller.fulfilment.minOrderValue, placeholder: 'e.g. 200', attrs: 'min="0"' })}
           </div>
-          </fieldset>
+          </div>
           ${saveRow(readOnly)}
         </form>
 
         <form class="card" id="notifications" data-section="notifications" novalidate>
           ${sectionHead('Notifications', readOnly)}
-          <fieldset class="section-fields" disabled>
+          <div class="section-fields" inert>
           <div class="table-wrap"><table class="table table-compact">
             <thead><tr><th scope="col">Topic</th>${CHANNELS.map(([, l]) => html`<th scope="col" class="center">${l}</th>`)}</tr></thead>
             <tbody>${TOPICS.map(
@@ -135,7 +140,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
             )}</tbody>
           </table></div>
           <p class="muted small">Email and SMS delivery require a configured provider. In this prototype, only in-app notifications are shown.</p>
-          </fieldset>
+          </div>
           ${saveRow(readOnly)}
         </form>
 
@@ -274,9 +279,9 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const editStart = new Map<string, { areas: string[]; holidays: typeof holidays }>();
   const controls = (form: HTMLFormElement) => $$<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select', form);
   const setEditing = (form: HTMLFormElement, editing: boolean) => {
-    form.querySelector<HTMLFieldSetElement>('fieldset.section-fields')!.disabled = !editing;
+    for (const box of $$<HTMLElement>('.section-fields', form)) box.inert = !editing;
     form.querySelector<HTMLElement>('.save-row')!.hidden = !editing;
-    form.querySelector<HTMLElement>('[data-action=edit-section]')!.hidden = editing;
+    for (const b of $$<HTMLElement>('[data-action=edit-section]', form)) b.hidden = editing;
     form.classList.toggle('is-editing', editing);
   };
   /** After a save, what's on screen becomes what Cancel returns to. */
@@ -293,7 +298,8 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     setEditing(form, true);
     const status = form.querySelector('.save-status') as HTMLElement;
     status.textContent = '';
-    form.querySelector<HTMLElement>('fieldset input:not([type=hidden]), fieldset textarea, fieldset select')?.focus();
+    const near = el.closest('.field-edit-wrap') ?? form;
+    near.querySelector<HTMLElement>('.section-fields input:not([type=hidden]), .section-fields textarea, .section-fields select')?.focus();
   });
   on(root, 'click', '[data-action=cancel-edit]', (_e, el) => {
     const form = el.closest('form') as HTMLFormElement;
@@ -426,7 +432,12 @@ function saveRow(readOnly: boolean) {
 
 /** Saved sections are read-only until the seller clicks the pencil. */
 function sectionHead(title: string, readOnly: boolean) {
-  return html`<div class="card-head"><h2 class="card-title">${title}</h2>${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-ghost" data-action="edit-section" aria-label="Edit ${title}" title="Edit">${icon('edit', 16)} Edit</button>`}</div>`;
+  return html`<div class="card-head"><h2 class="card-title">${title}</h2>${readOnly ? '' : editButton(title)}</div>`;
+}
+
+/** Unlocks the whole section; `what` names the field it sits beside, if any. */
+function editButton(what: string, section?: string) {
+  return html`<button type="button" class="btn btn-sm btn-ghost" data-action="edit-section" aria-label="Edit ${what}${section ? ` (${section})` : ''}" title="Edit">${icon('edit', 16)} Edit</button>`;
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;

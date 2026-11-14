@@ -4437,28 +4437,20 @@ textarea {
   display: none;
 }
 
-/* Store settings: saved sections stay read-only until "Edit" is clicked. */
-.section-fields {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-}
-.section-fields:disabled input,
-.section-fields:disabled textarea,
-.section-fields:disabled select {
-  color: inherit;
-  -webkit-text-fill-color: currentColor;
-  opacity: 1;
-  cursor: default;
-  background: var(--surface-2, #f6f7f6);
-}
-.section-fields:disabled .btn,
-.section-fields:disabled .chip-x,
-.section-fields:disabled #area-input,
-.section-fields:disabled #hol-date,
-.section-fields:disabled #hol-note,
-.section-fields:disabled .row-wrap:has(#area-input),
-.section-fields:disabled .row-wrap:has(#hol-date) {
+/* Store settings: saved sections look exactly the same but can't be changed until "Edit" is clicked
+   (they are inert, not disabled, so the browser doesn't grey them out). */
+.section-fields[inert] .btn,
+.section-fields[inert] .chip-x,
+.section-fields[inert] .row-wrap:has(#area-input),
+.section-fields[inert] .row-wrap:has(#hol-date) {
   display: none;
+}
+.field-edit-wrap {
+  position: relative;
+}
+.field-edit-wrap > [data-action='edit-section'] {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  z-index: 1;
 }
