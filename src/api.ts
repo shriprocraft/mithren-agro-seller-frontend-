@@ -265,6 +265,11 @@ interface StoredTokens {
   refresh: string;
 }
 
+// One page load asks for orders several times (sidebar badge, page, tab counts); they share one request.
+const ORDERS_REUSE_MS = 3000;
+let ordersCache: { at: number; promise: Promise<BackendOrder[]> } | null = null;
+const forgetOrders = () => (ordersCache = null);
+
 /** The signed-in seller's access and refresh tokens, kept in localStorage. */
 export const sellerSession = {
   tokens(): StoredTokens | null {
@@ -283,6 +288,7 @@ export const sellerSession = {
     }
   },
   clear() {
+    forgetOrders();
     try {
       localStorage.removeItem(TOKENS_KEY);
       localStorage.removeItem(SHOP_NAME_KEY);
@@ -485,15 +491,28 @@ export const uploads = {
 const ACTIVE: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit'];
 const ISSUES: OrderStatus[] = ['cancelled', 'rejected', 'return_requested', 'returned'];
 
-const backendOrders = {
-  /** Every order (a page at a time), then the portal's own tab and search filters. */
-  async list(f: core.OrderFilter = {}): Promise<SubOrder[]> {
+function allBackendOrders(): Promise<BackendOrder[]> {
+  if (ordersCache && Date.now() - ordersCache.at < ORDERS_REUSE_MS) return ordersCache.promise;
+  const promise = (async () => {
     const all: BackendOrder[] = [];
     for (let offset = 0; ; offset += 100) {
       const page = await backendRequest<{ items: BackendOrder[]; total: number }>('GET', `seller/orders?limit=100&offset=${offset}`, undefined, () => undefined);
       all.push(...page.items);
       if (all.length >= page.total || !page.items.length) break;
     }
+    return all;
+  })();
+  ordersCache = { at: Date.now(), promise };
+  promise.catch(() => {
+    if (ordersCache?.promise === promise) forgetOrders();
+  });
+  return promise;
+}
+
+const backendOrders = {
+  /** Every order (a page at a time), then the portal's own tab and search filters. */
+  async list(f: core.OrderFilter = {}): Promise<SubOrder[]> {
+    const all = await allBackendOrders();
     const q = f.q?.trim().toLowerCase();
     return all
       .map((o) => toSubOrder(o))
@@ -507,7 +526,12 @@ const backendOrders = {
     const status = BACKEND_STATUS[to];
     if (!status) throw new ApiError(409, 'The delivery partner updates this status.');
     const body = { status, ...(note.trim() ? { reason: note.trim() } : {}) };
-    return toSubOrder(await backendRequest<BackendOrder>('PATCH', `seller/orders/${encodeURIComponent(id)}/status`, body, () => undefined));
+    forgetOrders();
+    try {
+      return toSubOrder(await backendRequest<BackendOrder>('PATCH', `seller/orders/${encodeURIComponent(id)}/status`, body, () => undefined));
+    } finally {
+      forgetOrders();
+    }
   },
 };
 
