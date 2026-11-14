@@ -357,6 +357,15 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     btn.disabled = true;
     const status = form.querySelector('.save-status') as HTMLElement;
     try {
+      // The customer app reads the shop name from the FastAPI shop details: save it there first so a
+      // name the backend refuses never ends up only in the portal.
+      if (form.dataset.section === 'profile' && patch.shopName && patch.shopName !== seller.shopName) {
+        const me = await api.auth.me();
+        if (me?.seller_id) {
+          await api.shopDetails.update(me.seller_id, { shop_name: patch.shopName.trim() });
+          api.sellerSession.setShopName(patch.shopName.trim());
+        }
+      }
       await api.updateSeller(patch);
       commitDefaults(form);
       setEditing(form, false);
