@@ -175,8 +175,13 @@ export function clearAllData() {
 
 // ---------- email OTP (FastAPI backend) ----------
 
-/** FastAPI backend that sends real email OTPs. Override with <meta name="otp-api" content="...">. */
+/**
+ * FastAPI backend. Set by <meta name="otp-api" content="...">, which the build fills in from the
+ * BACKEND_API_URL environment variable (see scripts/set-backend-url.mjs).
+ */
 export const OTP_API = (meta('otp-api') ?? 'http://127.0.0.1:8000').replace(/\/+$/, '');
+/** Sent on every backend request so an ngrok free-tier tunnel answers with the API, not its warning page. */
+const BACKEND_HEADERS: Record<string, string> = { 'ngrok-skip-browser-warning': 'true' };
 
 /** POST /api/v1/auth/{email|phone}-otp/{send|verify}: the backend emails or texts (Fast2SMS) the code. */
 async function otpPost<T>(channel: 'email' | 'phone', path: 'send' | 'verify', body: unknown): Promise<T> {
@@ -184,7 +189,7 @@ async function otpPost<T>(channel: 'email' | 'phone', path: 'send' | 'verify', b
   try {
     res = await fetch(`${OTP_API}/api/v1/auth/${channel}-otp/${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...BACKEND_HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   } catch {
@@ -343,7 +348,7 @@ function refreshTokens(): Promise<boolean> {
     try {
       const res = await fetch(`${OTP_API}/api/v1/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...BACKEND_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: t.refresh }),
       });
       if (!res.ok) return false;
@@ -363,6 +368,7 @@ async function backendFetch(method: string, path: string, body: unknown): Promis
   return fetch(`${OTP_API}/api/v1/${path}`, {
     method,
     headers: {
+      ...BACKEND_HEADERS,
       ...(body === undefined || form ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },

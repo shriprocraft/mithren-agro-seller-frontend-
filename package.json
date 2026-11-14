@@ -5,7 +5,7 @@
   "description": "Mithren Agro Seller Portal: frontend and zero-dependency Node backend (node:sqlite).",
   "type": "module",
   "scripts": {
-    "build": "tsc -p .",
+    "build": "node scripts/set-backend-url.mjs && tsc -p .",
     "typecheck": "tsc -p . --noEmit",
     "watch": "tsc -p . --watch",
     "start": "node --disable-warning=ExperimentalWarning server/index.mjs",
