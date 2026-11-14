@@ -566,7 +566,7 @@ const page: Page = async ({ root, params, seller }) => {
       const input = { ...readForm(), images: imagePaths() };
       // The FastAPI catalogue is written first, after the same checks as saving, so a listing the
       // portal would refuse never reaches it. Publish sends it active; Save draft sends it inactive.
-      api.checkProduct(input, submit);
+      await api.checkProduct(input, submit);
       const convert = <T>(build: () => T): T => {
         try {
           return build();

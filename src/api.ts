@@ -522,12 +522,14 @@ export async function orderInvoiceHtml(id: string): Promise<string> {
 /** A product image as a URL the browser can load: server paths are served by the FastAPI backend. */
 export const imageUrl = (pathOrUrl: string): string => (pathOrUrl.startsWith('/') ? `${OTP_API}${pathOrUrl}` : pathOrUrl);
 
+const remoteCheckProduct = rpc('checkProduct');
 /**
- * Runs the same checks as saving, without saving, so nothing is sent to the backend that the
- * portal would then refuse. The Node server checks again when it saves.
+ * Runs the same checks as saving, without saving, so nothing is sent to the FastAPI catalogue that
+ * the portal would then refuse. On the server they run there (they need the seller's other products,
+ * e.g. for duplicate SKUs), and the Node server checks again when it saves.
  */
-export const checkProduct = (input: core.ProductInput, submit: boolean): void => {
-  if (!REMOTE) core.checkProduct(input, submit);
+export const checkProduct = async (input: core.ProductInput, submit: boolean): Promise<void> => {
+  await remoteCheckProduct(input, submit);
 };
 
 /**
