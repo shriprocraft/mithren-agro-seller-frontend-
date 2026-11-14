@@ -143,8 +143,8 @@ const page: Page = async ({ root, params, seller }) => {
             <div id="variants"></div>
             <p class="field-error" id="f_variants_err" hidden></p>
             <div class="row-3">
-              ${field({ name: 'minQty', label: 'Min order qty', type: 'number', value: product.minQty, placeholder: 'e.g. 1', attrs: 'min="1" step="1" inputmode="numeric"' })}
-              ${field({ name: 'maxQty', label: 'Max order qty', type: 'number', value: product.maxQty, placeholder: 'e.g. 10', attrs: 'min="1" step="1" inputmode="numeric"' })}
+              ${field({ name: 'minQty', label: 'Min order qty', required: true, type: 'number', value: product.minQty, placeholder: 'e.g. 1', attrs: 'min="1" step="1" inputmode="numeric"' })}
+              ${field({ name: 'maxQty', label: 'Max order qty', required: true, type: 'number', value: product.maxQty, placeholder: 'e.g. 10', attrs: 'min="1" step="1" inputmode="numeric"' })}
               ${field({ name: 'lowStockThreshold', label: 'Low-stock alert at', type: 'number', value: product.lowStockThreshold, placeholder: 'e.g. 10', attrs: 'min="0" step="1" inputmode="numeric"' })}
             </div>
             <p class="muted small">Platform commission for this category is set by the marketplace and shown on your Earnings page. It can’t be changed here.</p>
@@ -227,15 +227,15 @@ const page: Page = async ({ root, params, seller }) => {
         (v, i) => html`<fieldset class="variant" data-index="${i}">
           <legend>Variant ${i + 1}</legend>
           <div class="variant-grid">
-            ${field({ name: `variant_${i}_label`, label: 'Label', value: v.label, placeholder: apparel ? 'e.g. Size M' : 'e.g. 500 g', attrs: `data-v="label" data-i="${i}"` })}
-            ${field({ name: `variant_${i}_sku`, label: 'SKU', value: v.sku, placeholder: apparel ? 'e.g. APP-KURTI-M' : 'e.g. FRT-MANGO-500G', hint: skuManual.has(v.id) ? undefined : 'Filled in for you. You can change it.', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
+            ${field({ name: `variant_${i}_label`, label: 'Label', required: true, value: v.label, placeholder: apparel ? 'e.g. Size M' : 'e.g. 500 g', attrs: `data-v="label" data-i="${i}"` })}
+            ${field({ name: `variant_${i}_sku`, label: 'SKU', required: true, value: v.sku, placeholder: apparel ? 'e.g. APP-KURTI-M' : 'e.g. FRT-MANGO-500G', hint: skuManual.has(v.id) ? undefined : 'Filled in for you. You can change it.', attrs: `data-v="sku" data-i="${i}" autocapitalize="characters"` })}
             ${apparel
               ? select({ name: `variant_${i}_size`, label: 'Size', value: v.size ?? '', required: true, placeholder: 'Select size', options: APPAREL_SIZES.map((sz) => [sz, sz] as [string, string]), attrs: `data-v="size" data-i="${i}"` })
-              : html`${field({ name: `variant_${i}_packSize`, label: 'Pack size', type: 'number', value: v.packSize, placeholder: 'Enter pack size', attrs: `data-v="packSize" data-i="${i}" min="0" step="any"` })}
-                ${select({ name: `variant_${i}_unit`, label: 'Unit', value: v.unit, options: UNITS.map((u) => [u, UNIT_LABEL[u]] as [string, string]), attrs: `data-v="unit" data-i="${i}"` })}`}
-            ${field({ name: `variant_${i}_price`, label: 'Selling price (₹)', type: 'number', value: v.price || '', placeholder: 'Enter selling price', attrs: `data-v="price" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
+              : html`${field({ name: `variant_${i}_packSize`, label: 'Pack size', required: true, type: 'number', value: v.packSize, placeholder: 'Enter pack size', attrs: `data-v="packSize" data-i="${i}" min="0" step="any"` })}
+                ${select({ name: `variant_${i}_unit`, label: 'Unit', required: true, value: v.unit, options: UNITS.map((u) => [u, UNIT_LABEL[u]] as [string, string]), attrs: `data-v="unit" data-i="${i}"` })}`}
+            ${field({ name: `variant_${i}_price`, label: 'Selling price (₹)', required: true, type: 'number', value: v.price || '', placeholder: 'Enter selling price', attrs: `data-v="price" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
             ${field({ name: `variant_${i}_mrp`, label: 'MRP (₹)', type: 'number', value: v.mrp ?? '', placeholder: 'Enter MRP', hint: 'Optional', attrs: `data-v="mrp" data-i="${i}" min="0" step="0.01" inputmode="decimal"` })}
-            ${field({ name: `variant_${i}_stock`, label: isNew || !product.variants.some((x) => x.id === v.id) ? 'Opening stock' : 'Stock', type: 'number', value: v.stock, placeholder: 'Enter stock quantity', disabled: !isNew && product.variants.some((x) => x.id === v.id), hint: !isNew && product.variants.some((x) => x.id === v.id) ? 'Change on Inventory page' : undefined, attrs: `data-v="stock" data-i="${i}" min="0" step="1" inputmode="numeric"` })}
+            ${field({ name: `variant_${i}_stock`, label: isNew || !product.variants.some((x) => x.id === v.id) ? 'Opening stock' : 'Stock', required: isNew || !product.variants.some((x) => x.id === v.id), type: 'number', value: v.stock, placeholder: 'Enter stock quantity', disabled: !isNew && product.variants.some((x) => x.id === v.id), hint: !isNew && product.variants.some((x) => x.id === v.id) ? 'Change on Inventory page' : undefined, attrs: `data-v="stock" data-i="${i}" min="0" step="1" inputmode="numeric"` })}
           </div>
           ${variants.length > 1 && !readOnly ? html`<button type="button" class="btn btn-sm btn-danger-ghost" data-action="remove-variant" data-i="${i}">Remove variant</button>` : ''}
         </fieldset>`,
