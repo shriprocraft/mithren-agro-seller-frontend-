@@ -3,21 +3,25 @@
 import type { Page } from '../router.js';
 import { navigate } from '../router.js';
 import { html, on, formValues } from '../ui/dom.js';
-import { field, showFieldErrors } from '../ui/components.js';
+import { field, showFieldErrors, callout } from '../ui/components.js';
+import { takeSignInNotice } from './forgot-password.js';
 import * as api from '../api.js';
 
 const page: Page = ({ root, query }) => {
   const next = query.get('next');
   const safeNext = next && /^\/seller(\/[\w/-]*)?$/.test(next) ? next : '/seller';
+  const notice = takeSignInNotice();
   root.innerHTML = html`
     <div class="auth-wrap">
       <header class="register-head">
         <h1>Sign in to your seller account</h1>
         <p class="muted">Manage your shop, orders and payouts.</p>
       </header>
+      ${notice ? callout('success', notice) : ''}
       <form class="card auth-card" novalidate data-role="sign-in">
         ${field({ name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'Enter your registered email address', attrs: 'autocomplete="email" autofocus' })}
         ${field({ name: 'password', label: 'Password', type: 'password', reveal: true, required: true, placeholder: 'Enter your password', attrs: 'autocomplete="current-password"' })}
+        <p class="small forgot-link"><a href="#/seller/forgot-password">Forgot password?</a></p>
         <p class="form-error" role="alert" hidden></p>
         <button type="submit" class="btn btn-primary btn-block">Sign in</button>
         <p class="muted small center">New to Mithren Agro? <a href="#/seller/register">Create a seller account</a></p>

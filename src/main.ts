@@ -14,6 +14,7 @@ route('/seller', 'Seller portal', async () => (await import('./pages/entry.js'))
 route('/seller/register', 'Seller registration', async () => (await import('./pages/register.js')).default);
 route('/seller/sign-in', 'Sign in', async () => (await import('./pages/sign-in.js')).default);
 route('/seller/login', 'Sign in', async () => (await import('./pages/sign-in.js')).default);
+route('/seller/forgot-password', 'Forgot password', async () => (await import('./pages/forgot-password.js')).default);
 route('/seller/dashboard', 'Dashboard', async () => (await import('./pages/dashboard.js')).default, 'dashboard');
 route('/seller/products', 'Products', async () => (await import('./pages/products.js')).default, 'products');
 route('/seller/products/new', 'New product', async () => (await import('./pages/product-form.js')).default, 'products');
@@ -64,7 +65,7 @@ const app = $('#app')!;
 let renderToken = 0;
 
 /** Pages reachable without signing in. */
-const PUBLIC_PATHS = ['/seller/sign-in', '/seller/login', '/seller/register'];
+const PUBLIC_PATHS = ['/seller/sign-in', '/seller/login', '/seller/register', '/seller/forgot-password'];
 
 /** Placeholder for the shell while nobody is signed in (no seller data is shown). */
 const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2e7d32', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
@@ -213,7 +214,7 @@ async function render() {
   // Sign-in gate: every seller page needs an authenticated session (the server enforces this too).
   const isPublic = PUBLIC_PATHS.includes(path);
   if (!account && !isPublic) return navigate(`/seller/sign-in${path !== '/seller' ? `?next=${encodeURIComponent(path)}` : ''}`, true);
-  if (account && (path === '/seller/sign-in' || path === '/seller/login')) return navigate('/seller', true);
+  if (account && (path === '/seller/sign-in' || path === '/seller/login' || path === '/seller/forgot-password')) return navigate('/seller', true);
 
   const bare = isPublic;
   app.innerHTML = shell(seller, m?.route.nav, bare, account).value;

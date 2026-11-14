@@ -291,6 +291,66 @@ export function createApp(config) {
     return { account: toAccountView(rowToAccount(userRowById(row.id))) };
   });
 
+  // ----- forgot password -----
+  // The FastAPI backend owns the reset: it emails the code and checks it. The portal forwards the
+  // request, and once the backend has accepted a new password it stores that password for its own
+  // sign-in too and ends the account's portal sessions.
+  async function backendAuth(path, body) {
+    if (!config.backendUrl) fail(503, 'Password reset is not configured on this server.');
+    let r;
+    try {
+      r = await fetch(`${config.backendUrl}/api/v1/auth/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      fail(503, 'Can’t reach the server right now. Try again shortly.');
+    }
+    const json = await r.json().catch(() => null);
+    if (r.ok) return json ?? {};
+    // FastAPI errors: {detail: {message, field}} or, for a malformed body, {detail: [{loc, msg}]}.
+    const d = json?.detail;
+    const FIELD = { email: 'email', otp: 'otp', new_password: 'password' };
+    if (Array.isArray(d) && d[0]?.msg) {
+      const message = String(d[0].msg).replace(/^Value error, /, '');
+      const field = FIELD[String(d[0].loc?.[d[0].loc.length - 1])];
+      fail(422, field ? 'Please fix the highlighted fields.' : message, field ? { [field]: message } : undefined);
+    }
+    const message = typeof d?.message === 'string' ? d.message : 'Something went wrong. Try again.';
+    const field = FIELD[d?.field];
+    fail(r.status >= 500 ? 503 : r.status, message, field ? { [field]: message } : undefined);
+  }
+
+  route('POST', /^\/api\/auth\/forgot-password$/, async (req) => {
+    checkCsrf(req);
+    rateLimit(req, 'forgot-password', config.rateLimits?.forgotPassword ?? 10, 15 * 60_000);
+    const { email } = await readJson(req);
+    const r = await backendAuth('forgot-password', { email: String(email ?? '').trim().toLowerCase() });
+    return { sent: true, expiresInSeconds: Number(r.expiresInSeconds) > 0 ? Number(r.expiresInSeconds) : 600 };
+  });
+
+  route('POST', /^\/api\/auth\/reset-password$/, async (req) => {
+    checkCsrf(req);
+    rateLimit(req, 'reset-password', config.rateLimits?.resetPassword ?? 20, 15 * 60_000);
+    const { email, otp, newPassword } = await readJson(req);
+    const address = String(email ?? '').trim().toLowerCase();
+    const password = String(newPassword ?? '');
+    await backendAuth('reset-password', { email: address, otp: String(otp ?? '').trim(), new_password: password });
+    // The backend accepted the code and the new password: make the portal's own sign-in match.
+    const row = db.prepare('SELECT id FROM users WHERE email = ?').get(address);
+    if (row) {
+      const passwordHash = await hashPassword(password);
+      store.transaction(() => {
+        db.prepare('UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?').run(passwordHash, row.id);
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+        store.audit({ actorType: 'seller', actorId: row.id, action: 'account.password_reset', applicationId: null });
+      });
+    }
+    return { reset: true };
+  });
+
   route('POST', /^\/api\/auth\/signin$/, async (req, res) => {
     checkCsrf(req);
     rateLimit(req, 'signin', config.rateLimits?.signin ?? 20, 15 * 60_000);

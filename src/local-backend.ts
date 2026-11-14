@@ -324,6 +324,15 @@ export const localAuth = {
     bindSession(u);
     return toAccountView(accountOf(u));
   },
+  /** After the FastAPI backend accepted a password reset: this browser's account gets the same password. */
+  async setPassword(email: string, password: string): Promise<void> {
+    await ready;
+    const u = state.users.find((x) => x.email === String(email).trim().toLowerCase());
+    if (!u) return;
+    u.salt = rid('s');
+    u.passwordHash = await hash(password, u.salt);
+    save();
+  },
   async signOut() {
     state.sessionUserId = null;
     save();

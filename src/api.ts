@@ -610,6 +610,7 @@ interface AuthResponseView {
 
 const registerField: FieldFor = (loc) =>
   ({ full_name: 'fullName', email: 'email', phone: 'phone', password: 'password' } as Record<string, string>)[String(loc[loc.length - 1])];
+const resetField: FieldFor = (loc) => ({ email: 'email', otp: 'otp', new_password: 'password' } as Record<string, string>)[String(loc[loc.length - 1])];
 const loginField: FieldFor = (loc) => ({ identifier: 'email', password: 'password' } as Record<string, string>)[String(loc[loc.length - 1])];
 
 /** Signs in to the FastAPI backend and keeps the tokens. Remembers the seller_id once Step 2 exists. */
@@ -733,6 +734,23 @@ export const auth = {
       await local.localAuth.markVerified('email');
       return local.localAuth.markVerified('phone');
     }
+  },
+  /**
+   * Forgot password, step 1: asks the backend to email a 6-digit code. The answer is the same
+   * whether or not an account exists, so this never reveals who has an account.
+   */
+  forgotPassword: async (email: string): Promise<{ expiresInSeconds: number }> => {
+    const r = local
+      ? await backendRequest<{ expiresInSeconds?: number }>('POST', 'auth/forgot-password', { email }, resetField)
+      : await http<{ expiresInSeconds?: number }>('POST', '/api/auth/forgot-password', { email });
+    return { expiresInSeconds: Number(r.expiresInSeconds) > 0 ? Number(r.expiresInSeconds) : 600 };
+  },
+  /** Forgot password, step 2: sets the new password with the emailed code. Old sessions stop working. */
+  resetPassword: async (email: string, otp: string, newPassword: string): Promise<void> => {
+    sellerSession.clear();
+    if (!local) return void (await http('POST', '/api/auth/reset-password', { email, otp, newPassword }));
+    await backendRequest('POST', 'auth/reset-password', { email, otp, new_password: newPassword }, resetField);
+    await local.localAuth.setPassword(email, newPassword);
   },
   /** Revokes the server session (best effort), forgets the tokens and signs out of the portal. */
   signOut: async (): Promise<void> => {

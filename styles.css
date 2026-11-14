@@ -4465,3 +4465,28 @@ textarea {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* Sign in and forgot password */
+.forgot-link {
+  text-align: right;
+  margin: -4px 0 8px;
+}
+.auth-wrap .callout {
+  margin-bottom: 12px;
+}
+.otp-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 10px;
+}
+.otp-row .otp-timer {
+  margin: 0;
+  flex: 1;
+}
+.otp-row .btn {
+  white-space: nowrap;
+  margin: 0;
+}
