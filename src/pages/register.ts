@@ -32,6 +32,35 @@ import {
   type ApplicationView,
 } from '../application.js';
 
+const AUTOSAVE_KEY = (userId: string) => `mithren.register.autosave:${userId}`;
+const BANK_FIELDS = new Set(['holderName', 'accountNumber', 'accountNumberConfirm', 'ifsc', 'bankName']);
+const bankField = (name: string) => BANK_FIELDS.has(name);
+
+function readAutosave(userId: string): { at: number; data: Record<string, unknown> } | null {
+  try {
+    const v: unknown = JSON.parse(sessionStorage.getItem(AUTOSAVE_KEY(userId)) ?? 'null');
+    if (!v || typeof v !== 'object') return null;
+    const { at, data } = v as { at?: unknown; data?: unknown };
+    return typeof at === 'number' && Number.isFinite(at) && data && typeof data === 'object' ? { at, data: data as Record<string, unknown> } : null;
+  } catch {
+    return null;
+  }
+}
+function writeAutosave(userId: string, data: ApplicationData) {
+  try {
+    sessionStorage.setItem(AUTOSAVE_KEY(userId), JSON.stringify({ at: Date.now(), data }));
+  } catch {
+    /* storage full or unavailable: the server save still runs */
+  }
+}
+function clearAutosave(userId: string) {
+  try {
+    sessionStorage.removeItem(AUTOSAVE_KEY(userId));
+  } catch {
+    /* ignore */
+  }
+}
+
 const page: Page = async ({ root, account: initialAccount }) => {
   let account: AccountView | null = initialAccount;
   let view: ApplicationView | null = null;
@@ -48,6 +77,8 @@ const page: Page = async ({ root, account: initialAccount }) => {
     view = await api.application.get();
     if (!view.editable) return navigate('/seller', true);
     data = view.data;
+    const unsaved = readAutosave(account.userId);
+    if (unsaved && unsaved.at > Date.parse(view.updatedAt)) data = normaliseApplicationData({ ...(data as unknown as Record<string, unknown>), ...unsaved.data });
     step = account.emailVerified && account.phoneVerified ? Math.max(2, view.currentStep) : 1;
   } else {
     data = normaliseApplicationData({});
@@ -110,6 +141,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     return html`<div class="wizard-actions">
       ${step > 1 ? html`<button type="button" class="btn" data-action="prev">Previous</button>` : html`<span></span>`}
       <div class="row-wrap">
+        ${step > 1 ? html`<span class="muted small" data-autosave-status aria-live="polite"></span>` : ''}
         ${step > 1 ? html`<button type="button" class="btn btn-ghost" data-action="save">Save draft</button>` : ''}
         <button type="submit" class="btn btn-primary">${step === 8 ? 'Submit application' : 'Next'}</button>
       </div>
@@ -569,6 +601,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       }
       view = await api.application.saveDraft(data, target, validate ? step : null);
       data = view.data;
+      autosaveDone();
     } else if (validate) {
       const errors = validateStep(1, data, ctxFor());
       if (Object.keys(errors).length) return showError('Verify your email and mobile number to continue.', errors);
@@ -579,7 +612,55 @@ const page: Page = async ({ root, account: initialAccount }) => {
     window.scrollTo(0, 0);
   }
 
+  // ---------- autosave (Steps 2–8) ----------
+  // Every edit is copied to this tab at once (so even an instant reload keeps it) and saved to the
+  // server a moment after typing stops. Bank details are not part of `data` and keep their own Save.
+  let autosaveTimer: number | undefined;
+  let editsSinceSave = 0;
+  const autosaveStatus = (text: string) => {
+    const el = root.querySelector<HTMLElement>('[data-autosave-status]');
+    if (el) el.textContent = text;
+  };
+  function scheduleAutosave() {
+    if (!account || step < 2) return;
+    collect();
+    writeAutosave(account.userId, data);
+    editsSinceSave++;
+    autosaveStatus('Saving…');
+    window.clearTimeout(autosaveTimer);
+    autosaveTimer = window.setTimeout(() => void flushAutosave(), 1000);
+  }
+  async function flushAutosave() {
+    window.clearTimeout(autosaveTimer);
+    if (!account || step < 2 || !editsSinceSave) return;
+    if (busy) return void (autosaveTimer = window.setTimeout(() => void flushAutosave(), 1000));
+    const edits = editsSinceSave;
+    try {
+      view = await api.application.saveDraft(data, Math.max(step, view?.currentStep ?? step), null);
+      editsSinceSave -= edits;
+      if (!editsSinceSave) {
+        clearAutosave(account.userId);
+        autosaveStatus('All changes saved');
+      }
+    } catch {
+      autosaveStatus('Not saved yet — retrying…');
+      autosaveTimer = window.setTimeout(() => void flushAutosave(), 5000);
+    }
+  }
+  /** Next/Previous/Save draft just saved everything: nothing is left for autosave. */
+  function autosaveDone() {
+    window.clearTimeout(autosaveTimer);
+    editsSinceSave = 0;
+    if (account) clearAutosave(account.userId);
+  }
+
   render();
+  if (account && step >= 2 && readAutosave(account.userId)) {
+    // Restored from this tab after a reload: put it on the server too.
+    editsSinceSave = 1;
+    autosaveStatus('Restored your unsaved changes');
+    void flushAutosave();
+  }
   if (account && step === 1) void autoSendCodes();
 
   async function autoSendCodes() {
@@ -649,10 +730,18 @@ const page: Page = async ({ root, account: initialAccount }) => {
     void guarded(el as HTMLButtonElement, 'Saving…', async () => {
       collect();
       view = await api.application.saveDraft(data, Math.max(step, view?.currentStep ?? step), null);
+      autosaveDone();
+      autosaveStatus('All changes saved');
       toast('Draft saved');
     }),
   );
   on(root, 'click', '[data-goto]', (_e, el) => void guarded(null, '', () => goTo(Number(el.dataset.goto), false)));
+
+  on(root, 'input', 'form[data-role=step] input:not([type=file]), form[data-role=step] textarea', (_e, el) => {
+    if (!bankField((el as HTMLInputElement).name)) scheduleAutosave();
+  });
+  on(root, 'change', 'form[data-role=step] select, form[data-role=step] input[type=checkbox], form[data-role=step] input[type=radio]', () => scheduleAutosave());
+  window.addEventListener('pagehide', () => void flushAutosave(), { once: true });
 
   // Step 1 inputs are remembered as they're typed; changing the email or mobile number after sending
   // or verifying an OTP means verifying the new one.
