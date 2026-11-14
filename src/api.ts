@@ -75,7 +75,21 @@ function rpc<K extends RpcName>(name: K): (typeof core)[K] {
 }
 
 // ---------- business API ----------
-export const getSeller = rpc('getSeller');
+/** Callers asking at the same moment (two overlapping page renders) share one request. */
+function sharedWhileLoading<T>(load: () => Promise<T>): () => Promise<T> {
+  let inFlight: Promise<T> | null = null;
+  return () => {
+    if (inFlight) return inFlight;
+    const p = load();
+    inFlight = p;
+    const done = () => {
+      if (inFlight === p) inFlight = null;
+    };
+    p.then(done, done);
+    return p;
+  };
+}
+export const getSeller = sharedWhileLoading(rpc('getSeller'));
 export const updateSeller = rpc('updateSeller');
 const listLocalProducts = rpc('listProducts');
 let productsSyncedAt = 0;
@@ -205,6 +219,8 @@ export interface ShopDetailsPatch extends Partial<ShopDetailsStep2> {
   pincode?: string;
   pan_number?: string | null;
   gstin?: string | null;
+  pickup_address?: string | null;
+  description?: string | null;
 }
 export interface ShopDetailsView extends ShopDetailsStep2 {
   seller_id: string;
@@ -651,7 +667,7 @@ async function connectToServer(password: string): Promise<void> {
 }
 
 export const auth = {
-  current: (): Promise<AccountView | null> => (local ? local.localAuth.current() : http<{ account: AccountView | null }>('GET', '/api/auth/me').then((r) => r.account)),
+  current: sharedWhileLoading((): Promise<AccountView | null> => (local ? local.localAuth.current() : http<{ account: AccountView | null }>('GET', '/api/auth/me').then((r) => r.account))),
   /** Creates the seller account on the FastAPI backend (and signs in there), then in the portal. */
   signUp: async (input: { fullName: string; email: string; phone: string; password: string }): Promise<AccountView> => {
     const r = await backendRequest<AuthResponseView>(

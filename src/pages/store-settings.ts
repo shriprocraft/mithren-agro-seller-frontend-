@@ -164,9 +164,11 @@ const page: Page = async ({ root, query, seller, refresh }) => {
             <div><dt>Phone</dt><dd>${seller.phone} ${seller.phoneVerified ? badge('Verified', 'green') : badge('Unverified', 'amber')}</dd></div>
             <div><dt>GSTIN</dt><dd class="mono">${seller.gstin ?? '—'}</dd></div>
             <div><dt>PAN</dt><dd class="mono">${seller.pan ? seller.pan.slice(0, 2) + '•••••' + seller.pan.slice(-3) : '—'}</dd></div>
-            <div><dt>Bank</dt><dd>••••${seller.bank.last4} · ${seller.bank.ifsc}</dd></div>
+            <div><dt>Bank</dt><dd>••••${seller.bank.last4} · ${seller.bank.ifsc} ${seller.bank.verified ? badge('Verified', 'green') : badge('Verification pending', 'amber')}</dd></div>
           </dl>
-          <p class="muted small">Legal and bank details are verified, so changes go through <a href="mailto:${seller.supportEmail}">seller support</a> with updated documents.</p>
+          <p class="muted small">${seller.bank.verified
+            ? html`Legal and bank details are verified, so changes go through <a href="mailto:${seller.supportEmail}">seller support</a> with updated documents.`
+            : html`Bank details are awaiting verification by our team. To change them, upload new bank proof on <a href="#/seller/documents">Documents</a>.`}</p>
         </section>
       </div>
     </div>`.value;
@@ -357,13 +359,20 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     btn.disabled = true;
     const status = form.querySelector('.save-status') as HTMLElement;
     try {
-      // The customer app reads the shop name from the FastAPI shop details: save it there first so a
-      // name the backend refuses never ends up only in the portal.
-      if (form.dataset.section === 'profile' && patch.shopName && patch.shopName !== seller.shopName) {
+      // The customer and delivery apps read the shop name, description and pickup address from the
+      // FastAPI shop details: save them there first so values the backend refuses never end up
+      // only in the portal.
+      const backendPatch: api.ShopDetailsPatch = {};
+      if (form.dataset.section === 'profile') {
+        if (patch.shopName?.trim()) backendPatch.shop_name = patch.shopName.trim();
+        backendPatch.description = patch.description?.trim() || null;
+      }
+      if (form.dataset.section === 'pickup') backendPatch.pickup_address = patch.pickupAddress?.trim() || null;
+      if (Object.keys(backendPatch).length) {
         const me = await api.auth.me();
         if (me?.seller_id) {
-          await api.shopDetails.update(me.seller_id, { shop_name: patch.shopName.trim() });
-          api.sellerSession.setShopName(patch.shopName.trim());
+          await api.shopDetails.update(me.seller_id, backendPatch);
+          if (backendPatch.shop_name) api.sellerSession.setShopName(backendPatch.shop_name);
         }
       }
       await api.updateSeller(patch);
