@@ -4454,3 +4454,14 @@ textarea {
   right: 0;
   z-index: 1;
 }
+
+/* Store settings: on small screens the section menu scrolls sideways inside its own strip. */
+.settings-layout > *,
+.settings-aside {
+  min-width: 0;
+}
+.settings-nav {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
