@@ -7,7 +7,8 @@ import * as core from './api-core.js';
 import { ApiError } from './errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS, type RpcName } from './rpc.js';
 import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, BankInput } from './application.js';
-import type { OrderStatus, SubOrder } from './types.js';
+import type { OrderStatus, Review, SubOrder } from './types.js';
+import { toReview, type BackendReview, type BackendReviewPage } from './backend-reviews.js';
 import { BACKEND_STATUS, toSubOrder, type BackendOrder } from './backend-orders.js';
 import { toDashboardMetrics, type BackendDashboard } from './backend-analytics.js';
 
@@ -145,9 +146,34 @@ export const listSettlements = rpc('listSettlements');
 export const listPayoutRequests = rpc('listPayoutRequests');
 export const getCommissionRules = rpc('getCommissionRules');
 export const requestPayout = rpc('requestPayout');
-export const listReviews = rpc('listReviews');
-export const replyToReview = rpc('replyToReview');
-export const reportReview = rpc('reportReview');
+const localListReviews = rpc('listReviews');
+const localReplyToReview = rpc('replyToReview');
+const localReportReview = rpc('reportReview');
+const reviewField: FieldFor = (loc) => (loc.includes('body') ? 'body' : undefined);
+/** Every review of the seller's products: from the FastAPI backend when signed in there, otherwise the portal's own. */
+export const listReviews = async (): Promise<Review[]> => {
+  if (!sellerSession.isSignedIn()) return localListReviews();
+  const sellerId = (await getSeller()).id;
+  const all: Review[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await backendRequest<BackendReviewPage>('GET', `seller/reviews?limit=100&offset=${offset}`, undefined, () => undefined);
+    all.push(...page.items.map((r) => toReview(r, sellerId)));
+    if (all.length >= page.total || !page.items.length) break;
+  }
+  return all;
+};
+/** The seller's public reply (5–600 characters); posting again replaces it. */
+export const replyToReview = async (id: string, body: string): Promise<Review> => {
+  if (!sellerSession.isSignedIn()) return localReplyToReview(id, body);
+  const r = await backendRequest<BackendReview>('POST', `seller/reviews/${encodeURIComponent(id)}/reply`, { body }, reviewField);
+  return toReview(r, (await getSeller()).id);
+};
+/** Flags the review for moderation. */
+export const reportReview = async (id: string): Promise<Review> => {
+  if (!sellerSession.isSignedIn()) return localReportReview(id);
+  const r = await backendRequest<BackendReview>('POST', `seller/reviews/${encodeURIComponent(id)}/report`, { reason: 'other' }, () => undefined);
+  return toReview(r, (await getSeller()).id);
+};
 export const listDocuments = rpc('listDocuments');
 export const listNotifications = rpc('listNotifications');
 export const markNotificationsRead = rpc('markNotificationsRead');

@@ -60,11 +60,13 @@ const page: Page = async ({ root, query, seller, refresh }) => {
           (r) => html`<li class="card review">
             <div class="review-head">
               ${stars(r.rating)}
-              <strong>${r.title}</strong>
+              ${r.title ? html`<strong>${r.title}</strong>` : ''}
               ${r.reported ? badge('Reported', 'amber') : ''}
             </div>
-            <p>${r.body}</p>
-            <p class="muted small">${r.customerFirstName} · ${pname(r.productId)} · ${fmtDate(r.date)} · <span class="ok-text">Verified purchase</span> (<a href="#/seller/orders/${r.subOrderId}">${r.subOrderId}</a>)</p>
+            ${r.body ? html`<p>${r.body}</p>` : ''}
+            <p class="muted small">${r.customerFirstName} · ${r.productName ?? pname(r.productId)} · ${fmtDate(r.date)} · <span class="ok-text">Verified purchase</span>${
+              !r.subOrderId ? '' : r.orderInPortal === false ? html` (order ${r.subOrderId})` : html` (<a href="#/seller/orders/${r.subOrderId}">${r.subOrderId}</a>)`
+            }</p>
             ${r.reply
               ? html`<div class="reply"><strong>Your reply</strong> <span class="muted small">· ${fmtDate(r.reply.at)}</span><p>${r.reply.body}</p></div>`
               : canReply
@@ -92,6 +94,14 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     const ta = form.querySelector('textarea')!;
     const err = form.querySelector('.field-error') as HTMLElement;
     const btn = form.querySelector('[type=submit]') as HTMLButtonElement;
+    const length = ta.value.trim().length;
+    if (length < 5 || length > 600) {
+      err.textContent = length < 5 ? 'Write at least 5 characters.' : 'Keep it under 600 characters.';
+      err.hidden = false;
+      ta.setAttribute('aria-invalid', 'true');
+      ta.focus();
+      return;
+    }
     btn.disabled = true;
     try {
       await api.replyToReview(form.dataset.id!, ta.value);

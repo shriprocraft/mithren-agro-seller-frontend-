@@ -249,6 +249,10 @@ export interface Review {
   date: string;
   reply?: { body: string; at: string };
   reported?: boolean;
+  /** Set for reviews from the backend, whose productId is not a portal product id. */
+  productName?: string;
+  /** false when subOrderId is the customer application's order number, which the portal cannot open. */
+  orderInPortal?: boolean;
 }
 
 export type DocumentType =
