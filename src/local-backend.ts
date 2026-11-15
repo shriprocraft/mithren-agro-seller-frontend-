@@ -344,6 +344,9 @@ export const localApplication = {
   async get(): Promise<ApplicationView> {
     return service.view(accountOf(currentUser()));
   },
+  async adoptServerApproval(data: Record<string, unknown>, bank: BankView | null): Promise<ApplicationView> {
+    return service.adoptServerApproval(accountOf(currentUser()), data, bank);
+  },
   async saveDraft(data: unknown, nextStep: number, validateStep: number | null): Promise<ApplicationView> {
     return service.saveDraft(accountOf(currentUser()), data, nextStep, validateStep);
   },

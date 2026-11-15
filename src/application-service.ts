@@ -288,6 +288,33 @@ export class ApplicationService {
     });
   }
 
+  /**
+   * The backend already has this seller approved (registered on another device, or through the
+   * portal server): take its details and approval instead of asking for the steps again. Documents
+   * stay where they were uploaded; the bank summary carries only holder, IFSC and last four digits.
+   */
+  adoptServerApproval(acc: AccountInfo, data: Record<string, unknown>, bank: BankView | null): ApplicationView {
+    return this.store.transaction(() => {
+      const app = this.mine(acc);
+      if (app.status === 'approved' || app.status === 'suspended') return this.view(acc);
+      const t = now();
+      app.data = normaliseApplicationData({ ...(app.data as unknown as Record<string, unknown>), ...data });
+      app.status = 'approved';
+      app.currentStep = 8;
+      app.requestedItems = [];
+      app.referenceId ??= this.store.nextReferenceId();
+      app.submittedAt ??= t;
+      app.lastSubmittedAt ??= t;
+      app.reviewedAt = t;
+      app.updatedAt = t;
+      this.store.updateApplication(app);
+      if (bank && !this.store.getBank(app.id)) this.store.saveBank(app.id, bank, '');
+      this.store.audit({ actorType: 'seller', actorId: acc.userId, action: 'application.approval_synced', applicationId: app.id });
+      this.syncWorkspace(app);
+      return this.view(acc);
+    });
+  }
+
   // ---------- Super Admin side (called only by the authenticated admin API) ----------
 
   adminDecide(applicationId: string, action: AdminAction, reviewer: string, message: string, requestedItems: string[]): ApplicationRecord {

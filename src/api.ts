@@ -743,7 +743,9 @@ export const auth = {
     }
     try {
       const account = await portalSignIn();
-      return (await applyServerVerification(profile)) ?? (await syncServerVerification()) ?? account;
+      const verified = (await applyServerVerification(profile)) ?? (await syncServerVerification()) ?? account;
+      await adoptOnSignIn();
+      return verified;
     } catch (e) {
       // Signed in on the server but this browser has no portal account yet: create it from the profile.
       if (!local || !(e instanceof ApiError) || e.status !== 401) throw e;
@@ -754,7 +756,9 @@ export const auth = {
         throw new ApiError(409, 'This browser has a different password saved for this account. Sign in with that password.');
       }
       await local.localAuth.markVerified('email');
-      return local.localAuth.markVerified('phone');
+      const account = await local.localAuth.markVerified('phone');
+      await adoptOnSignIn();
+      return account;
     }
   },
   /**
@@ -856,9 +860,52 @@ interface ServerDraft {
   updated_at: string;
 }
 
+/**
+ * Browser mode: when the backend already has this seller approved (the application was completed
+ * on another device or through the portal server), take over its approval and details instead of
+ * showing an empty application. Null when there's nothing to take over.
+ */
+async function adoptServerApproval(view: ApplicationView): Promise<ApplicationView | null> {
+  if (!local || view.status === 'approved' || view.status === 'suspended') return null;
+  const profile = await backendProfile();
+  if (profile?.approval_status !== 'approved' || !profile.seller_id) return null;
+  const quiet = <T,>(path: string) => backendRequest<T>('GET', path, undefined, () => undefined).catch(() => null);
+  const [shop, bank, draft] = await Promise.all([
+    quiet<ShopDetailsView & { pickup_address?: string | null; description?: string | null }>('seller/shop-details'),
+    quiet<{ account_holder_name: string; ifsc_code: string; last_4_digits: string; updated_at: string }>('seller/bank-details'),
+    quiet<ServerDraft>('seller/registration-draft'),
+  ]);
+  const data: Record<string, unknown> = { ...(draft?.data ?? {}) };
+  if (shop) {
+    const set = (key: string, value: string | null | undefined) => {
+      if (value) data[key] = value;
+    };
+    set('shopName', shop.shop_name);
+    set('ownerName', shop.owner_name);
+    set('businessEmail', shop.email);
+    set('primaryPhone', shop.phone);
+    set('addressLine1', shop.address_line1);
+    set('city', shop.city);
+    set('state', shop.state);
+    set('pincode', shop.pincode);
+    set('pan', shop.pan_number);
+    set('gstin', shop.gstin);
+    set('pickupAddress', shop.pickup_address);
+    set('description', shop.description);
+  }
+  const bankView = bank ? { holderName: bank.account_holder_name, last4: bank.last_4_digits, ifsc: bank.ifsc_code, bankName: '', updatedAt: bank.updated_at } : null;
+  return local.localApplication.adoptServerApproval(data, bankView);
+}
+
+/** At sign-in, so the first page already shows the backend's approval (browser mode only). */
+async function adoptOnSignIn(): Promise<void> {
+  if (!local) return;
+  await adoptServerApproval(await local.localApplication.get()).catch(() => null);
+}
+
 /** Saves the wizard's progress on the backend too (best effort), so it survives cleared browser data. */
-async function saveServerDraft(view: ApplicationView): Promise<void> {
-  if (!sellerSession.isSignedIn() || !view.editable) return;
+async function saveServerDraft(view: ApplicationView, evenWhenLocked = false): Promise<void> {
+  if (!sellerSession.isSignedIn() || (!view.editable && !evenWhenLocked)) return;
   const step = Math.min(8, Math.max(1, view.currentStep));
   await backendRequest('PUT', 'seller/registration-draft', { current_step: step, data: view.data }, () => undefined).catch(() => undefined);
 }
@@ -871,7 +918,10 @@ export const application = {
   get: async (): Promise<ApplicationView> => {
     if (!local) return http('GET', '/api/application');
     const view = await local.localApplication.get();
-    if (!sellerSession.isSignedIn() || !view.editable) return view;
+    if (!sellerSession.isSignedIn()) return view;
+    const adopted = await adoptServerApproval(view);
+    if (adopted) return adopted;
+    if (!view.editable) return view;
     try {
       const remote = await backendRequest<ServerDraft>('GET', 'seller/registration-draft', undefined, () => undefined);
       // A copy this browser has never saved (just recreated after its data was cleared) always yields to the server's.
@@ -890,7 +940,12 @@ export const application = {
     return view;
   },
   saveDraft: async (data: unknown, nextStep: number, validateStep: number | null): Promise<ApplicationView> => {
-    if (!local) return http('PUT', '/api/application', { data, nextStep, validateStep });
+    if (!local) {
+      // The portal server keeps the application; a copy on the backend lets other devices restore it.
+      const saved = await http<ApplicationView>('PUT', '/api/application', { data, nextStep, validateStep });
+      await saveServerDraft(saved);
+      return saved;
+    }
     const view = await local.localApplication.saveDraft(data, nextStep, validateStep);
     await saveServerDraft(view);
     return view;
@@ -901,7 +956,11 @@ export const application = {
     const q = new URLSearchParams({ kind, name: file.name, ...(cert ?? {}) });
     return http('POST', `/api/application/documents?${q}`, undefined, { data: file, type: file.type });
   },
-  submit: (idempotencyKey: string): Promise<ApplicationView> => (local ? local.localApplication.submit(idempotencyKey) : http('POST', '/api/application/submit', { idempotencyKey })),
+  submit: async (idempotencyKey: string): Promise<ApplicationView> => {
+    const view = local ? await local.localApplication.submit(idempotencyKey) : await http<ApplicationView>('POST', '/api/application/submit', { idempotencyKey });
+    await saveServerDraft(view, true);
+    return view;
+  },
   /** Private file link for the owner (server only; the preview keeps no files). */
   fileUrl: (documentId: string): string | null => (REMOTE ? `/api/documents/${encodeURIComponent(documentId)}/file` : null),
 };
