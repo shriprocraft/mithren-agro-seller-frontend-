@@ -157,7 +157,7 @@ const store: ApplicationStore = {
   newId: rid,
 };
 
-const service = new ApplicationService(store);
+const service = new ApplicationService(store, { autoApprove: true });
 
 /** The preview's pre-existing demo seller (already approved), created on first run. */
 async function ensureDemoAccount() {

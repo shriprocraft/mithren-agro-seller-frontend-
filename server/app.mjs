@@ -7,7 +7,7 @@ import { join, extname, resolve, sep, posix } from 'node:path';
 import * as core from '../dist/api-core.js';
 import { ApiError } from '../dist/errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS } from '../dist/rpc.js';
-import { ApplicationService, toAccountView, validateSignUp } from '../dist/application-service.js';
+import { ApplicationService, AUTO_REVIEWER, toAccountView, validateSignUp } from '../dist/application-service.js';
 import { sniffMime, buildView, DOC_KIND_LABEL } from '../dist/application.js';
 import { openDatabase } from './db.mjs';
 import { createStore, rowToAccount } from './store.mjs';
@@ -46,7 +46,16 @@ export function createApp(config) {
   const db = openDatabase(config.dataDir);
   const cipher = createFieldCipher(config.encryptionKey);
   const store = createStore(db, cipher);
-  const service = new ApplicationService(store);
+  const autoApprove = config.autoApprove ?? false;
+  const service = new ApplicationService(store, { autoApprove });
+  core._internal.setAutoApproveListings(autoApprove);
+  if (autoApprove) {
+    // Applications that were already waiting for review are approved too.
+    for (const { id } of db.prepare("SELECT id FROM seller_applications WHERE status = 'pending'").all()) {
+      service.adminDecide(id, 'approve', AUTO_REVIEWER, '', []);
+      (config.log ?? console.log)(`[approval] Application ${id} approved automatically (SELLER_AUTO_APPROVE).`);
+    }
+  }
   const uploadsDir = join(config.dataDir, 'uploads');
   const adminTokenHashes = new Map([...config.adminTokens].map(([t, name]) => [sha256(t), name]));
   const ipHits = new Map();

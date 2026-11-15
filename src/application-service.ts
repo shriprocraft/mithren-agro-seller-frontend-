@@ -88,8 +88,15 @@ export interface UploadMeta {
 const now = () => new Date().toISOString();
 const SUPPORT_EMAIL = 'seller-support@mithrenagro.example';
 
+/** Who approves applications while there is no admin review (SELLER_AUTO_APPROVE). */
+export const AUTO_REVIEWER = 'Automatic approval';
+
 export class ApplicationService {
-  constructor(private store: ApplicationStore) {}
+  /** With autoApprove, a submitted application is approved at once instead of waiting for an admin. */
+  constructor(
+    private store: ApplicationStore,
+    private options: { autoApprove?: boolean } = {},
+  ) {}
 
   /** Create the application record for a newly registered account. */
   createForAccount(acc: AccountInfo): ApplicationRecord {
@@ -245,6 +252,16 @@ export class ApplicationService {
   }
 
   submit(acc: AccountInfo, idempotencyKey: string): ApplicationView {
+    const view = this.submitForReview(acc, idempotencyKey);
+    const app = this.mine(acc);
+    if (this.options.autoApprove && app.status === 'pending') {
+      this.adminDecide(app.id, 'approve', AUTO_REVIEWER, '', []);
+      return this.view(acc);
+    }
+    return view;
+  }
+
+  private submitForReview(acc: AccountInfo, idempotencyKey: string): ApplicationView {
     if (!/^[A-Za-z0-9-]{8,64}$/.test(idempotencyKey)) throw new ApiError(422, 'Invalid submission key.');
     return this.store.transaction(() => {
       const app = this.mine(acc);

@@ -94,6 +94,8 @@ interface Session {
   actorName: string;
 }
 let session: Session = { sellerId: SELLER_A, actorName: 'Ananya K.' };
+// While there is no admin review, published listings go live at once instead of waiting in "pending".
+let autoApproveListings = true;
 
 export const sim = {
   latencyMs: typeof window === 'undefined' ? 0 : 280,
@@ -197,6 +199,9 @@ export const _internal = {
   getDb: () => db,
   replaceDb(next: DB) {
     db = next;
+  },
+  setAutoApproveListings(on: boolean) {
+    autoApproveListings = on;
   },
   setSession(sellerId: string, actorName: string) {
     session = { sellerId, actorName };
@@ -335,7 +340,7 @@ export function saveProduct(input: ProductInput, submit: boolean) {
       Object.assign(p, fields, { variants, updatedAt: nowIso() });
     }
     if (submit && needsReview) {
-      p.status = 'pending';
+      p.status = autoApproveListings ? 'approved' : 'pending';
       p.available = true;
       delete p.moderationNote;
     } else if (submit && wasLive) {
@@ -420,7 +425,7 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
           seasonMonths: [],
           storage: '',
           organicClaim: 'none',
-          status: b.is_active ? 'pending' : 'draft',
+          status: b.is_active ? (autoApproveListings ? 'approved' : 'pending') : 'draft',
           available: true,
           minQty: 1,
           maxQty: 10,
