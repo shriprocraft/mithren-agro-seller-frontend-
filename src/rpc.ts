@@ -8,6 +8,7 @@ export const RPC_METHODS = {
   getProduct: false,
   saveProduct: true,
   checkProduct: false,
+  syncBackendProducts: true,
   setProductAvailability: true,
   archiveProduct: true,
   adjustStock: true,

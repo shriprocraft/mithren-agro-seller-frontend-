@@ -92,14 +92,15 @@ function sharedWhileLoading<T>(load: () => Promise<T>): () => Promise<T> {
 export const getSeller = sharedWhileLoading(rpc('getSeller'));
 export const updateSeller = rpc('updateSeller');
 const listLocalProducts = rpc('listProducts');
+const mergeBackendProducts = rpc('syncBackendProducts');
 let productsSyncedAt = 0;
 /**
  * The seller's products saved on the backend (Neon), merged into this browser's list before listing,
- * so they appear on any device or address and after the browser's data is cleared. At most every 15 s;
+ * so they appear on any device or address (Vercel and the portal server alike) and after the browser's data is cleared. At most every 15 s;
  * without a server session (or before Step 2, when there is no shop) the local list is used as is.
  */
 async function syncProductsFromBackend(): Promise<void> {
-  if (REMOTE || !sellerSession.isSignedIn() || Date.now() - productsSyncedAt < 15_000) return;
+  if (!sellerSession.isSignedIn() || Date.now() - productsSyncedAt < 15_000) return;
   productsSyncedAt = Date.now();
   try {
     const items: core.BackendCatalogProduct[] = [];
@@ -113,7 +114,7 @@ async function syncProductsFromBackend(): Promise<void> {
       items.push(...page.items);
       if (items.length >= page.total || page.items.length === 0) break;
     }
-    await core.syncBackendProducts(items);
+    await mergeBackendProducts(items);
   } catch {
     productsSyncedAt = 0; // offline or no shop yet: try again next time
   }

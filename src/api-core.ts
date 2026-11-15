@@ -402,6 +402,11 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
         ...(v.size ? { size: v.size as Variant['size'] } : {}),
       }));
       if (existing) {
+        // The backend decides whether the listing is live: published on another device or address
+        // means live here too, and unpublished there means a draft here. Rejected and switched-off
+        // (inactive) listings keep their own status.
+        if (b.is_active && (existing.status === 'draft' || existing.status === 'pending')) existing.status = autoApproveListings ? 'approved' : 'pending';
+        else if (!b.is_active && (existing.status === 'approved' || existing.status === 'pending')) existing.status = 'draft';
         Object.assign(existing, {
           name: b.title,
           description: b.description ?? existing.description,
