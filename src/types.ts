@@ -93,6 +93,8 @@ export interface Product {
   slug: string;
   description: string;
   category: string;
+  /** With category "Others": the seller's own name for it, e.g. "Honey". */
+  customCategory?: string;
   emoji: string;
   variants: Variant[];
   origin: string;

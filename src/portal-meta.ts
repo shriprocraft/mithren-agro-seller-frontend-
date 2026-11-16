@@ -22,6 +22,7 @@ export interface PortalMeta {
   max_qty?: number;
   low_stock_threshold?: number;
   emoji?: string;
+  custom_category?: string;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,6 +48,8 @@ export function portalMetaOf(p: Product): PortalMeta {
     max_qty: clamp(p.maxQty || 10, 1, 1000),
     low_stock_threshold: clamp(p.lowStockThreshold ?? 10, 0, 100000),
     ...(p.emoji ? { emoji: p.emoji.slice(0, 8) } : {}),
+    // Always sent, so clearing it (another category chosen) reaches other devices too.
+    custom_category: p.category === 'Others' ? (p.customCategory ?? '').trim().slice(0, 40) : '',
   };
 }
 
@@ -73,4 +76,5 @@ export function applyPortalMeta(p: Product, m: PortalMeta): void {
   if (m.max_qty !== undefined) p.maxQty = m.max_qty;
   if (m.low_stock_threshold !== undefined) p.lowStockThreshold = m.low_stock_threshold;
   if (m.emoji !== undefined) p.emoji = m.emoji;
+  if (m.custom_category !== undefined) p.customCategory = m.custom_category || undefined;
 }

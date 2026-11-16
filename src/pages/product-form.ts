@@ -120,6 +120,9 @@ const page: Page = async ({ root, params, seller }) => {
                 <p class="hint">Shown wherever a product photo isn’t available.</p>
               </div>
             </div>
+            <div id="custom-category" ${product.category === 'Others' ? '' : raw('hidden')}>
+              ${field({ name: 'customCategory', label: 'Category name', required: true, value: product.customCategory ?? '', placeholder: 'Type your category, e.g. Honey, Spices, Millets', hint: 'Shown with your product in the portal. In the customer app it is listed under Others.', attrs: 'maxlength="40" autocomplete="off"' })}
+            </div>
             ${textarea({ name: 'description', label: 'Description', value: product.description, rows: 4, placeholder: 'Describe the variety, taste and how it is grown', hint: 'Variety, taste, how it’s grown. At least 20 characters to submit.', attrs: 'maxlength="1200"' })}
           </section>
 
@@ -256,6 +259,7 @@ const page: Page = async ({ root, params, seller }) => {
         slug: f.slug?.trim() ?? '',
         description: f.description ?? '',
         category: f.category ?? '',
+        customCategory: undefined,
         emoji: f.emoji ?? '👗',
         variants: variants.map((v) => ({ ...v, sku: v.sku.trim().toUpperCase(), packSize: 1, unit: 'piece' as Unit })),
         origin: '',
@@ -276,6 +280,7 @@ const page: Page = async ({ root, params, seller }) => {
       slug: f.slug?.trim() ?? '',
       description: f.description ?? '',
       category: f.category ?? '',
+      customCategory: f.category === 'Others' ? (f.customCategory ?? '').trim() : undefined,
       emoji: f.emoji ?? '🥬',
       variants: variants.map(({ size: _size, ...v }) => ({ ...v, sku: v.sku.trim().toUpperCase() })),
       origin: f.origin ?? '',
@@ -500,6 +505,12 @@ const page: Page = async ({ root, params, seller }) => {
     else delete v.size;
     refreshSkus();
     renderPreview();
+  });
+  // "Others": the seller types their own category name.
+  on(root, 'change', '#f_category', (_e, el) => {
+    const others = (el as HTMLSelectElement).value === 'Others';
+    $('#custom-category', root)!.hidden = !others;
+    if (others) ($('#f_customCategory', root) as HTMLInputElement).focus();
   });
   // Show the fields that fit the chosen category.
   on(root, 'change', '#f_category', (_e, el) => {

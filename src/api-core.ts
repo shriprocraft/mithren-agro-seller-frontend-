@@ -262,6 +262,11 @@ function validateProduct(input: ProductInput, submitting: boolean): Record<strin
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(input.slug)) e.slug = 'Use lowercase letters, numbers and hyphens only.';
   else if (db.products.some((p) => p.slug === input.slug && p.sellerId === session.sellerId && p.id !== input.id)) e.slug = 'You already have a product with this slug.';
   if (!input.category) e.category = 'Choose a category.';
+  else if (input.category === 'Others') {
+    const own = (input.customCategory ?? '').trim();
+    if (own.length < 2) e.customCategory = 'Type the category name, e.g. Honey.';
+    else if (own.length > 40) e.customCategory = 'Keep it under 40 characters.';
+  }
   if (input.variants.length === 0) e.variants = 'Add at least one variant.';
   const apparel = categoryKind(input.category) === 'apparel';
   const skus = new Set<string>();
@@ -331,7 +336,7 @@ export function saveProduct(input: ProductInput, submit: boolean) {
     const { id: _ignored, ...fields } = input;
     void _ignored;
     // Live listings keep their status unless a moderated field changed.
-    const moderated: (keyof ProductInput)[] = ['name', 'description', 'category', 'organicClaim', 'certificateId', 'origin'];
+    const moderated: (keyof ProductInput)[] = ['name', 'description', 'category', 'customCategory', 'organicClaim', 'certificateId', 'origin'];
     const wasLive = !!p && (p.status === 'approved' || p.status === 'inactive');
     const needsReview = !p || !wasLive || moderated.some((k) => (p as Product)[k as keyof Product] !== fields[k as keyof typeof fields]);
     if (!p) {

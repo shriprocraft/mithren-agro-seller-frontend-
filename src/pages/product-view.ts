@@ -5,7 +5,7 @@ import { html, raw, on, type Raw } from '../ui/dom.js';
 import { pageHeader, productBadge, icon, emptyState, badge, callout } from '../ui/components.js';
 import * as api from '../api.js';
 import { money, fmtDate } from '../lib.js';
-import { categoryKind } from '../catalog.js';
+import { categoryKind, categoryLabel } from '../catalog.js';
 import type { Product, Variant } from '../types.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -49,7 +49,7 @@ const page: Page = async ({ root, params, seller }) => {
   const editButton = readOnly ? '' : html`<a class="btn btn-primary" href="${editHref}" data-action="edit-product">${icon('edit', 16)} Edit Product</a>`;
 
   root.innerHTML = html`
-    ${pageHeader(p.name, `${p.category} · Last updated ${fmtDate(p.updatedAt, true)}`, html`${status}${editButton}`, { href: '/seller/products', label: 'Products' })}
+    ${pageHeader(p.name, `${categoryLabel(p)} · Last updated ${fmtDate(p.updatedAt, true)}`, html`${status}${editButton}`, { href: '/seller/products', label: 'Products' })}
     ${p.status === 'rejected' ? callout('error', 'This listing was rejected', p.moderationNote ?? 'Edit the listing to fix the reviewer’s points and resubmit.') : ''}
     ${readOnly ? callout('error', 'Read-only', 'Your account is suspended, so listings can’t be edited.') : ''}
 

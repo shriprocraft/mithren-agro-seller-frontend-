@@ -8,6 +8,7 @@ import { toast, confirmDialog, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { money, timeAgo, toCsv } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
+import { categoryLabel } from '../catalog.js';
 import type { Product, Variant } from '../types.js';
 
 const STATUS_TABS: [string, string][] = [
@@ -334,7 +335,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
 
   on(root, 'click', '[data-action=export]', () => {
     const rows: (string | number)[][] = [['product', 'category', 'status', 'variant', 'sku', 'price', 'mrp', 'stock']];
-    for (const p of all) for (const vr of p.variants) rows.push([p.name, p.category, p.archived ? 'archived' : p.status, vr.label, vr.sku, vr.price, vr.mrp ?? '', vr.stock]);
+    for (const p of all) for (const vr of p.variants) rows.push([p.name, categoryLabel(p), p.archived ? 'archived' : p.status, vr.label, vr.sku, vr.price, vr.mrp ?? '', vr.stock]);
     saveFile(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
   });
 };
@@ -351,7 +352,7 @@ function row(p: Product, readOnly: boolean) {
     <td>
       <a class="prod-cell" href="#/seller/products/${p.id}">
         <span class="prod-thumb" aria-hidden="true">${p.images?.length ? html`<img src="${api.imageUrl(p.images[0]!)}" alt="" loading="lazy" />` : p.emoji}</span>
-        <span><strong>${p.name}</strong><span class="muted small">${p.category}${p.organicClaim === 'certified' ? ' · Certified organic' : p.organicClaim === 'in_conversion' ? ' · In conversion' : ''}</span></span>
+        <span><strong>${p.name}</strong><span class="muted small">${categoryLabel(p)}${p.organicClaim === 'certified' ? ' · Certified organic' : p.organicClaim === 'in_conversion' ? ' · In conversion' : ''}</span></span>
       </a>
     </td>
     <td>${p.archived ? badge('Archived') : productBadge(p.status)}</td>

@@ -143,3 +143,7 @@ export function generateSku(category: string, name: string, v: { size?: ApparelS
     if (!taken.has(candidate)) return candidate;
   }
 }
+
+/** The category as the seller sees it: their own name for "Others" when they typed one. */
+export const categoryLabel = (p: { category: string; customCategory?: string }): string =>
+  p.category === 'Others' && p.customCategory?.trim() ? p.customCategory.trim() : p.category;
