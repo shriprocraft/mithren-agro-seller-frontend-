@@ -403,10 +403,12 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
       }));
       if (existing) {
         // The backend decides whether the listing is live: published on another device or address
-        // means live here too, and unpublished there means a draft here. Rejected and switched-off
-        // (inactive) listings keep their own status.
-        if (b.is_active && (existing.status === 'draft' || existing.status === 'pending')) existing.status = autoApproveListings ? 'approved' : 'pending';
-        else if (!b.is_active && (existing.status === 'approved' || existing.status === 'pending')) existing.status = 'draft';
+        // means live here too, and unpublished there means a draft here. Rejected, switched-off
+        // (inactive) and archived listings keep their own status: the seller hid those on purpose,
+        // and the backend is inactive because of that, not because the listing went back to draft.
+        const hiddenBySeller = existing.archived || !existing.available;
+        if (b.is_active && !hiddenBySeller && (existing.status === 'draft' || existing.status === 'pending')) existing.status = autoApproveListings ? 'approved' : 'pending';
+        else if (!b.is_active && !hiddenBySeller && (existing.status === 'approved' || existing.status === 'pending')) existing.status = 'draft';
         Object.assign(existing, {
           name: b.title,
           description: b.description ?? existing.description,

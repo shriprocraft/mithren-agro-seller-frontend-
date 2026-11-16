@@ -264,11 +264,33 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     if (panel) panel.hidden = !open;
   });
 
+  // Customers see a product only while it is approved, available and not archived. Archive, Restore and
+  // the Available switch change the portal first (it checks open orders), then the backend, which
+  // lists or unlists it in the customer storefront; if the backend fails, the portal change is undone.
+  const isLive = (p: Product) => !p.archived && p.available && p.status === 'approved';
+  async function changeAndPublish(id: string, change: () => Promise<Product>, undo: () => Promise<Product>): Promise<Product> {
+    const backendId = all.find((p) => p.id === id)?.backendId;
+    if (backendId && !api.sellerSession.isSignedIn()) {
+      throw new api.ApiError(401, 'Connect your account to the Mithren server first: enter your password in the banner at the top of the page.');
+    }
+    const after = await change();
+    if (!backendId) return after;
+    try {
+      await api.products.setActive(backendId, isLive(after));
+    } catch (err) {
+      await undo().catch(() => undefined);
+      throw err;
+    }
+    return after;
+  }
+
   on(root, 'change', '[data-action=toggle-available]', async (_e, el) => {
     const input = el as HTMLInputElement;
     input.disabled = true;
     try {
-      await api.setProductAvailability(input.dataset.id!, input.checked);
+      const id = input.dataset.id!;
+      const available = input.checked;
+      await changeAndPublish(id, () => api.setProductAvailability(id, available), () => api.setProductAvailability(id, !available));
       toast(input.checked ? 'Product is available to customers' : 'Product hidden from customers');
       refresh();
     } catch (err) {
@@ -286,8 +308,8 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       if (!c.ok) return;
     }
     try {
-      await api.archiveProduct(id, archived);
-      toast(archived ? 'Product archived' : 'Product restored');
+      const after = await changeAndPublish(id, () => api.archiveProduct(id, archived), () => api.archiveProduct(id, !archived));
+      toast(archived ? 'Product archived and hidden from customers' : isLive(after) ? 'Product restored' : 'Product restored. Turn on Available to show it to customers.');
       refresh();
     } catch (err) {
       toast((err as Error).message, 'error');

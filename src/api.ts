@@ -512,6 +512,9 @@ export const products = {
   /** PATCH /api/v1/products/{id}. Sent variants replace the stored list. */
   update: (backendId: string, payload: import('./catalog.js').BackendProductUpdate) =>
     backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, payload, productField),
+  /** PATCH /api/v1/products/{id} with is_active only: shows (true) or hides (false) it in the customer storefront. */
+  setActive: (backendId: string, active: boolean) =>
+    backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, { is_active: active }, productField),
   /** DELETE /api/v1/products/{id}: soft delete, the product becomes inactive. */
   remove: (backendId: string) => backendRequest<BackendProductView>('DELETE', `products/${encodeURIComponent(backendId)}`, undefined, productField),
 };
