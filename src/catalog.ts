@@ -52,6 +52,8 @@ export interface BackendProduct {
   variants: BackendVariant[];
   images: string[];
   is_active: boolean;
+  /** The portal's listing details (see portal-meta.ts), sent with the product so it never exists without them. */
+  portal?: Record<string, unknown>;
 }
 
 interface FormProduct {

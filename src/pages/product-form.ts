@@ -91,6 +91,35 @@ const page: Page = async ({ root, params, seller }) => {
       ? 'One variant per size, such as S, M, L or Free Size.'
       : 'Pack sizes such as 250 g, 500 g, 1 kg, a bunch or a box.';
 
+  // The portal's details for the form as it is now (status, availability and archiving are set
+  // separately, once the save decides them).
+  const detailsOf = (input: api.ProductInput) => {
+    const { status: _s, available: _a, archived: _r, ...details } = portalMetaOf({ ...product, ...input } as Product);
+    void _s, void _a, void _r;
+    return details;
+  };
+
+  // Category: pick from the list, or choose "Others" and type your own (it becomes a category of its
+  // own in the customer app, e.g. "Millet").
+  const categoryField = () => {
+    const own = product.category === 'Others';
+    return html`<div class="field category-field">
+      <label id="category-label" for="${own ? 'f_customCategory' : 'f_category'}">Category<span class="req" aria-hidden="true"> *</span></label>
+      <select id="f_category" name="category" required aria-describedby="f_category_hint f_category_err" ${own ? raw('hidden') : ''}>
+        <option value="">Select category</option>
+        ${CATEGORIES.map((c) => html`<option value="${c}" ${product.category === c ? raw('selected') : ''}>${c === 'Others' ? 'Others (type your own)' : c}</option>`)}
+      </select>
+      <div class="own-category" id="own-category" ${own ? '' : raw('hidden')}>
+        <input id="f_customCategory" name="customCategory" type="text" maxlength="40" autocomplete="off" value="${product.customCategory ?? ''}"
+          placeholder="Type your category, e.g. Millet" aria-describedby="f_category_hint f_customCategory_err" />
+        <button type="button" class="link-btn small" data-action="category-list">Choose from list</button>
+      </div>
+      <p class="hint" id="f_category_hint" ${own ? '' : raw('hidden')}>Customers will find it under this name.</p>
+      <p class="field-error" id="f_category_err" hidden></p>
+      <p class="field-error" id="f_customCategory_err" hidden></p>
+    </div>`;
+  };
+
   const moderationInfo =
     product.status === 'approved' && !isNew
       ? callout('info', 'Editing a live listing', 'Your changes show to customers as soon as you save.')
@@ -109,15 +138,12 @@ const page: Page = async ({ root, params, seller }) => {
             ${field({ name: 'name', label: 'Product name', value: product.name, required: true, placeholder: 'Enter the product name, e.g. Alphonso Mango', attrs: 'maxlength="80" autocomplete="off"' })}
             ${field({ name: 'slug', label: 'URL slug', value: product.slug, required: true, placeholder: 'product-name-in-lowercase', hint: 'Used in the storefront link. Lowercase letters, numbers and hyphens.', attrs: 'maxlength="80"' })}
             <div class="row-2">
-              ${select({ name: 'category', label: 'Category', value: product.category, required: true, placeholder: 'Select category', options: CATEGORIES.map((c) => [c, c] as [string, string]) })}
+              ${categoryField()}
               <div class="field">
                 <label for="f_emoji">Fallback icon</label>
                 <select id="f_emoji" name="emoji" class="emoji-select">${EMOJIS.map((e) => html`<option ${e === product.emoji ? 'selected' : ''}>${e}</option>`)}</select>
                 <p class="hint">Shown wherever a product photo isn’t available.</p>
               </div>
-            </div>
-            <div id="custom-category" ${product.category === 'Others' ? '' : raw('hidden')}>
-              ${field({ name: 'customCategory', label: 'Category name', required: true, value: product.customCategory ?? '', placeholder: 'Type your category, e.g. Honey, Spices, Millets', hint: 'Shown with your product in the portal. In the customer app it is listed under Others.', attrs: 'maxlength="40" autocomplete="off"' })}
             </div>
             ${textarea({ name: 'description', label: 'Description', value: product.description, rows: 4, placeholder: 'Describe the variety, taste and how it is grown', hint: 'Variety, taste, how it’s grown. At least 20 characters to submit.', attrs: 'maxlength="1200"' })}
           </section>
@@ -179,7 +205,6 @@ const page: Page = async ({ root, params, seller }) => {
         <aside class="form-side">
           <section class="card" id="organic-card" ${apparel ? raw('hidden') : ''}>
             <h2 class="card-title">Organic claim</h2>
-            <p class="muted small">Organic labels appear only when backed by a certificate that a reviewer has verified and that hasn’t expired.</p>
             <fieldset class="field">
               <legend class="sr-only">Organic claim</legend>
               <div class="radio-stack">
@@ -502,11 +527,25 @@ const page: Page = async ({ root, params, seller }) => {
     refreshSkus();
     renderPreview();
   });
-  // "Others": the seller types their own category name.
+  // "Others": the Category field itself becomes a text box for the seller's own category.
+  const showOwnCategory = (own: boolean) => {
+    const sel = $('#f_category', root) as HTMLSelectElement;
+    const input = $('#f_customCategory', root) as HTMLInputElement;
+    sel.hidden = own;
+    $('#own-category', root)!.hidden = !own;
+    $('#f_category_hint', root)!.hidden = !own;
+    $('#category-label', root)!.setAttribute('for', own ? 'f_customCategory' : 'f_category');
+    if (own) input.focus();
+  };
   on(root, 'change', '#f_category', (_e, el) => {
-    const others = (el as HTMLSelectElement).value === 'Others';
-    $('#custom-category', root)!.hidden = !others;
-    if (others) ($('#f_customCategory', root) as HTMLInputElement).focus();
+    if ((el as HTMLSelectElement).value === 'Others') showOwnCategory(true);
+  });
+  on(root, 'click', '[data-action=category-list]', () => {
+    const sel = $('#f_category', root) as HTMLSelectElement;
+    sel.value = '';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    showOwnCategory(false);
+    sel.focus();
   });
   // Show the fields that fit the chosen category.
   on(root, 'change', '#f_category', (_e, el) => {
@@ -586,11 +625,12 @@ const page: Page = async ({ root, params, seller }) => {
       let synced = false;
       if (product.backendId) {
         if (!onServer()) throw new api.ApiError(401, NO_SERVER_SESSION);
-        await api.products.update(product.backendId, convert(() => toBackendUpdate(input, submit)));
+        // The details go in the same request, so no other device ever sees the product without them.
+        await api.products.update(product.backendId, { ...convert(() => toBackendUpdate(input, submit)), portal: detailsOf(input) });
         synced = true;
       } else if (onServer()) {
         // New products, and older ones saved before the catalogue existed, are created there.
-        input.backendId = (await api.products.create(convert(() => toBackendProduct(input, submit)))).id;
+        input.backendId = (await api.products.create({ ...convert(() => toBackendProduct(input, submit)), portal: { ...detailsOf(input), status: submit ? 'approved' : 'draft', available: true, archived: false } })).id;
         synced = true;
       } else if (isNew) {
         throw new api.ApiError(401, NO_SERVER_SESSION);

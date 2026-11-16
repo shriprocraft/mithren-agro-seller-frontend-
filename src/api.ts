@@ -171,16 +171,16 @@ async function syncProductsFromBackend(): Promise<void> {
       items.push(...page.items);
       if (items.length >= page.total || page.items.length === 0) break;
     }
-    await mergeBackendProducts(items);
-    // Products saved before the backend kept the portal's details: this browser's copy fills them in
-    // once, so other devices get them too. After that the backend's copy always wins.
+    // Products saved before the backend kept the portal's details: a browser that already had them
+    // fills them in once, so other devices get them too. Only copies this browser had *before* this
+    // sync count: one it has just received knows nothing the backend doesn't (and pushing it would
+    // race the device that is saving the product). After that the backend's copy always wins.
     const missing = items.filter((b) => !hasPortalMeta(b.portal));
-    if (missing.length) {
-      const mine = await listLocalProducts({ includeArchived: true });
-      for (const b of missing) {
-        const local = mine.find((p) => p.backendId === b.id);
-        if (local) await products.setPortal(b.id, portalMetaOf(local)).catch(() => undefined);
-      }
+    const hadBefore = missing.length ? await listLocalProducts({ includeArchived: true }) : [];
+    await mergeBackendProducts(items);
+    for (const b of missing) {
+      const local = hadBefore.find((p) => p.backendId === b.id);
+      if (local) await products.setPortal(b.id, portalMetaOf(local)).catch(() => undefined);
     }
   } catch {
     productsSyncedAt = 0; // offline or no shop yet: try again next time

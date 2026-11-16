@@ -456,6 +456,20 @@ main > .callout {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* Product form: "Others" turns the Category field into a text box in the same place. */
+.category-field .own-category {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.category-field .own-category input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.category-field .own-category .link-btn {
+  white-space: nowrap;
+}
+
 /* The order page's two print actions: same look, same size, side by side. */
 .print-actions {
   display: flex;
