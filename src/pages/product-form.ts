@@ -92,13 +92,9 @@ const page: Page = async ({ root, params, seller }) => {
       : 'Pack sizes such as 250 g, 500 g, 1 kg, a bunch or a box.';
 
   const moderationInfo =
-    product.status === 'rejected'
-      ? callout('error', 'This listing was rejected', product.moderationNote ?? 'See the reviewer’s note and resubmit.')
-      : product.status === 'pending'
-        ? callout('info', 'Pending approval', 'This listing is with our moderation team. You can still edit it; saving will keep it in the queue.')
-        : product.status === 'approved' && !isNew
-          ? callout('info', 'Editing a live listing', 'Price, stock limits and availability update immediately. Changes to name, description, category or organic claim are sent for re-approval.')
-          : '';
+    product.status === 'approved' && !isNew
+      ? callout('info', 'Editing a live listing', 'Your changes show to customers as soon as you save.')
+      : '';
 
   root.innerHTML = html`
     ${pageHeader(isNew ? 'Add product' : product.name, isNew ? 'Fill in the details customers see. Save a draft any time.' : `Last updated ${fmtDate(product.updatedAt, true)}`, isNew ? undefined : productBadge(product.status), { href: '/seller/products', label: 'Products' })}
@@ -213,7 +209,7 @@ const page: Page = async ({ root, params, seller }) => {
             ${readOnly
               ? ''
               : html`<button type="submit" class="btn btn-primary btn-block" data-submit="submit" ${approved ? '' : raw('disabled aria-describedby="submit-why"')}>
-                  ${isNew ? 'Publish Product' : product.status === 'approved' || product.status === 'inactive' ? 'Save changes' : product.status === 'pending' ? 'Update submission' : 'Publish Product'}
+                  ${isNew ? 'Publish Product' : product.status === 'approved' || product.status === 'inactive' ? 'Save changes' : 'Publish Product'}
                 </button>
                 ${approved ? '' : html`<p class="hint" id="submit-why">Available after account approval.</p>`}
                 ${product.status === 'approved' || product.status === 'inactive' ? '' : html`<button type="submit" class="btn btn-block" data-submit="draft">Save draft</button>`}
@@ -612,7 +608,7 @@ const page: Page = async ({ root, params, seller }) => {
       toast(
         isNew
           ? submit ? 'Product published' : 'Draft saved'
-          : `${submit ? (saved.status === 'pending' && product.status !== 'pending' ? 'Changes saved — sent for re-approval' : 'Changes saved') : 'Draft saved'}${synced ? '' : ' (this product isn’t in the catalogue)'}`,
+          : `${submit ? 'Changes saved' : 'Draft saved'}${synced ? '' : ' (this product isn’t in the catalogue)'}`,
       );
       navigate(`/seller/products/${saved.id}`, isNew);
     } catch (err) {

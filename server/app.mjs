@@ -48,7 +48,6 @@ export function createApp(config) {
   const store = createStore(db, cipher);
   const autoApprove = config.autoApprove ?? false;
   const service = new ApplicationService(store, { autoApprove });
-  core._internal.setAutoApproveListings(autoApprove);
   if (autoApprove) {
     // Applications that were already waiting for review are approved too.
     for (const { id } of db.prepare("SELECT id FROM seller_applications WHERE status = 'pending'").all()) {

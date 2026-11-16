@@ -25,10 +25,8 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   if (m.awaiting) alerts.push(alertItem('amber', `${m.awaiting} order${m.awaiting > 1 ? 's' : ''} awaiting confirmation`, `Accept or reject within ${seller.fulfilment.acceptWindowMins} min of placement.`, '/seller/orders?status=awaiting_confirmation', 'Review orders'));
   const outOfStock = m.lowStock.filter((l) => l.stock === 0).length;
   if (m.lowStock.length) alerts.push(alertItem(outOfStock ? 'red' : 'amber', `${m.lowStock.length} variant${m.lowStock.length > 1 ? 's' : ''} low on stock${outOfStock ? ` (${outOfStock} out of stock)` : ''}`, m.lowStock.slice(0, 3).map((l) => `${l.name} ${l.variant}`).join(', '), '/seller/inventory?filter=low', 'Restock'));
-  if (m.rejectedProducts) alerts.push(alertItem('red', `${m.rejectedProducts} listing${m.rejectedProducts > 1 ? 's' : ''} rejected by moderation`, 'Read the reviewer note, fix and resubmit.', '/seller/products?status=rejected', 'View'));
   if (m.certExpiringDays !== null && m.certExpiringDays <= 30)
     alerts.push(alertItem(m.certExpiringDays <= 0 ? 'red' : 'amber', m.certExpiringDays <= 0 ? 'Organic certificate has expired' : `Organic certificate expires in ${m.certExpiringDays} days`, 'Organic labels are removed from listings when the certificate expires.', '/seller/documents', 'Upload renewal'));
-  if (m.pendingProducts) alerts.push(alertItem('blue', `${m.pendingProducts} listing${m.pendingProducts > 1 ? 's' : ''} pending approval`, 'Moderation usually completes within 1 business day.', '/seller/products?status=pending', 'View'));
 
   root.innerHTML = html`
     ${pageHeader(

@@ -15,7 +15,6 @@ export interface PortalMeta {
   organic_claim?: OrganicClaim;
   certificate_id?: string;
   status?: ProductStatus;
-  moderation_note?: string;
   available?: boolean;
   archived?: boolean;
   min_qty?: number;
@@ -41,7 +40,6 @@ export function portalMetaOf(p: Product): PortalMeta {
     organic_claim: p.organicClaim,
     ...(p.certificateId ? { certificate_id: p.certificateId.slice(0, 64) } : {}),
     status: p.status,
-    ...(p.moderationNote ? { moderation_note: p.moderationNote.slice(0, 500) } : {}),
     available: p.available,
     archived: p.archived,
     min_qty: clamp(p.minQty || 1, 1, 1000),
@@ -68,8 +66,8 @@ export function applyPortalMeta(p: Product, m: PortalMeta): void {
   if (m.storage !== undefined) p.storage = m.storage;
   if (m.organic_claim !== undefined) p.organicClaim = m.organic_claim;
   if (m.certificate_id !== undefined) p.certificateId = m.certificate_id;
-  if (m.status !== undefined) p.status = m.status;
-  if (m.moderation_note !== undefined) p.moderationNote = m.moderation_note;
+  // Older records may still say pending or rejected: there is no product review any more.
+  if (m.status !== undefined) p.status = (m.status as string) === 'pending' ? 'approved' : (m.status as string) === 'rejected' ? 'draft' : m.status;
   if (m.available !== undefined) p.available = m.available;
   if (m.archived !== undefined) p.archived = m.archived;
   if (m.min_qty !== undefined) p.minQty = m.min_qty;

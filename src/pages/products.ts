@@ -14,9 +14,7 @@ import type { Product, Variant } from '../types.js';
 const STATUS_TABS: [string, string][] = [
   ['', 'All'],
   ['approved', 'Approved'],
-  ['pending', 'Pending'],
   ['draft', 'Drafts'],
-  ['rejected', 'Rejected'],
   ['inactive', 'Inactive'],
   ['archived', 'Archived'],
 ];
@@ -150,7 +148,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   root.innerHTML = html`
     ${pageHeader(
       'Products',
-      'Create and manage your listings. New listings and changes to organic claims go through moderation.',
+      'Create and manage your listings. Published products go live for customers right away.',
       html`<button class="btn" type="button" data-action="export">${icon('download', 16)} Export CSV</button>
         ${readOnly ? '' : html`<a class="btn btn-primary" href="#/seller/products/new">${icon('plus', 16)} Add product</a>`}`,
     )}

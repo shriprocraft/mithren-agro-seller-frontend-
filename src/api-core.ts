@@ -95,8 +95,6 @@ interface Session {
   actorName: string;
 }
 let session: Session = { sellerId: SELLER_A, actorName: 'Ananya K.' };
-// While there is no admin review, published listings go live at once instead of waiting in "pending".
-let autoApproveListings = true;
 
 export const sim = {
   latencyMs: typeof window === 'undefined' ? 0 : 280,
@@ -201,9 +199,6 @@ export const _internal = {
   replaceDb(next: DB) {
     db = next;
   },
-  setAutoApproveListings(on: boolean) {
-    autoApproveListings = on;
-  },
   setSession(sellerId: string, actorName: string) {
     session = { sellerId, actorName };
   },
@@ -254,7 +249,7 @@ function ownedProduct(id: string) {
 
 export const getProduct = (id: string) => call(() => ownedProduct(id));
 
-export type ProductInput = Omit<Product, 'id' | 'sellerId' | 'status' | 'moderationNote' | 'archived' | 'updatedAt'> & { id?: string };
+export type ProductInput = Omit<Product, 'id' | 'sellerId' | 'status' | 'archived' | 'updatedAt'> & { id?: string };
 
 function validateProduct(input: ProductInput, submitting: boolean): Record<string, string> {
   const e: Record<string, string> = {};
@@ -335,10 +330,8 @@ export function saveProduct(input: ProductInput, submit: boolean) {
     let p = input.id ? ownedProduct(input.id) : undefined;
     const { id: _ignored, ...fields } = input;
     void _ignored;
-    // Live listings keep their status unless a moderated field changed.
-    const moderated: (keyof ProductInput)[] = ['name', 'description', 'category', 'customCategory', 'organicClaim', 'certificateId', 'origin'];
+    // Approved sellers publish straight to approved; live listings keep their status (and Available) when edited.
     const wasLive = !!p && (p.status === 'approved' || p.status === 'inactive');
-    const needsReview = !p || !wasLive || moderated.some((k) => (p as Product)[k as keyof Product] !== fields[k as keyof typeof fields]);
     if (!p) {
       p = { ...fields, id: uid('p'), sellerId: s.id, status: 'draft', archived: false, updatedAt: nowIso() };
       db.products.unshift(p);
@@ -350,13 +343,10 @@ export function saveProduct(input: ProductInput, submit: boolean) {
       for (const v of variants) if (!stockById.has(v.id) && v.stock > 0) logAdjustment(p, v, v.stock, 'restock', 'Opening stock (new variant)');
       Object.assign(p, fields, { variants, updatedAt: nowIso() });
     }
-    if (submit && needsReview) {
-      p.status = autoApproveListings ? 'approved' : 'pending';
+    if (submit && !wasLive) {
+      p.status = 'approved';
       p.available = true;
-      delete p.moderationNote;
-    } else if (submit && wasLive) {
-      /* price, limits and storage changes apply immediately */
-    } else if (p.status === 'rejected' || p.status === 'draft') {
+    } else if (!wasLive) {
       p.status = 'draft';
     }
     return p;
@@ -420,8 +410,8 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
         // (inactive) and archived listings keep their own status: the seller hid those on purpose,
         // and the backend is inactive because of that, not because the listing went back to draft.
         const hiddenBySeller = existing.archived || !existing.available;
-        if (b.is_active && !hiddenBySeller && (existing.status === 'draft' || existing.status === 'pending')) existing.status = autoApproveListings ? 'approved' : 'pending';
-        else if (!b.is_active && !hiddenBySeller && (existing.status === 'approved' || existing.status === 'pending')) existing.status = 'draft';
+        if (b.is_active && !hiddenBySeller && existing.status === 'draft') existing.status = 'approved';
+        else if (!b.is_active && !hiddenBySeller && existing.status === 'approved') existing.status = 'draft';
         Object.assign(existing, {
           name: b.title,
           description: b.description ?? existing.description,
@@ -447,7 +437,7 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
           seasonMonths: [],
           storage: '',
           organicClaim: 'none',
-          status: b.is_active ? (autoApproveListings ? 'approved' : 'pending') : 'draft',
+          status: b.is_active ? 'approved' : 'draft',
           available: true,
           minQty: 1,
           maxQty: 10,
@@ -800,8 +790,6 @@ export interface DashboardMetrics {
   series: { date: string; sales: number; orders: number }[];
   awaiting: number;
   certExpiringDays: number | null;
-  pendingProducts: number;
-  rejectedProducts: number;
 }
 
 const orderValue = (o: SubOrder) => o.items.filter((i) => !i.unavailable).reduce((s, i) => s + i.qty * i.unitPrice, 0) - o.discountAllocation;
@@ -874,8 +862,6 @@ export function computeDashboard(data: DB, sellerId: string, days: number, nowMs
     series,
     awaiting: mine.filter((o) => o.status === 'awaiting_confirmation').length,
     certExpiringDays,
-    pendingProducts: products.filter((p) => p.status === 'pending').length,
-    rejectedProducts: products.filter((p) => p.status === 'rejected').length,
   };
 }
 

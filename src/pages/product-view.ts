@@ -50,7 +50,6 @@ const page: Page = async ({ root, params, seller }) => {
 
   root.innerHTML = html`
     ${pageHeader(p.name, `${categoryLabel(p)} · Last updated ${fmtDate(p.updatedAt, true)}`, html`${status}${editButton}`, { href: '/seller/products', label: 'Products' })}
-    ${p.status === 'rejected' ? callout('error', 'This listing was rejected', p.moderationNote ?? 'Edit the listing to fix the reviewer’s points and resubmit.') : ''}
     ${readOnly ? callout('error', 'Read-only', 'Your account is suspended, so listings can’t be edited.') : ''}
 
     <div class="grid-main product-view">

@@ -65,7 +65,7 @@ const ORDER_TONE: Record<OrderStatus, Tone> = {
 };
 export const orderBadge = (s: OrderStatus) => badge(ORDER_STATUS_LABEL[s], ORDER_TONE[s]);
 
-const PRODUCT_TONE: Record<ProductStatus, Tone> = { draft: 'neutral', pending: 'amber', approved: 'green', rejected: 'red', inactive: 'neutral' };
+const PRODUCT_TONE: Record<ProductStatus, Tone> = { draft: 'neutral', approved: 'green', inactive: 'neutral' };
 export const productBadge = (s: ProductStatus) => badge(PRODUCT_STATUS_LABEL[s], PRODUCT_TONE[s]);
 
 const SETTLE_TONE: Record<SettlementState, Tone> = { pending: 'neutral', eligible: 'blue', processing: 'amber', paid: 'green', failed: 'red', reversed: 'purple' };

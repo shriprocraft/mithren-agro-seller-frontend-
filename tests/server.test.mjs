@@ -292,7 +292,7 @@ test('pending sellers cannot publish products; approval enables it; suspension b
   assert.equal((await admin('POST', `/api/admin/applications/${appId}/decision`, { action: 'approve', message: '' })).status, 200);
   r = await c.rpc('saveProduct', { ...product, id: draftId }, true);
   assert.equal(r.status, 200, JSON.stringify(r.json));
-  assert.equal(r.json.status, 'pending', 'listing goes to moderation');
+  assert.equal(r.json.status, 'approved', 'an approved seller publishes straight to approved');
   // Suspend: restricted operations are blocked.
   assert.equal((await admin('POST', `/api/admin/applications/${appId}/decision`, { action: 'suspend', message: 'Repeated late deliveries.' })).status, 200);
   assert.equal((await c.rpc('saveProduct', { ...product, id: draftId }, true)).status, 403);

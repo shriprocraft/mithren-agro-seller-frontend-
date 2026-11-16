@@ -69,7 +69,8 @@ export interface Seller {
   joinedAt: string;
 }
 
-export type ProductStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'inactive';
+/** Approved sellers publish straight to approved: there is no per-product review. */
+export type ProductStatus = 'draft' | 'approved' | 'inactive';
 export type OrganicClaim = 'none' | 'certified' | 'in_conversion';
 export type Seasonality = 'year_round' | 'seasonal';
 
@@ -106,7 +107,6 @@ export interface Product {
   organicClaim: OrganicClaim;
   certificateId?: string;
   status: ProductStatus;
-  moderationNote?: string;
   available: boolean;
   minQty: number;
   maxQty: number;

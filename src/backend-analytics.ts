@@ -47,7 +47,5 @@ export function toDashboardMetrics(d: BackendDashboard): DashboardMetrics {
     series: d.trends.daily.map((p) => ({ date: new Date(`${p.period_start}T00:00:00+05:30`).toISOString(), sales: rupees(p.revenue_paise), orders: p.orders })),
     awaiting: d.orders.pending,
     certExpiringDays: null,
-    pendingProducts: 0,
-    rejectedProducts: 0,
   };
 }

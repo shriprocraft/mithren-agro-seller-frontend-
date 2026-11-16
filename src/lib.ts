@@ -60,9 +60,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 
 export const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   draft: 'Draft',
-  pending: 'Pending approval',
   approved: 'Approved',
-  rejected: 'Rejected',
   inactive: 'Inactive',
 };
 
