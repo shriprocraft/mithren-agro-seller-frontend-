@@ -181,6 +181,8 @@ export interface StatusEvent {
 
 export interface SubOrder {
   id: string;
+  /** TEMPORARY: the seller may mark pickup and delivery to try the flow (until the delivery app does). */
+  deliveryTestControls?: boolean;
   parentOrderId: string;
   sellerId: string;
   placedAt: string;

@@ -326,6 +326,8 @@ export const listOrders = (f: core.OrderFilter = {}): Promise<SubOrder[]> => (se
 export const getOrder = (id: string): Promise<SubOrder> => (sellerSession.isSignedIn() ? backendOrders.get(id) : localGetOrder(id));
 export const transitionOrder = (id: string, to: OrderStatus, note = ''): Promise<SubOrder> =>
   sellerSession.isSignedIn() ? backendOrders.transition(id, to, note) : localTransitionOrder(id, to, note);
+/** TEMPORARY: mark an order picked up or delivered, standing in for the delivery partner. */
+export const testDelivery = (id: string, step: 'pickup' | 'deliver'): Promise<SubOrder> => backendOrders.testDelivery(id, step);
 export const markItemUnavailable = rpc('markItemUnavailable');
 export const getLedger = rpc('getLedger');
 export const listSettlements = rpc('listSettlements');
@@ -820,6 +822,15 @@ const backendOrders = {
   },
   async get(id: string): Promise<SubOrder> {
     return toSubOrder(await backendRequest<BackendOrder>('GET', `seller/orders/${encodeURIComponent(id)}`, undefined, () => undefined));
+  },
+  /** TEMPORARY: stands in for the delivery partner (POST /seller/orders/{id}/test-delivery). */
+  async testDelivery(id: string, step: 'pickup' | 'deliver'): Promise<SubOrder> {
+    forgetOrders();
+    try {
+      return toSubOrder(await backendRequest<BackendOrder>('POST', `seller/orders/${encodeURIComponent(id)}/test-delivery`, { step }, () => undefined));
+    } finally {
+      forgetOrders();
+    }
   },
   async transition(id: string, to: OrderStatus, note: string): Promise<SubOrder> {
     const status = BACKEND_STATUS[to];

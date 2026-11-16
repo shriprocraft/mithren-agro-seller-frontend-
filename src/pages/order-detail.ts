@@ -201,6 +201,20 @@ const page: Page = async ({ root, params, seller, refresh }) => {
     }
   });
 
+  // TEMPORARY test controls standing in for the delivery partner.
+  on(root, 'click', '[data-action=test-delivery]', async (_e, el) => {
+    const step = el.dataset.step as 'pickup' | 'deliver';
+    (el as HTMLButtonElement).disabled = true;
+    try {
+      const u = await api.testDelivery(o.id, step);
+      toast(step === 'pickup' ? 'Marked picked up (test). The order is in transit.' : `Marked delivered (test). Order ${u.id} is complete.`);
+      refresh();
+    } catch (err) {
+      (el as HTMLButtonElement).disabled = false;
+      toast((err as Error).message, 'error');
+    }
+  });
+
   on(root, 'click', '[data-action=sim-delivery]', async () => {
     try {
       const u = await api._demoAdvanceDelivery(o.id);
@@ -214,13 +228,19 @@ const page: Page = async ({ root, params, seller, refresh }) => {
 
 function actionsCard(o: SubOrder, canAct: boolean, forward: OrderStatus[], negative: OrderStatus[]): Raw {
   const sim = api.DEMO_TOOLS && !o.backendId && (o.status === 'ready_for_pickup' || o.status === 'in_transit');
-  if (!forward.length && !negative.length && !sim) return html``;
+  // TEMPORARY: until the delivery app assigns orders, the seller can mark pickup and delivery to test.
+  const testStep = o.backendId && o.deliveryTestControls ? (o.status === 'ready_for_pickup' ? 'pickup' : o.status === 'in_transit' ? 'deliver' : null) : null;
+  if (!forward.length && !negative.length && !sim && !testStep) return html``;
   return html`<section class="card card-accent">
     <h2 class="card-title">Next step</h2>
     ${!canAct && (forward.length || negative.length) ? html`<p class="muted small">Order actions are unavailable while your account is not approved.</p>` : ''}
     <div class="stack-sm">
       ${forward.map((s) => html`<button type="button" class="btn btn-primary btn-block" data-to="${s}" ${canAct ? '' : raw('disabled')}>${ACTION_LABEL[s] ?? s}</button>`)}
       ${negative.map((s) => html`<button type="button" class="btn btn-danger-ghost btn-block" data-to="${s}" ${canAct ? '' : raw('disabled')}>${ACTION_LABEL[s] ?? s}</button>`)}
+      ${testStep
+        ? html`<p class="muted small">${testStep === 'pickup' ? 'Waiting for the delivery partner to collect.' : 'Out for delivery.'} For testing, you can mark this step yourself.</p>
+          <button type="button" class="btn btn-block proto-action" data-action="test-delivery" data-step="${testStep}" ${canAct ? '' : raw('disabled')}>${icon('flask', 14)} ${testStep === 'pickup' ? 'Mark picked up (test)' : 'Mark delivered (test)'}</button>`
+        : ''}
       ${sim
         ? html`<p class="muted small">${o.status === 'ready_for_pickup' ? 'Waiting for the delivery partner to collect.' : 'Out for delivery.'}</p>
           <button type="button" class="btn btn-block proto-action" data-action="sim-delivery">${icon('flask', 14)} Simulate ${o.status === 'ready_for_pickup' ? 'courier pickup' : 'delivery'}</button>`

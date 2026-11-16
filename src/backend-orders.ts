@@ -16,6 +16,10 @@ export interface BackendOrder {
   payment_method: 'online' | 'cod';
   payment_status: 'paid' | 'cod_pending' | 'refund_pending' | 'refunded';
   delivery_slot: string | null;
+  /** TEMPORARY: the seller may mark pickup and delivery for testing (off in production). */
+  delivery_test_controls?: boolean;
+  /** A delivery partner (or the test controls) has collected it: "In transit". */
+  picked_up?: boolean;
   customer: { name: string; phone: string; address: string; city: string; state: string; pincode: string; instructions: string | null };
   items: { product_id: string | null; variant_id: string | null; title: string; variant_label: string | null; sku: string | null; quantity: number; unit_price_paise: number }[];
   discount_paise: number;
@@ -73,10 +77,16 @@ export function toSubOrder(o: BackendOrder, sellerId = ''): SubOrder {
     })),
     discountAllocation: o.discount_paise / 100,
     deliveryAdjustment: o.delivery_fee_paise / 100,
-    status: portalStatus(o.status, confirmed),
+    status: o.status === 'shipped' && o.picked_up ? 'in_transit' : portalStatus(o.status, confirmed),
+    ...(o.delivery_test_controls ? { deliveryTestControls: true } : {}),
     paymentStatus: o.payment_status,
     paymentMethod: o.payment_method,
-    history: o.events.map((e) => ({ status: portalStatus(e.status, confirmed), at: e.at, actor: e.actor, ...(e.note ? { note: e.note } : {}) })),
+    history: o.events.map((e) => ({
+      status: e.status === 'shipped' && e.actor.startsWith('delivery partner') ? 'in_transit' : portalStatus(e.status, confirmed),
+      at: e.at,
+      actor: e.actor,
+      ...(e.note ? { note: e.note } : {}),
+    })),
     ...(o.cancel_reason ? { reason: o.cancel_reason } : {}),
     otherSellerCount: o.other_seller_count,
   };
