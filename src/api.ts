@@ -7,8 +7,9 @@ import * as core from './api-core.js';
 import { ApiError } from './errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS, type RpcName } from './rpc.js';
 import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, BankInput } from './application.js';
-import type { OrderStatus, Review, SubOrder } from './types.js';
+import type { AdjustmentReason, InventoryAdjustment, OrderStatus, Review, SubOrder } from './types.js';
 import { toReview, type BackendReview, type BackendReviewPage } from './backend-reviews.js';
+import { hasPortalMeta, portalMetaOf, type PortalMeta } from './portal-meta.js';
 import { BACKEND_STATUS, toSubOrder, type BackendOrder } from './backend-orders.js';
 import { toDashboardMetrics, type BackendDashboard } from './backend-analytics.js';
 
@@ -116,10 +117,24 @@ async function syncProductsFromBackend(): Promise<void> {
       if (items.length >= page.total || page.items.length === 0) break;
     }
     await mergeBackendProducts(items);
+    // Products saved before the backend kept the portal's details: this browser's copy fills them in
+    // once, so other devices get them too. After that the backend's copy always wins.
+    const missing = items.filter((b) => !hasPortalMeta(b.portal));
+    if (missing.length) {
+      const mine = await listLocalProducts({ includeArchived: true });
+      for (const b of missing) {
+        const local = mine.find((p) => p.backendId === b.id);
+        if (local) await products.setPortal(b.id, portalMetaOf(local)).catch(() => undefined);
+      }
+    }
   } catch {
     productsSyncedAt = 0; // offline or no shop yet: try again next time
   }
 }
+/** Makes the next product list pull from the backend at once (after a change on this device). */
+export const forgetProductSync = () => {
+  productsSyncedAt = 0;
+};
 export const listProducts: typeof listLocalProducts = (async (...args: Parameters<typeof listLocalProducts>) => {
   await syncProductsFromBackend();
   return listLocalProducts(...args);
@@ -132,25 +147,28 @@ const localDeleteProduct = rpc('deleteProduct');
 const localAdjustStock = rpc('adjustStock');
 const NOT_CONNECTED = 'Connect your account to the Mithren server first: enter your password in the banner at the top of the page.';
 /** The backend's stock row for a portal variant: by SKU, or none for a single-price product. */
-const stockRow = (backendId: string, v: { sku: string; stock: number }, price?: number) => ({
+const BACKEND_REASONS: AdjustmentReason[] = ['restock', 'damage', 'correction', 'return', 'csv_import'];
+const stockRow = (backendId: string, v: { sku: string; stock: number }, price?: number, reason: AdjustmentReason = 'correction', note = '') => ({
   product_id: backendId,
   ...(v.sku ? { sku: v.sku } : {}),
   stock: v.stock,
   ...(price !== undefined ? { price_paise: Math.round(price * 100) } : {}),
+  reason: BACKEND_REASONS.includes(reason) ? reason : 'correction',
+  ...(note.trim() ? { note: note.trim().slice(0, 300) } : {}),
 });
 /**
  * Changes a variant's stock in the portal, then on the backend, so the customer storefront sees the
  * new count (and stops selling at 0). If the backend refuses, the portal change is undone.
  */
 export const adjustStock = async (...args: Parameters<typeof localAdjustStock>) => {
-  const [productId, variantId, delta] = args;
+  const [productId, variantId, delta, reason, note] = args;
   const before = await getProduct(productId);
   if (before.backendId && !sellerSession.isSignedIn()) throw new ApiError(401, NOT_CONNECTED);
   const after = await localAdjustStock(...args);
   const v = after.variants.find((x) => x.id === variantId);
   if (before.backendId && v) {
     try {
-      await products.setStockLevels([stockRow(before.backendId, v)]);
+      await products.setStockLevels([stockRow(before.backendId, v, undefined, reason, note)]);
     } catch (err) {
       await localAdjustStock(productId, variantId, -delta, 'correction', 'Undone: the server did not save this change').catch(() => undefined);
       throw err;
@@ -176,7 +194,56 @@ export const deleteProduct = async (id: string) => {
   }
   return localDeleteProduct(id);
 };
-export const listAdjustments = rpc('listAdjustments');
+const localListAdjustments = rpc('listAdjustments');
+interface BackendAdjustment {
+  id: string;
+  product_id: string;
+  sku: string | null;
+  delta: number;
+  resulting_stock: number;
+  reason: AdjustmentReason;
+  note: string | null;
+  actor: string;
+  created_at: string;
+}
+/** The stock log: from the backend when signed in there (the same on every device), otherwise this browser's. */
+export const listAdjustments = async (productId?: string): Promise<InventoryAdjustment[]> => {
+  if (!sellerSession.isSignedIn()) return localListAdjustments(productId);
+  const mine = await listLocalProducts({ includeArchived: true });
+  const byBackend = new Map(mine.filter((p) => p.backendId).map((p) => [p.backendId!, p]));
+  const only = productId ? mine.find((p) => p.id === productId)?.backendId : undefined;
+  if (productId && !only) return localListAdjustments(productId);
+  const rows: BackendAdjustment[] = [];
+  for (let offset = 0; offset < 1000; offset += 200) {
+    const page = await backendRequest<{ items: BackendAdjustment[]; total: number }>(
+      'GET',
+      `seller/stock-adjustments?limit=200&offset=${offset}${only ? `&product_id=${encodeURIComponent(only)}` : ''}`,
+      undefined,
+      () => undefined,
+    );
+    rows.push(...page.items);
+    if (rows.length >= page.total || !page.items.length) break;
+  }
+  const out: InventoryAdjustment[] = [];
+  for (const r of rows) {
+    const p = byBackend.get(r.product_id);
+    if (!p) continue;
+    const v = p.variants.find((x) => x.sku === (r.sku ?? '')) ?? (r.sku ? undefined : p.variants[0]);
+    out.push({
+      id: r.id,
+      sellerId: p.sellerId,
+      productId: p.id,
+      variantId: v?.id ?? '',
+      delta: r.delta,
+      resultingStock: r.resulting_stock,
+      reason: r.reason,
+      note: r.note ?? '',
+      actor: r.actor,
+      at: r.created_at,
+    });
+  }
+  return out;
+};
 const localApplyInventoryCsv = rpc('applyInventoryCsv');
 /** CSV stock and price import: saved on the backend first (all or nothing), then in the portal. */
 export const applyInventoryCsv = async (rows: Parameters<typeof localApplyInventoryCsv>[0]) => {
@@ -186,7 +253,7 @@ export const applyInventoryCsv = async (rows: Parameters<typeof localApplyInvent
     if (!p.backendId) continue;
     for (const v of p.variants) {
       const r = wanted.get(v.sku);
-      if (r) backendRows.push(stockRow(p.backendId, { sku: v.sku, stock: r.stock }, r.price));
+      if (r) backendRows.push(stockRow(p.backendId, { sku: v.sku, stock: r.stock }, r.price, 'csv_import', 'Bulk CSV update'));
     }
   }
   if (backendRows.length) {
@@ -576,9 +643,12 @@ export const products = {
   /** PATCH /api/v1/products/{id}. Sent variants replace the stored list. */
   update: (backendId: string, payload: import('./catalog.js').BackendProductUpdate) =>
     backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, payload, productField),
-  /** PATCH /api/v1/products/{id} with is_active only: shows (true) or hides (false) it in the customer storefront. */
-  setActive: (backendId: string, active: boolean) =>
-    backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, { is_active: active }, productField),
+  /** PATCH /api/v1/products/{id}: shows (true) or hides (false) it in the customer storefront, with the portal's state. */
+  setState: (backendId: string, active: boolean, portal: PortalMeta) =>
+    backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, { is_active: active, portal }, productField),
+  /** PATCH /api/v1/products/{id} with the portal's listing details only (merged into the stored ones). */
+  setPortal: (backendId: string, portal: PortalMeta) =>
+    backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, { portal }, productField),
   /** DELETE /api/v1/products/{id}?permanent=true: gone for good; 409 while orders or reviews refer to it. */
   destroy: (backendId: string) =>
     backendRequest<{ id: string; deleted: boolean }>('DELETE', `products/${encodeURIComponent(backendId)}?permanent=true`, undefined, () => undefined),

@@ -10,6 +10,7 @@ import { slugify, money, fmtDate, UNIT_LABEL } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
 import { APPAREL_SIZES, categoryKind, generateSku, toBackendProduct, toBackendUpdate, type ApparelSize } from '../catalog.js';
+import { portalMetaOf, portalStateOf } from '../portal-meta.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UNITS: Unit[] = ['g', 'kg', 'bunch', 'piece', 'box'];
@@ -587,6 +588,14 @@ const page: Page = async ({ root, params, seller }) => {
         throw new api.ApiError(401, NO_SERVER_SESSION);
       }
       const saved = await api.saveProduct(input, submit);
+      // The portal's details (origin, storage, order limits, status…) go to the backend too, so
+      // every device shows this product the same.
+      const backendId = saved.backendId ?? input.backendId;
+      if (backendId && onServer()) {
+        await api.products.setPortal(backendId, portalMetaOf(saved)).catch(() =>
+          toast('Saved here, but its details didn’t reach the server. Save again to update your other devices.', 'error'),
+        );
+      }
       releaseImages();
       toast(
         isNew
@@ -623,6 +632,7 @@ const page: Page = async ({ root, params, seller }) => {
       if (product.backendId) {
         try {
           await api.products.remove(product.backendId);
+          await api.products.setPortal(product.backendId, portalStateOf(await api.getProduct(product.id))).catch(() => undefined);
         } catch (err) {
           // 404: already gone on the server, so archiving this browser's copy is all that's left.
           if (!(err instanceof api.ApiError) || err.status !== 404) {

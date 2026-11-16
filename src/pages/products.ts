@@ -9,6 +9,7 @@ import * as api from '../api.js';
 import { money, timeAgo, toCsv } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant } from '../types.js';
+import { portalStateOf } from '../portal-meta.js';
 
 const STATUS_TABS: [string, string][] = [
   ['', 'All'],
@@ -276,7 +277,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     const after = await change();
     if (!backendId) return after;
     try {
-      await api.products.setActive(backendId, isLive(after));
+      await api.products.setState(backendId, isLive(after), portalStateOf(after));
     } catch (err) {
       await undo().catch(() => undefined);
       throw err;

@@ -38,6 +38,7 @@ const STORAGE_KEY = 'organic-seller-portal-db';
 const DAY = 86_400_000;
 
 import { ApiError } from './errors.js';
+import { applyPortalMeta, hasPortalMeta, type PortalMeta } from './portal-meta.js';
 export { ApiError };
 
 // ---------- persistence ----------
@@ -363,6 +364,8 @@ export interface BackendCatalogProduct {
   images: string[];
   is_active: boolean;
   updated_at: string;
+  /** The portal's listing details saved on the backend; {} until a portal saves them. */
+  portal?: PortalMeta;
   variants: {
     label: string;
     sku: string;
@@ -417,6 +420,8 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
           variants,
           updatedAt: b.updated_at > existing.updatedAt ? b.updated_at : existing.updatedAt,
         });
+        // The backend's copy of the portal details wins: it's what every other device sees.
+        if (hasPortalMeta(b.portal)) applyPortalMeta(existing, b.portal);
       } else {
         db.products.unshift({
           id: uid('p'),
@@ -442,6 +447,7 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
           backendId: b.id,
           images: b.images,
         });
+        if (hasPortalMeta(b.portal)) applyPortalMeta(db.products[0], b.portal);
         added += 1;
       }
     }

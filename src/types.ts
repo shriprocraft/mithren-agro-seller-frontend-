@@ -124,7 +124,10 @@ export type AdjustmentReason =
   | 'order'
   | 'order_cancelled'
   | 'return'
-  | 'csv_import';
+  | 'csv_import'
+  /** Logged on the backend: stock a product was created with, and stock changed on the product page. */
+  | 'opening'
+  | 'edit';
 
 export interface InventoryAdjustment {
   id: string;

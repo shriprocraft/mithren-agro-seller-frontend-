@@ -19,10 +19,12 @@ const REASON_LABEL: Record<AdjustmentReason, string> = {
   restock: 'Restock',
   damage: 'Damage',
   correction: 'Correction',
-  order: 'Order reserved',
+  order: 'Order delivered',
   order_cancelled: 'Order released',
   return: 'Return',
   csv_import: 'CSV import',
+  opening: 'Opening stock',
+  edit: 'Product edit',
 };
 
 const page: Page = async ({ root, query, seller, refresh }) => {
