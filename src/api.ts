@@ -326,6 +326,50 @@ export const listOrders = (f: core.OrderFilter = {}): Promise<SubOrder[]> => (se
 export const getOrder = (id: string): Promise<SubOrder> => (sellerSession.isSignedIn() ? backendOrders.get(id) : localGetOrder(id));
 export const transitionOrder = (id: string, to: OrderStatus, note = ''): Promise<SubOrder> =>
   sellerSession.isSignedIn() ? backendOrders.transition(id, to, note) : localTransitionOrder(id, to, note);
+// ---------- unsaved product forms ----------
+export interface ProductFormDraft {
+  data: Record<string, unknown>;
+  updatedAt: string;
+}
+const draftStorageKey = (key: string) => `mithren.productForm:${sellerSession.shopName() ?? 'me'}:${key}`;
+/**
+ * The product form's unsaved fields, kept on the server (so they survive reloads, cleared site data
+ * and other devices) and in this browser (for when the server can't be reached).
+ */
+export const productDrafts = {
+  async load(key: string): Promise<ProductFormDraft | null> {
+    let local: ProductFormDraft | null = null;
+    try {
+      local = JSON.parse(localStorage.getItem(draftStorageKey(key)) ?? 'null');
+    } catch {
+      /* storage unavailable or unreadable */
+    }
+    if (!sellerSession.isSignedIn()) return local;
+    try {
+      const r = await backendRequest<{ data: Record<string, unknown>; updated_at: string }>('GET', `seller/product-drafts/${encodeURIComponent(key)}`, undefined, () => undefined);
+      const server = { data: r.data, updatedAt: r.updated_at };
+      return local && local.updatedAt > server.updatedAt ? local : server;
+    } catch (err) {
+      return err instanceof ApiError && err.status === 404 ? null : local;
+    }
+  },
+  async save(key: string, data: Record<string, unknown>): Promise<void> {
+    try {
+      localStorage.setItem(draftStorageKey(key), JSON.stringify({ data, updatedAt: new Date().toISOString() }));
+    } catch {
+      /* storage full or unavailable: the server copy still saves */
+    }
+    if (sellerSession.isSignedIn()) await backendRequest('PUT', `seller/product-drafts/${encodeURIComponent(key)}`, { data }, () => undefined);
+  },
+  async forget(key: string): Promise<void> {
+    try {
+      localStorage.removeItem(draftStorageKey(key));
+    } catch {
+      /* nothing to remove */
+    }
+    if (sellerSession.isSignedIn()) await backendRequest('DELETE', `seller/product-drafts/${encodeURIComponent(key)}`, undefined, () => undefined).catch(() => undefined);
+  },
+};
 /** TEMPORARY: mark an order picked up or delivered, standing in for the delivery partner. */
 export const testDelivery = (id: string, step: 'pickup' | 'deliver'): Promise<SubOrder> => backendOrders.testDelivery(id, step);
 export const markItemUnavailable = rpc('markItemUnavailable');

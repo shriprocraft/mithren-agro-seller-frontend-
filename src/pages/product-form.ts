@@ -6,7 +6,7 @@ import { html, raw, on, $, $$, formValues } from '../ui/dom.js';
 import { pageHeader, field, textarea, select, callout, productBadge, icon, showFieldErrors, badge, emptyState } from '../ui/components.js';
 import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { slugify, money, fmtDate, UNIT_LABEL } from '../lib.js';
+import { slugify, money, fmtDate, timeAgo, UNIT_LABEL } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
 import { APPAREL_SIZES, categoryKind, generateSku, toBackendProduct, toBackendUpdate, type ApparelSize } from '../catalog.js';
@@ -58,6 +58,8 @@ const blankProduct = (): Product => ({
   updatedAt: new Date().toISOString(),
 });
 
+const readOnlyFor = (status: string) => status === 'suspended';
+
 const page: Page = async ({ root, params, seller }) => {
   const isNew = !params.id;
   let product: Product;
@@ -70,11 +72,18 @@ const page: Page = async ({ root, params, seller }) => {
     }
     throw e;
   }
+  // Unsaved changes from an earlier visit (a reload, cleared site data, another device) come back.
+  const draftKey = (isNew ? 'new' : product.backendId ?? product.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'new';
+  const restored = readOnlyFor(seller.status) ? null : await api.productDrafts.load(draftKey).catch(() => null);
+  if (restored?.data.product) {
+    const kept = { id: product.id, backendId: product.backendId, status: product.status, archived: product.archived, available: product.available, sellerId: product.sellerId, updatedAt: product.updatedAt };
+    product = { ...product, ...(restored.data.product as Partial<Product>), ...kept };
+  }
   const docs = (await api.listDocuments()).filter((d) => d.type === 'organic_cert');
   const approved = seller.status === 'approved';
   const readOnly = seller.status === 'suspended';
   let variants: Variant[] = structuredClone(product.variants);
-  let slugTouched = !isNew;
+  let slugTouched = !isNew || restored?.data.slugTouched === true;
   // SKUs are generated from category, name and size or pack until the seller types their own.
   // Saved variants keep their SKU, so an edit never renames stock that already exists.
   const skuManual = new Set(variants.filter((v) => !isNew && v.sku).map((v) => v.id));
@@ -130,6 +139,14 @@ const page: Page = async ({ root, params, seller }) => {
     ${!approved && !readOnly ? callout('warn', 'Drafts only until your account is approved', 'You can prepare listings now. Publishing unlocks once your seller account is approved.') : ''}
     ${readOnly ? callout('error', 'Read-only', 'Your account is suspended, so listings can’t be edited.') : ''}
     ${moderationInfo}
+    ${restored?.data.product
+      ? callout(
+          'info',
+          'Your unsaved changes are back',
+          `We kept what you entered ${timeAgo(restored.updatedAt)}. Save when you're ready.`,
+          html`<button type="button" class="btn btn-sm" data-action="discard-draft">Discard changes</button>`,
+        )
+      : ''}
     <form class="product-form" novalidate data-role="form">
       <div class="form-grid">
         <div class="form-main">
@@ -390,6 +407,8 @@ const page: Page = async ({ root, params, seller }) => {
       img.error = uploadError(e);
     }
     if (images.includes(img)) renderImages();
+    // The uploaded photo is part of the unsaved form too.
+    if (img.state === 'saved') keepDraft();
   };
   const addImages = (files: File[]) => {
     const problems: string[] = [];
@@ -581,6 +600,41 @@ const page: Page = async ({ root, params, seller }) => {
     refreshSkus();
     renderPreview();
   });
+  // ---------- autosave ----------
+  // What's typed is kept (on the server and in this browser) shortly after each change, so a reload,
+  // cleared site data or another device starts from where the seller left off.
+  const snapshot = (): string | null => {
+    try {
+      const { id: _id, backendId: _bid, ...fields } = readForm() as api.ProductInput & { backendId?: string };
+      void _id, void _bid;
+      return JSON.stringify({ product: { ...fields, images: images.filter((x) => x.path).map((x) => x.path!) }, slugTouched });
+    } catch {
+      return null;
+    }
+  };
+  let lastKept = restored?.data.product ? '' : snapshot() ?? '';
+  let keepTimer = 0;
+  const keepDraft = () => {
+    if (readOnly) return;
+    window.clearTimeout(keepTimer);
+    keepTimer = window.setTimeout(() => {
+      if (!root.isConnected) return;
+      const now = snapshot();
+      if (!now || now === lastKept) return;
+      lastKept = now;
+      void api.productDrafts.save(draftKey, JSON.parse(now)).catch(() => undefined);
+    }, 800);
+  };
+  on(root, 'input', '[data-role=form]', keepDraft);
+  on(root, 'change', '[data-role=form]', keepDraft);
+  on(root, 'click', '[data-role=form] button', keepDraft);
+  on(root, 'click', '[data-action=discard-draft]', async () => {
+    window.clearTimeout(keepTimer);
+    await api.productDrafts.forget(draftKey);
+    lastKept = '';
+    window.location.reload();
+  });
+
   on(root, 'input', '#f_name', (_e, el) => {
     if (!slugTouched) ($('#f_slug', root) as HTMLInputElement).value = slugify((el as HTMLInputElement).value);
     refreshSkus();
@@ -644,6 +698,8 @@ const page: Page = async ({ root, params, seller }) => {
           toast('Saved here, but its details didn’t reach the server. Save again to update your other devices.', 'error'),
         );
       }
+      window.clearTimeout(keepTimer);
+      await api.productDrafts.forget(draftKey);
       releaseImages();
       toast(
         isNew
@@ -686,6 +742,8 @@ const page: Page = async ({ root, params, seller }) => {
         }
       }
       await api.archiveProduct(product.id, true);
+      window.clearTimeout(keepTimer);
+      await api.productDrafts.forget(draftKey);
       releaseImages();
       toast('Product deleted');
       navigate('/seller/products', true);
