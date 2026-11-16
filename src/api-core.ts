@@ -375,6 +375,8 @@ export interface BackendCatalogProduct {
     price_paise: number;
     mrp_paise: number | null;
     stock: number;
+    /** Units held by open customer orders (the seller's own listing only). */
+    reserved?: number;
   }[];
 }
 
@@ -402,6 +404,7 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
         price: v.price_paise / 100,
         ...(v.mrp_paise != null ? { mrp: v.mrp_paise / 100 } : {}),
         stock: v.stock,
+        reserved: 'reserved' in v ? v.reserved ?? 0 : 0,
         ...(v.size ? { size: v.size as Variant['size'] } : {}),
       }));
       if (existing) {

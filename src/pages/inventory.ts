@@ -6,7 +6,7 @@ import { setQuery } from '../router.js';
 import { pageHeader, emptyState, tabs, icon, badge, field, select, textarea, showFieldErrors, fileInput, paginate, pager, bindPager } from '../ui/components.js';
 import { toast, modal, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { fmtDate, toCsv, validateInventoryCsv, money } from '../lib.js';
+import { availableStock, fmtDate, toCsv, validateInventoryCsv, money } from '../lib.js';
 import type { AdjustmentReason, Product, Variant } from '../types.js';
 
 const REASONS: [AdjustmentReason, string][] = [
@@ -34,7 +34,8 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const log = await api.listAdjustments();
   const readOnly = seller.status === 'suspended';
 
-  const rows = products.flatMap((p) => p.variants.map((v) => ({ p, v, low: v.stock <= p.lowStockThreshold, out: v.stock === 0 })));
+  // Low and out of stock go by what customers can still buy: stock on hand minus what open orders hold.
+  const rows = products.flatMap((p) => p.variants.map((v) => ({ p, v, low: availableStock(v) <= p.lowStockThreshold, out: availableStock(v) === 0 })));
   const needle = q.toLowerCase();
   const filtered = rows
     .filter((r) => (filter === 'low' ? r.low : filter === 'out' ? r.out : true))
@@ -71,14 +72,14 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     ${filtered.length
       ? html`<div class="table-block"><div class="table-wrap"><table class="table">
           <caption class="sr-only">Stock by variant</caption>
-          <thead><tr><th scope="col">Product</th><th scope="col">Variant</th><th scope="col">SKU</th><th scope="col" class="num">Price</th><th scope="col" class="num">Stock</th><th scope="col" class="num">Alert at</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th scope="col">Product</th><th scope="col">Variant</th><th scope="col">SKU</th><th scope="col" class="num">Price</th><th scope="col" class="num">Available</th><th scope="col" class="num">Alert at</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
           <tbody>${stockPage.rows.map(
             ({ p, v, low, out }) => html`<tr>
               <td><a href="#/seller/products/${p.id}">${p.emoji} ${p.name}</a>${p.status !== 'approved' ? html` <span class="muted small">(${p.status})</span>` : ''}</td>
               <td>${v.label}</td>
               <td class="mono small">${v.sku}</td>
               <td class="num">${money(v.price)}</td>
-              <td class="num"><strong>${v.stock}</strong></td>
+              <td class="num"><strong>${availableStock(v)}</strong>${v.reserved ? html`<br /><span class="muted small" data-tip="Held by open orders. Released if an order is cancelled; taken off stock when it's delivered.">${v.stock} on hand · ${v.reserved} reserved</span>` : ''}</td>
               <td class="num muted">${p.lowStockThreshold}</td>
               <td>${out ? badge('Out of stock', 'red') : low ? badge('Low', 'amber') : badge('In stock', 'green')}</td>
               <td class="actions">${readOnly ? '' : html`<button type="button" class="btn btn-sm" data-action="adjust" data-p="${p.id}" data-v="${v.id}">Adjust</button>`}</td>
@@ -136,7 +137,7 @@ function openAdjust(p: Product, v: Variant, refresh: () => void) {
   modal({
     title: `Adjust stock — ${p.name} (${v.label})`,
     body: html`<form class="stack" novalidate>
-      <p>Current stock: <strong>${v.stock}</strong></p>
+      <p>Stock on hand: <strong>${v.stock}</strong>${v.reserved ? html` · <span class="muted">${v.reserved} reserved for open orders, ${availableStock(v)} available to sell</span>` : ''}</p>
       <div class="row-2">
         <div class="field">
           <label for="f_direction">Change</label>

@@ -214,3 +214,6 @@ export function validateInventoryCsv(text: string, knownSkus: Set<string>): CsvV
   });
   return { rows, errors };
 }
+
+/** What can still be sold: stock on hand minus what open orders hold. */
+export const availableStock = (v: { stock: number; reserved?: number }): number => Math.max(0, v.stock - (v.reserved ?? 0));

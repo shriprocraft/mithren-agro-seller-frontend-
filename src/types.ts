@@ -82,7 +82,10 @@ export interface Variant {
   unit: Unit;
   price: number;
   mrp?: number;
+  /** Physical stock on hand. */
   stock: number;
+  /** Units held by open customer orders: what customers can still buy is stock - reserved. */
+  reserved?: number;
   /** Apparel and accessories only: the size this variant is sold in. */
   size?: 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'Free Size';
 }

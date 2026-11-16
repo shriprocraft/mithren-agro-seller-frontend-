@@ -7,7 +7,7 @@ import * as core from './api-core.js';
 import { ApiError } from './errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS, type RpcName } from './rpc.js';
 import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, BankInput } from './application.js';
-import type { AdjustmentReason, InventoryAdjustment, OrderStatus, Review, SubOrder } from './types.js';
+import type { AdjustmentReason, AppNotification, InventoryAdjustment, OrderStatus, Review, SubOrder } from './types.js';
 import { toReview, type BackendReview, type BackendReviewPage } from './backend-reviews.js';
 import { hasPortalMeta, portalMetaOf, type PortalMeta } from './portal-meta.js';
 import { changedSettings, fromBackendSettings, hasSettings, settingsOf, toBackendSettings, type BackendSettings, type SettingsPatch } from './seller-settings.js';
@@ -361,8 +361,56 @@ export const reportReview = async (id: string): Promise<Review> => {
   return toReview(r, (await getSeller()).id);
 };
 export const listDocuments = rpc('listDocuments');
-export const listNotifications = rpc('listNotifications');
-export const markNotificationsRead = rpc('markNotificationsRead');
+const localListNotifications = rpc('listNotifications');
+const localMarkNotificationsRead = rpc('markNotificationsRead');
+interface BackendNotification {
+  id: string;
+  topic: 'new_order' | 'order_update';
+  title: string;
+  body: string;
+  order_id: string;
+  order_number: string;
+  at: string;
+  read: boolean;
+}
+/** Server notifications (new orders, customer cancellations) have ids starting with this. */
+const SERVER_NOTIFICATION = 'srv_';
+/**
+ * The bell's notifications: new orders and customer cancellations from the backend (the same on
+ * every device), together with this portal's own (account and listing messages), newest first.
+ */
+export const listNotifications = async (): Promise<AppNotification[]> => {
+  const mine = await localListNotifications();
+  if (!sellerSession.isSignedIn()) return mine;
+  try {
+    const page = await backendRequest<{ items: BackendNotification[]; unread: number }>('GET', 'seller/notifications?limit=30', undefined, () => undefined);
+    const sellerId = mine[0]?.sellerId ?? '';
+    const fromServer: AppNotification[] = page.items.map((n) => ({
+      id: `${SERVER_NOTIFICATION}${n.id}|${n.at}`,
+      sellerId,
+      topic: n.topic,
+      title: n.title,
+      body: n.body,
+      at: n.at,
+      read: n.read,
+      link: `/seller/orders/${n.order_id}`,
+    }));
+    return [...fromServer, ...mine].sort((a, b) => b.at.localeCompare(a.at));
+  } catch {
+    return mine; // offline: the portal's own notifications still show
+  }
+};
+/** Marks notifications read: all of them, or the ones given (server ones up to the newest given). */
+export const markNotificationsRead = async (ids?: string[]): Promise<boolean> => {
+  const local = ids?.filter((id) => !id.startsWith(SERVER_NOTIFICATION));
+  const server = ids?.filter((id) => id.startsWith(SERVER_NOTIFICATION));
+  if (!ids || local!.length) await localMarkNotificationsRead(ids ? local : undefined);
+  if (sellerSession.isSignedIn() && (!ids || server!.length)) {
+    const upTo = server?.length ? server.map((id) => id.split('|')[1]).sort().pop() : undefined;
+    await backendRequest('POST', 'seller/notifications/read', upTo ? { up_to: upTo } : {}, () => undefined).catch(() => undefined);
+  }
+  return true;
+};
 const localGetDashboard = rpc('getDashboard');
 /** Dashboard figures: from the FastAPI analytics when signed in there, otherwise the portal's own. */
 export const getDashboard = async (days: number): Promise<core.DashboardMetrics> =>

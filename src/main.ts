@@ -353,10 +353,21 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// New orders already announced in this tab, so each pops up once.
+const announced = new Set<string>();
+let firstBadgeLoad = true;
+
 async function updateBadges() {
   if (!$('[data-action=notifs]')) return;
   try {
     const [orders, notifs] = await Promise.all([api.listOrders({ status: 'awaiting_confirmation' }), api.listNotifications()]);
+    // A new order that arrives while the portal is open gets a pop-up message, once.
+    for (const n of notifs) {
+      if (n.topic !== 'new_order' || n.read || announced.has(n.id)) continue;
+      announced.add(n.id);
+      if (!firstBadgeLoad) toast(`${n.title}. ${n.body}`);
+    }
+    firstBadgeLoad = false;
     const c = $('[data-count=orders]');
     if (c) {
       c.hidden = orders.length === 0;
@@ -520,6 +531,10 @@ function openPrototypeControls() {
 }
 
 api.onDataChange(() => void updateBadges());
+// Check for new orders every 30 seconds while the portal is open and visible.
+window.setInterval(() => {
+  if (document.visibilityState === 'visible') void updateBadges();
+}, 30_000);
 window.addEventListener('hashchange', () => {
   closeNotifications();
   void render().then(() => {

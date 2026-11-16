@@ -6,7 +6,7 @@ import { html, raw, on } from '../ui/dom.js';
 import { pageHeader, productBadge, icon, emptyState, tabs, badge, paginate, pager, bindPager } from '../ui/components.js';
 import { toast, confirmDialog, saveFile } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { money, timeAgo, toCsv } from '../lib.js';
+import { availableStock, money, timeAgo, toCsv } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import { categoryLabel } from '../catalog.js';
 import type { Product, Variant } from '../types.js';
@@ -48,12 +48,14 @@ const FILTER_KEYS = ['q', 'category', 'stock', 'avail', 'variant', 'pmin', 'pmax
 /** Products whose variant panel is open. Kept at module level so toggling availability doesn't collapse rows. */
 const expanded = new Set<string>();
 
-const totalStock = (p: Product) => p.variants.reduce((s, v) => s + v.stock, 0);
+// What customers can still buy: stock on hand minus what open orders hold.
+const totalStock = (p: Product) => p.variants.reduce((s, v) => s + availableStock(v), 0);
+const totalReserved = (p: Product) => p.variants.reduce((s, v) => s + (v.reserved ?? 0), 0);
 const minPrice = (p: Product) => (p.variants.length ? Math.min(...p.variants.map((v) => v.price)) : 0);
-const isLow = (p: Product, v: Variant) => v.stock > 0 && v.stock <= p.lowStockThreshold;
+const isLow = (p: Product, v: Variant) => availableStock(v) > 0 && availableStock(v) <= p.lowStockThreshold;
 function stockLevel(p: Product): 'in' | 'low' | 'out' {
   if (totalStock(p) === 0) return 'out';
-  return p.variants.some((v) => v.stock <= p.lowStockThreshold) ? 'low' : 'in';
+  return p.variants.some((v) => availableStock(v) <= p.lowStockThreshold) ? 'low' : 'in';
 }
 
 const numParam = (query: URLSearchParams, key: string) => {
@@ -340,7 +342,8 @@ const page: Page = async ({ root, query, seller, refresh }) => {
 
 function row(p: Product, readOnly: boolean) {
   const stock = totalStock(p);
-  const low = p.variants.some((v) => v.stock <= p.lowStockThreshold);
+  const low = p.variants.some((v) => availableStock(v) <= p.lowStockThreshold);
+  const held = totalReserved(p);
   const prices = p.variants.map((v) => v.price);
   const from = prices.length ? Math.min(...prices) : 0;
   const multi = new Set(prices).size > 1;
@@ -358,7 +361,7 @@ function row(p: Product, readOnly: boolean) {
       ? html`<button type="button" class="expander" data-action="expand" data-id="${p.id}" aria-expanded="${String(open)}" aria-controls="vr_${p.id}">${icon('chevronDown', 14)}<span>${p.variants.length} variant${p.variants.length === 1 ? '' : 's'}</span></button>`
       : html`<span class="muted">None</span>`}</td>
     <td class="num">${p.variants.length ? html`${multi ? html`<span class="muted small">from </span>` : ''}<strong>${money(from)}</strong>` : '—'}</td>
-    <td class="num">${stock === 0 ? badge('Out of stock', 'red') : low ? html`<span class="warn-text">${stock}</span> ${badge('Low', 'amber')}` : stock}</td>
+    <td class="num">${stock === 0 ? badge('Out of stock', 'red') : low ? html`<span class="warn-text">${stock}</span> ${badge('Low', 'amber')}` : stock}${held ? html`<br /><span class="muted small" data-tip="Held by open orders. Released if an order is cancelled; taken off stock when it's delivered.">${held} reserved</span>` : ''}</td>
     <td>
       ${canToggle
         ? html`<label class="toggle"><input type="checkbox" data-action="toggle-available" data-id="${p.id}" ${p.available ? raw('checked') : ''} /><span class="toggle-ui" aria-hidden="true"></span><span class="sr-only">Available: ${p.name}</span></label>`
@@ -387,8 +390,8 @@ function variantPanel(p: Product) {
           <td><strong>${p.name}</strong> — ${v.label || '—'}</td>
           <td class="mono small">${v.sku || '—'}</td>
           <td class="num"><strong>${money(v.price)}</strong>${v.mrp && v.mrp > v.price ? html` <s class="muted small">${money(v.mrp)}</s>` : ''}</td>
-          <td class="num">${v.stock}</td>
-          <td>${!p.available ? badge('Hidden', 'neutral') : v.stock === 0 ? badge('Out of stock', 'red') : isLow(p, v) ? badge('Low stock', 'amber') : badge('In stock', 'green')}</td>
+          <td class="num">${availableStock(v)}${v.reserved ? html` <span class="muted small">(${v.reserved} reserved)</span>` : ''}</td>
+          <td>${!p.available ? badge('Hidden', 'neutral') : availableStock(v) === 0 ? badge('Out of stock', 'red') : isLow(p, v) ? badge('Low stock', 'amber') : badge('In stock', 'green')}</td>
           <td>${p.archived ? badge('Archived') : productBadge(p.status)}</td>
         </tr>`,
       )}</tbody>
