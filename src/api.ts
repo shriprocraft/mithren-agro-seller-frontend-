@@ -698,9 +698,13 @@ export const products = {
   /** PATCH /api/v1/products/{id}. Sent variants replace the stored list. */
   update: (backendId: string, payload: import('./catalog.js').BackendProductUpdate) =>
     backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, payload, productField),
-  /** PATCH /api/v1/products/{id}: shows (true) or hides (false) it in the customer storefront, with the portal's state. */
-  setState: (backendId: string, active: boolean, portal: PortalMeta) =>
-    backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, { is_active: active, portal }, productField),
+  /** POST /api/v1/products/{id}/archive: hidden from customers and the main list (409 while in an open order). */
+  archive: (backendId: string) => backendRequest<BackendProductView>('POST', `products/${encodeURIComponent(backendId)}/archive`, undefined, productField),
+  /** POST /api/v1/products/{id}/restore: back in the main list, still switched off. */
+  restore: (backendId: string) => backendRequest<BackendProductView>('POST', `products/${encodeURIComponent(backendId)}/restore`, undefined, productField),
+  /** PUT /api/v1/products/{id}/availability: live for customers (true) or paused as inactive (false). */
+  setAvailability: (backendId: string, available: boolean) =>
+    backendRequest<BackendProductView>('PUT', `products/${encodeURIComponent(backendId)}/availability`, { available }, productField),
   /** PATCH /api/v1/products/{id} with the portal's listing details only (merged into the stored ones). */
   setPortal: (backendId: string, portal: PortalMeta) =>
     backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, { portal }, productField),

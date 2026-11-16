@@ -10,7 +10,7 @@ import { slugify, money, fmtDate, UNIT_LABEL } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
 import { APPAREL_SIZES, categoryKind, generateSku, toBackendProduct, toBackendUpdate, type ApparelSize } from '../catalog.js';
-import { portalMetaOf, portalStateOf } from '../portal-meta.js';
+import { portalMetaOf } from '../portal-meta.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UNITS: Unit[] = ['g', 'kg', 'bunch', 'piece', 'box'];
@@ -629,19 +629,16 @@ const page: Page = async ({ root, params, seller }) => {
     try {
       if (product.backendId && !onServer()) throw new api.ApiError(401, NO_SERVER_SESSION);
       // The portal goes first: it refuses while orders for this product are still open.
-      await api.archiveProduct(product.id, true);
+      // The backend goes first: it refuses while the product is in an open order.
       if (product.backendId) {
         try {
-          await api.products.remove(product.backendId);
-          await api.products.setPortal(product.backendId, portalStateOf(await api.getProduct(product.id))).catch(() => undefined);
+          await api.products.archive(product.backendId);
         } catch (err) {
           // 404: already gone on the server, so archiving this browser's copy is all that's left.
-          if (!(err instanceof api.ApiError) || err.status !== 404) {
-            await api.archiveProduct(product.id, false); // keep both sides in step
-            throw err;
-          }
+          if (!(err instanceof api.ApiError) || err.status !== 404) throw err;
         }
       }
+      await api.archiveProduct(product.id, true);
       releaseImages();
       toast('Product deleted');
       navigate('/seller/products', true);

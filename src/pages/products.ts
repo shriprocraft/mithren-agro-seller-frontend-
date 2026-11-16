@@ -9,7 +9,6 @@ import * as api from '../api.js';
 import { money, timeAgo, toCsv } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import type { Product, Variant } from '../types.js';
-import { portalStateOf } from '../portal-meta.js';
 
 const STATUS_TABS: [string, string][] = [
   ['', 'All'],
@@ -265,24 +264,19 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     if (panel) panel.hidden = !open;
   });
 
-  // Customers see a product only while it is approved, available and not archived. Archive, Restore and
-  // the Available switch change the portal first (it checks open orders), then the backend, which
-  // lists or unlists it in the customer storefront; if the backend fails, the portal change is undone.
+  // Customers see a product only while it is approved, available and not archived; at 0 stock it stays
+  // listed as out of stock. Archive, Restore and the Available switch go to the backend first, which
+  // enforces the rules (no archiving during an open order, drafts can't be switched on…) and updates
+  // the customer storefront; then this portal's copy follows.
   const isLive = (p: Product) => !p.archived && p.available && p.status === 'approved';
-  async function changeAndPublish(id: string, change: () => Promise<Product>, undo: () => Promise<Product>): Promise<Product> {
+  async function changeAndPublish(id: string, onServer: (backendId: string) => Promise<unknown>, change: () => Promise<Product>): Promise<Product> {
     const backendId = all.find((p) => p.id === id)?.backendId;
-    if (backendId && !api.sellerSession.isSignedIn()) {
-      throw new api.ApiError(401, 'Connect your account to the Mithren server first: enter your password in the banner at the top of the page.');
+    if (backendId) {
+      if (!api.sellerSession.isSignedIn())
+        throw new api.ApiError(401, 'Connect your account to the Mithren server first: enter your password in the banner at the top of the page.');
+      await onServer(backendId);
     }
-    const after = await change();
-    if (!backendId) return after;
-    try {
-      await api.products.setState(backendId, isLive(after), portalStateOf(after));
-    } catch (err) {
-      await undo().catch(() => undefined);
-      throw err;
-    }
-    return after;
+    return change();
   }
 
   on(root, 'click', '[data-action=delete]', async (_e, el) => {
@@ -308,7 +302,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     try {
       const id = input.dataset.id!;
       const available = input.checked;
-      await changeAndPublish(id, () => api.setProductAvailability(id, available), () => api.setProductAvailability(id, !available));
+      await changeAndPublish(id, (backendId) => api.products.setAvailability(backendId, available), () => api.setProductAvailability(id, available));
       toast(input.checked ? 'Product is available to customers' : 'Product hidden from customers');
       refresh();
     } catch (err) {
@@ -326,7 +320,11 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       if (!c.ok) return;
     }
     try {
-      const after = await changeAndPublish(id, () => api.archiveProduct(id, archived), () => api.archiveProduct(id, !archived));
+      const after = await changeAndPublish(
+        id,
+        (backendId) => (archived ? api.products.archive(backendId) : api.products.restore(backendId)),
+        () => api.archiveProduct(id, archived),
+      );
       toast(archived ? 'Product archived and hidden from customers' : isLive(after) ? 'Product restored' : 'Product restored. Turn on Available to show it to customers.');
       refresh();
     } catch (err) {
