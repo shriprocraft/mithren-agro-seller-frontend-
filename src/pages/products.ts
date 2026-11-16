@@ -284,6 +284,23 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     return after;
   }
 
+  on(root, 'click', '[data-action=delete]', async (_e, el) => {
+    const c = await confirmDialog({
+      title: `Delete ${el.dataset.name ?? 'this product'}?`,
+      message: 'It will be removed for good, with its options and photos, and taken out of customers\u2019 carts. This can\u2019t be undone. A product that has orders or reviews can\u2019t be deleted; it stays archived.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!c.ok) return;
+    try {
+      await api.deleteProduct(el.dataset.id!);
+      toast('Product deleted');
+      refresh();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  });
+
   on(root, 'change', '[data-action=toggle-available]', async (_e, el) => {
     const input = el as HTMLInputElement;
     input.disabled = true;
@@ -353,6 +370,7 @@ function row(p: Product, readOnly: boolean) {
     <td class="actions">
       <a class="btn btn-sm btn-ghost" href="#/seller/products/${p.id}${readOnly ? '' : '/edit'}">${readOnly ? 'View' : 'Edit'}</a>
       ${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-ghost" data-action="archive" data-id="${p.id}" data-archived="${String(p.archived)}">${p.archived ? 'Restore' : 'Archive'}</button>`}
+      ${readOnly || !p.archived ? '' : html`<button type="button" class="btn btn-sm btn-danger-ghost" data-action="delete" data-id="${p.id}" data-name="${p.name}">Delete</button>`}
     </td>
   </tr>
   <tr class="variant-row" id="vr_${p.id}" ${open ? '' : raw('hidden')}>

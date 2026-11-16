@@ -445,7 +445,15 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
         added += 1;
       }
     }
-    return { synced: items.length, added };
+    // A product deleted on the backend (from another device, or by an admin) leaves this list too.
+    const onBackend = new Set(items.map((b) => b.id));
+    const before = db.products.length;
+    db.products = db.products.filter((p) => p.sellerId !== s.id || !p.backendId || onBackend.has(p.backendId));
+    if (db.products.length !== before) {
+      const kept = new Set(db.products.map((p) => p.id));
+      db.adjustments = db.adjustments.filter((a) => a.sellerId !== s.id || kept.has(a.productId));
+    }
+    return { synced: items.length, added, removed: before - db.products.length };
   }, true);
 }
 
@@ -470,6 +478,19 @@ export function archiveProduct(id: string, archived = true) {
     p.available = !archived && p.available;
     p.updatedAt = nowIso();
     return p;
+  }, true);
+}
+
+/** Removes an archived product from the portal for good (the backend copy is deleted first, by the caller). */
+export function deleteProduct(id: string) {
+  return call(() => {
+    const p = ownedProduct(id);
+    if (!p.archived) throw new ApiError(409, 'Archive the product before deleting it.');
+    if (db.orders.some((o) => o.sellerId === session.sellerId && ACTIVE_STATUSES.includes(o.status) && o.items.some((i) => i.productId === id)))
+      throw new ApiError(409, 'This product is part of an active order, so it can’t be deleted.');
+    db.products = db.products.filter((x) => x !== p);
+    db.adjustments = db.adjustments.filter((a) => a.productId !== id);
+    return { deleted: true };
   }, true);
 }
 

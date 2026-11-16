@@ -11,6 +11,7 @@ export const RPC_METHODS = {
   syncBackendProducts: true,
   setProductAvailability: true,
   archiveProduct: true,
+  deleteProduct: true,
   adjustStock: true,
   listAdjustments: false,
   applyInventoryCsv: true,

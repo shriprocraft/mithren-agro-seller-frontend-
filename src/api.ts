@@ -128,9 +128,68 @@ export const getProduct = rpc('getProduct');
 export const saveProduct = rpc('saveProduct');
 export const setProductAvailability = rpc('setProductAvailability');
 export const archiveProduct = rpc('archiveProduct');
-export const adjustStock = rpc('adjustStock');
+const localDeleteProduct = rpc('deleteProduct');
+const localAdjustStock = rpc('adjustStock');
+const NOT_CONNECTED = 'Connect your account to the Mithren server first: enter your password in the banner at the top of the page.';
+/** The backend's stock row for a portal variant: by SKU, or none for a single-price product. */
+const stockRow = (backendId: string, v: { sku: string; stock: number }, price?: number) => ({
+  product_id: backendId,
+  ...(v.sku ? { sku: v.sku } : {}),
+  stock: v.stock,
+  ...(price !== undefined ? { price_paise: Math.round(price * 100) } : {}),
+});
+/**
+ * Changes a variant's stock in the portal, then on the backend, so the customer storefront sees the
+ * new count (and stops selling at 0). If the backend refuses, the portal change is undone.
+ */
+export const adjustStock = async (...args: Parameters<typeof localAdjustStock>) => {
+  const [productId, variantId, delta] = args;
+  const before = await getProduct(productId);
+  if (before.backendId && !sellerSession.isSignedIn()) throw new ApiError(401, NOT_CONNECTED);
+  const after = await localAdjustStock(...args);
+  const v = after.variants.find((x) => x.id === variantId);
+  if (before.backendId && v) {
+    try {
+      await products.setStockLevels([stockRow(before.backendId, v)]);
+    } catch (err) {
+      await localAdjustStock(productId, variantId, -delta, 'correction', 'Undone: the server did not save this change').catch(() => undefined);
+      throw err;
+    }
+  }
+  return after;
+};
+/**
+ * Deletes an archived product for good: on the backend first (refused while orders or reviews refer
+ * to it; it then stays archived), then from the portal.
+ */
+export const deleteProduct = async (id: string) => {
+  const p = await getProduct(id);
+  if (!p.archived) throw new ApiError(409, 'Archive the product before deleting it.');
+  if (p.backendId) {
+    if (!sellerSession.isSignedIn()) throw new ApiError(401, NOT_CONNECTED);
+    await products.destroy(p.backendId);
+  }
+  return localDeleteProduct(id);
+};
 export const listAdjustments = rpc('listAdjustments');
-export const applyInventoryCsv = rpc('applyInventoryCsv');
+const localApplyInventoryCsv = rpc('applyInventoryCsv');
+/** CSV stock and price import: saved on the backend first (all or nothing), then in the portal. */
+export const applyInventoryCsv = async (rows: Parameters<typeof localApplyInventoryCsv>[0]) => {
+  const wanted = new Map(rows.map((r) => [r.sku, r]));
+  const backendRows = [];
+  for (const p of await listLocalProducts({ includeArchived: true })) {
+    if (!p.backendId) continue;
+    for (const v of p.variants) {
+      const r = wanted.get(v.sku);
+      if (r) backendRows.push(stockRow(p.backendId, { sku: v.sku, stock: r.stock }, r.price));
+    }
+  }
+  if (backendRows.length) {
+    if (!sellerSession.isSignedIn()) throw new ApiError(401, NOT_CONNECTED);
+    for (let i = 0; i < backendRows.length; i += 500) await products.setStockLevels(backendRows.slice(i, i + 500));
+  }
+  return localApplyInventoryCsv(rows);
+};
 const localListOrders = rpc('listOrders');
 const localGetOrder = rpc('getOrder');
 const localTransitionOrder = rpc('transitionOrder');
@@ -515,6 +574,12 @@ export const products = {
   /** PATCH /api/v1/products/{id} with is_active only: shows (true) or hides (false) it in the customer storefront. */
   setActive: (backendId: string, active: boolean) =>
     backendRequest<BackendProductView>('PATCH', `products/${encodeURIComponent(backendId)}`, { is_active: active }, productField),
+  /** DELETE /api/v1/products/{id}?permanent=true: gone for good; 409 while orders or reviews refer to it. */
+  destroy: (backendId: string) =>
+    backendRequest<{ id: string; deleted: boolean }>('DELETE', `products/${encodeURIComponent(backendId)}?permanent=true`, undefined, () => undefined),
+  /** POST /api/v1/products/stock-levels: stock (and price) by SKU, all or nothing. */
+  setStockLevels: (items: { product_id: string; sku?: string; stock: number; price_paise?: number }[]) =>
+    backendRequest<{ updated: number }>('POST', 'products/stock-levels', { items }, () => undefined),
   /** DELETE /api/v1/products/{id}: soft delete, the product becomes inactive. */
   remove: (backendId: string) => backendRequest<BackendProductView>('DELETE', `products/${encodeURIComponent(backendId)}`, undefined, productField),
 };
