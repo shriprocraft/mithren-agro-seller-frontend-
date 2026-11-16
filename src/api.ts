@@ -167,7 +167,12 @@ export const deleteProduct = async (id: string) => {
   if (!p.archived) throw new ApiError(409, 'Archive the product before deleting it.');
   if (p.backendId) {
     if (!sellerSession.isSignedIn()) throw new ApiError(401, NOT_CONNECTED);
-    await products.destroy(p.backendId);
+    try {
+      await products.destroy(p.backendId);
+    } catch (err) {
+      // 404: already gone on the server (deleted elsewhere), so only this browser's copy is left.
+      if (!(err instanceof ApiError) || err.status !== 404) throw err;
+    }
   }
   return localDeleteProduct(id);
 };
@@ -909,6 +914,9 @@ export const auth = {
       if (!sellerSession.isSignedIn())
         throw new ApiError(409, 'A server login with a different password already exists for this email or mobile number. Enter that password.');
     }
+    // Signed in to the portal while the server was unreachable: take over the server's approval and
+    // details now, as a normal sign-in would have.
+    await adoptOnSignIn();
     window.dispatchEvent(new CustomEvent(SESSION_CONNECTED_EVENT));
   },
   /**

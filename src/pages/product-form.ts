@@ -624,8 +624,11 @@ const page: Page = async ({ root, params, seller }) => {
         try {
           await api.products.remove(product.backendId);
         } catch (err) {
-          await api.archiveProduct(product.id, false); // keep both sides in step
-          throw err;
+          // 404: already gone on the server, so archiving this browser's copy is all that's left.
+          if (!(err instanceof api.ApiError) || err.status !== 404) {
+            await api.archiveProduct(product.id, false); // keep both sides in step
+            throw err;
+          }
         }
       }
       releaseImages();

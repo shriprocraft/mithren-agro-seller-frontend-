@@ -567,6 +567,8 @@ on(document.body, 'submit', '[data-role=connect-form]', async (e, el) => {
     const shop = api.sellerSession.shopName();
     if (label && shop && !label.hasAttribute('data-local-shop')) label.textContent = shop;
     toast('Account connected. You can save products and photos now.');
+    // The application status, header and menu may have changed with the server's details: redraw.
+    window.setTimeout(() => window.location.reload(), 800);
   } catch (ex) {
     err.textContent = (ex as Error).message;
     err.hidden = false;
