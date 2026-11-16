@@ -153,26 +153,27 @@ const page: Page = async ({ root, params, seller }) => {
 
           <section class="card" id="origin-card" ${apparel ? raw('hidden') : ''}>
             <h2 class="card-title">Origin, freshness &amp; storage</h2>
-            ${field({ name: 'origin', label: 'Origin', value: product.origin, placeholder: 'Enter the farm or region, e.g. Mulshi, Pune', hint: 'Farm or region where it is grown.' })}
+            <p class="muted small">Customers rely on these details to judge freshness. Every field marked <span class="req" aria-hidden="true">*</span> is required to publish.</p>
+            ${field({ name: 'origin', label: 'Origin', required: true, value: product.origin, placeholder: 'Enter the farm or region, e.g. Mulshi, Pune', hint: 'Farm or region where it is grown.' })}
             <fieldset class="field">
-              <legend>Seasonality</legend>
+              <legend>Seasonality<span class="req" aria-hidden="true"> *</span></legend>
               <div class="radio-row">
                 <label><input type="radio" name="seasonality" value="year_round" ${product.seasonality === 'year_round' ? 'checked' : ''}/> Available year-round</label>
                 <label><input type="radio" name="seasonality" value="seasonal" ${product.seasonality === 'seasonal' ? 'checked' : ''}/> Seasonal</label>
               </div>
             </fieldset>
             <fieldset class="field" id="months-field" ${product.seasonality === 'seasonal' ? '' : raw('hidden')}>
-              <legend>In-season months</legend>
+              <legend>In-season months<span class="req" aria-hidden="true"> *</span></legend>
               <div class="chip-row" id="f_seasonMonths" tabindex="-1">
                 ${MONTHS.map((m, i) => html`<label class="chip"><input type="checkbox" name="month" value="${i + 1}" ${product.seasonMonths.includes(i + 1) ? 'checked' : ''}/><span>${m}</span></label>`)}
               </div>
               <p class="field-error" id="f_seasonMonths_err" hidden></p>
             </fieldset>
             <div class="row-2">
-              ${field({ name: 'harvestDate', label: 'Harvest date', type: 'date', value: product.harvestDate, hint: 'Optional. Pick a date; shown to customers if set.' })}
-              ${field({ name: 'packedDate', label: 'Packed date', type: 'date', value: product.packedDate, hint: 'Optional. Pick a date.' })}
+              ${field({ name: 'harvestDate', label: 'Harvest date', type: 'date', required: true, value: product.harvestDate, hint: 'When it was harvested (or made). Shown to customers.', attrs: `max="${new Date().toISOString().slice(0, 10)}"` })}
+              ${field({ name: 'packedDate', label: 'Packed date', type: 'date', required: true, value: product.packedDate, hint: 'On or after the harvest date.', attrs: `max="${new Date().toISOString().slice(0, 10)}"` })}
             </div>
-            ${textarea({ name: 'storage', label: 'Storage guidance', value: product.storage, rows: 2, placeholder: 'Enter storage guidance, e.g. Refrigerate at 2–4 °C. Best within 3 days.' })}
+            ${textarea({ name: 'storage', label: 'Storage guidance', required: true, value: product.storage, rows: 2, placeholder: 'Enter storage guidance, e.g. Refrigerate at 2–4 °C. Best within 3 days.', hint: 'How customers should store it, and how long it keeps.' })}
           </section>
         </div>
 

@@ -288,12 +288,17 @@ function validateProduct(input: ProductInput, submitting: boolean): Record<strin
   if (input.maxQty < input.minQty) e.maxQty = 'Must be ≥ minimum quantity.';
   if (input.seasonality === 'seasonal' && input.seasonMonths.length === 0) e.seasonMonths = 'Pick the months this product is in season.';
   if (input.harvestDate && input.packedDate && input.packedDate < input.harvestDate) e.packedDate = 'Packed date can’t be before harvest date.';
-  if (input.harvestDate && input.harvestDate > new Date().toISOString().slice(0, 10)) e.harvestDate = 'Harvest date can’t be in the future.';
+  const today = new Date().toISOString().slice(0, 10);
+  if (input.harvestDate && input.harvestDate > today) e.harvestDate = 'Harvest date can’t be in the future.';
+  if (input.packedDate && input.packedDate > today) e.packedDate = 'Packed date can’t be in the future.';
   if (submitting) {
     if (input.description.trim().length < 20) e.description = 'Write at least 20 characters so customers know what they’re buying.';
     // Apparel and accessories have no origin, freshness or organic fields.
-    if (!apparel && !input.origin.trim()) e.origin = 'Origin is required for listings.';
-    if (!apparel && !input.storage.trim()) e.storage = 'Storage guidance is required for listings.';
+    // Origin, freshness and storage: every field is required to publish (drafts may be incomplete).
+    if (!apparel && !input.origin.trim()) e.origin = 'Origin is required to publish.';
+    if (!apparel && !input.harvestDate) e.harvestDate ??= 'Harvest date is required to publish.';
+    if (!apparel && !input.packedDate) e.packedDate ??= 'Packed date is required to publish.';
+    if (!apparel && !input.storage.trim()) e.storage = 'Storage guidance is required to publish.';
     if (apparel && input.organicClaim !== 'none') e.organicClaim = 'Organic claims apply to produce only.';
     else if (input.organicClaim !== 'none') {
       const cert = db.documents.find((d) => d.id === input.certificateId && d.sellerId === session.sellerId && d.type === 'organic_cert');

@@ -281,7 +281,7 @@ test('pending sellers cannot publish products; approval enables it; suspension b
   const product = {
     name: 'Fresh Coriander', slug: 'fresh-coriander', description: 'Fragrant coriander bunches with roots on, harvested daily.', category: 'Herbs', emoji: '🌿',
     variants: [{ id: 'v1', label: '1 bunch', sku: 'JF-COR-1B', packSize: 1, unit: 'bunch', price: 25, stock: 10 }],
-    origin: 'Lonavala', seasonality: 'year_round', seasonMonths: [], storage: 'Refrigerate.', organicClaim: 'none', available: true, minQty: 1, maxQty: 10, lowStockThreshold: 3,
+    origin: 'Lonavala', seasonality: 'year_round', seasonMonths: [], harvestDate: '2026-01-10', packedDate: '2026-01-11', storage: 'Refrigerate.', organicClaim: 'none', available: true, minQty: 1, maxQty: 10, lowStockThreshold: 3,
   };
   let r = await c.rpc('saveProduct', product, true);
   assert.equal(r.status, 403, 'pending seller cannot submit a listing for sale');

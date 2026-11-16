@@ -10,6 +10,7 @@ import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, Ban
 import type { AdjustmentReason, InventoryAdjustment, OrderStatus, Review, SubOrder } from './types.js';
 import { toReview, type BackendReview, type BackendReviewPage } from './backend-reviews.js';
 import { hasPortalMeta, portalMetaOf, type PortalMeta } from './portal-meta.js';
+import { changedSettings, fromBackendSettings, hasSettings, settingsOf, toBackendSettings, type BackendSettings, type SettingsPatch } from './seller-settings.js';
 import { BACKEND_STATUS, toSubOrder, type BackendOrder } from './backend-orders.js';
 import { toDashboardMetrics, type BackendDashboard } from './backend-analytics.js';
 
@@ -91,8 +92,62 @@ function sharedWhileLoading<T>(load: () => Promise<T>): () => Promise<T> {
     return p;
   };
 }
-export const getSeller = sharedWhileLoading(rpc('getSeller'));
-export const updateSeller = rpc('updateSeller');
+const localGetSeller = rpc('getSeller');
+const localUpdateSeller = rpc('updateSeller');
+const saveBackendSettings = (settings: BackendSettings) =>
+  backendRequest<{ settings: BackendSettings }>('PUT', 'seller/portal-settings', settings, () => undefined);
+let sellerSyncedAt = 0;
+/**
+ * Brings this device's copy of the store settings (and shop name, description and pickup address) in
+ * line with the backend, which every device shares. At most every 15 s. The first device to sync
+ * uploads its settings when the backend has none yet.
+ */
+async function syncSellerFromBackend(): Promise<void> {
+  if (!sellerSession.isSignedIn() || Date.now() - sellerSyncedAt < 15_000) return;
+  sellerSyncedAt = Date.now();
+  try {
+    const shop = await backendRequest<{ shop_name: string; description?: string | null; pickup_address?: string | null; portal_settings?: BackendSettings }>(
+      'GET',
+      'seller/shop-details',
+      undefined,
+      () => undefined,
+    );
+    const mine = await localGetSeller();
+    if (!hasSettings(shop.portal_settings)) {
+      await saveBackendSettings(toBackendSettings(settingsOf(mine))).catch(() => undefined);
+      return;
+    }
+    const patch: SettingsPatch & { shopName?: string; description?: string; pickupAddress?: string } = changedSettings(mine, fromBackendSettings(shop.portal_settings));
+    if (shop.shop_name && shop.shop_name.trim().length >= 3 && shop.shop_name !== mine.shopName) patch.shopName = shop.shop_name;
+    if (shop.description && shop.description !== mine.description) patch.description = shop.description;
+    if (shop.pickup_address && shop.pickup_address.trim().length >= 10 && shop.pickup_address !== mine.pickupAddress) patch.pickupAddress = shop.pickup_address;
+    if (Object.keys(patch).length) await localUpdateSeller(patch).catch(() => undefined);
+  } catch {
+    sellerSyncedAt = 0; // offline or no shop yet: try again next time
+  }
+}
+export const getSeller = sharedWhileLoading(async () => {
+  await syncSellerFromBackend();
+  return localGetSeller();
+});
+/**
+ * Saves store settings in the portal, then on the backend so every device shows them. If the backend
+ * refuses, the portal change is undone.
+ */
+export const updateSeller = async (patch: Parameters<typeof localUpdateSeller>[0]) => {
+  const settings = toBackendSettings(patch as SettingsPatch);
+  if (!Object.keys(settings).length || !sellerSession.isSignedIn()) return localUpdateSeller(patch);
+  const before = await localGetSeller();
+  const after = await localUpdateSeller(patch);
+  try {
+    await saveBackendSettings(settings);
+  } catch (err) {
+    const undo = Object.fromEntries(Object.keys(patch).map((k) => [k, (before as unknown as Record<string, unknown>)[k]]));
+    await localUpdateSeller(undo as typeof patch).catch(() => undefined);
+    throw err;
+  }
+  return after;
+};
 const listLocalProducts = rpc('listProducts');
 const mergeBackendProducts = rpc('syncBackendProducts');
 let productsSyncedAt = 0;
