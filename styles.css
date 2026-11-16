@@ -456,6 +456,31 @@ main > .callout {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* The order page's two print actions: same look, same size, side by side. */
+.print-actions {
+  display: flex;
+  gap: 8px;
+}
+.print-actions .print-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 11.5rem;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  /* A row of their own, split evenly. */
+  .print-actions {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .print-actions .print-btn {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+}
 .back-link {
   display: inline-flex;
   align-items: center;

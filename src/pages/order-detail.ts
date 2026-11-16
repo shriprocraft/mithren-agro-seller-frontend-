@@ -45,7 +45,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
   const minsLeft = Math.round((deadline - Date.now()) / 60_000);
 
   root.innerHTML = html`
-    ${pageHeader(`Order ${o.id}`, `Placed ${fmtDate(o.placedAt, true)} · delivery slot ${o.deliverySlot}`, html`${orderBadge(o.status)}${EMBEDDED ? '' : html`${canInvoice ? html`<button type="button" class="btn btn-sm btn-primary" data-action="invoice">${icon('download', 14)} Print GST invoice</button>` : ''}<button type="button" class="btn btn-sm" data-action="print">Print packing slip</button>`}`, { href: '/seller/orders', label: 'Orders' })}
+    ${pageHeader(`Order ${o.id}`, `Placed ${fmtDate(o.placedAt, true)} · delivery slot ${o.deliverySlot}`, html`${orderBadge(o.status)}${EMBEDDED ? '' : html`<div class="print-actions">${canInvoice ? html`<button type="button" class="btn btn-sm print-btn" data-action="invoice">${icon('print', 16)} Print GST invoice</button>` : ''}<button type="button" class="btn btn-sm print-btn" data-action="print">${icon('print', 16)} Print packing slip</button></div>`}`, { href: '/seller/orders', label: 'Orders' })}
     ${o.status === 'awaiting_confirmation'
       ? callout(minsLeft > 0 ? 'warn' : 'error', minsLeft > 0 ? `Confirm within ${minsLeft} min` : 'Confirmation window has passed', minsLeft > 0 ? 'Unconfirmed orders may be auto-cancelled by the platform and count towards your cancellation rate.' : 'The platform may auto-cancel this order. Accept now if you can still fulfil it.')
       : ''}
