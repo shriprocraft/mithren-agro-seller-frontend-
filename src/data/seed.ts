@@ -39,22 +39,34 @@ export const SELLER_A = 's_demo_a';
 export const SELLER_B = 's_demo_b';
 const DAY = 86_400_000;
 
+/** The seller categories: the same nine as the Customer App's storefront categories. */
 export const COMMISSION_RULES: CommissionRule[] = [
-  { category: 'Fruits', ratePct: 8 },
+  { category: 'Spinach', ratePct: 6 },
   { category: 'Vegetables', ratePct: 7 },
-  { category: 'Leafy Greens', ratePct: 6 },
-  { category: 'Root Vegetables', ratePct: 7 },
-  { category: 'Herbs', ratePct: 6 },
-  { category: 'Exotic', ratePct: 10 },
-  // Non-produce categories. 8% matches the default rate for categories without a rule.
-  { category: 'Women Apparel', ratePct: 8 },
-  { category: 'Women Accessories', ratePct: 8 },
-  { category: 'Others', ratePct: 8 },
+  { category: 'Fruits', ratePct: 8 },
+  { category: 'Organic Groceries', ratePct: 8 },
+  { category: 'Oil', ratePct: 8 },
+  { category: 'Cosmetics', ratePct: 8 },
+  { category: 'Fancy Items', ratePct: 8 },
+  { category: 'Women Apparels', ratePct: 8 },
+  { category: 'Fertilizers', ratePct: 8 },
 ];
 
 export const CATEGORIES = COMMISSION_RULES.map((r) => r.category);
-/** The approved categories a seller can register for and list products in: no "Others". */
-export const SELLER_CATEGORIES = CATEGORIES.filter((c) => c !== 'Others');
+/** The categories a seller can register for and list products in. */
+export const SELLER_CATEGORIES = CATEGORIES;
+/** Category names used before 18 Nov 2026, and the category each became. */
+export const RENAMED_CATEGORIES: Record<string, string> = {
+  'Leafy Greens': 'Spinach',
+  'Root Vegetables': 'Vegetables',
+  Herbs: 'Vegetables',
+  Exotic: 'Vegetables',
+  'Women Apparel': 'Women Apparels',
+  'Women Accessories': 'Fancy Items',
+  Others: 'Organic Groceries',
+};
+/** A category by its current name (old names are moved to the new ones). */
+export const currentCategory = (c: string): string => RENAMED_CATEGORIES[c] ?? c;
 
 export function createSeed(now = new Date()): DB {
   const t = now.getTime();

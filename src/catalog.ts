@@ -1,9 +1,9 @@
 // Category-specific product rules, shared by the product form and the API.
 
-/** Fashion categories: sold by size, with no organic claim or freshness details. */
-export const APPAREL_CATEGORIES = ['Women Apparel', 'Women Accessories'] as const;
+/** Sold by size, with no organic claim or freshness details (bangles and other fancy items come in sizes too). */
+export const APPAREL_CATEGORIES = ['Women Apparels', 'Fancy Items'] as const;
 /** Produce categories: sold by weight or pack, with organic claims and freshness details. */
-export const PRODUCE_CATEGORIES = ['Fruits', 'Vegetables', 'Leafy Greens', 'Root Vegetables', 'Herbs', 'Exotic'] as const;
+export const PRODUCE_CATEGORIES = ['Spinach', 'Vegetables', 'Fruits', 'Organic Groceries'] as const;
 
 export const APPAREL_SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'Free Size'] as const;
 export type ApparelSize = (typeof APPAREL_SIZES)[number];
@@ -106,15 +106,15 @@ export function toBackendUpdate(p: FormProduct, active: boolean): BackendProduct
 // ---------- automatic SKUs ----------
 
 const CATEGORY_CODES: Record<string, string> = {
-  Fruits: 'FRT',
+  Spinach: 'SPN',
   Vegetables: 'VEG',
-  'Leafy Greens': 'LFG',
-  'Root Vegetables': 'RTV',
-  Herbs: 'HRB',
-  Exotic: 'EXO',
-  'Women Apparel': 'APP',
-  'Women Accessories': 'ACC',
-  Others: 'OTH',
+  Fruits: 'FRT',
+  'Organic Groceries': 'ORG',
+  Oil: 'OIL',
+  Cosmetics: 'COS',
+  'Fancy Items': 'FNC',
+  'Women Apparels': 'APP',
+  Fertilizers: 'FRZ',
 };
 const UNIT_CODES: Record<string, string> = { g: 'G', kg: 'KG', bunch: 'BN', piece: 'PC', box: 'BX' };
 // Pack words say nothing about the product, so they don't name it.

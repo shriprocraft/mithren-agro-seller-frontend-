@@ -4,14 +4,13 @@ import assert from 'node:assert/strict';
 import { CATEGORIES } from '../dist/data/seed.js';
 import { GST_STATE_CODES, INDIAN_STATES, emptyApplicationData, validateStep, normaliseApplicationData } from '../dist/application.js';
 
-test('existing categories are kept and the new ones are added', () => {
-  for (const c of ['Fruits', 'Vegetables', 'Leafy Greens', 'Root Vegetables', 'Herbs', 'Exotic']) assert.ok(CATEGORIES.includes(c), c);
-  for (const c of ['Women Apparel', 'Women Accessories', 'Others']) assert.ok(CATEGORIES.includes(c), c);
+test('the seller categories are the nine storefront categories', () => {
+  assert.deepEqual(CATEGORIES, ['Spinach', 'Vegetables', 'Fruits', 'Organic Groceries', 'Oil', 'Cosmetics', 'Fancy Items', 'Women Apparels', 'Fertilizers']);
 });
 
-test('new categories survive application data normalisation; "Others" is not offered at registration', () => {
-  const d = normaliseApplicationData({ ...emptyApplicationData(), productTypes: ['Women Apparel', 'Others', 'Not a category'] });
-  assert.deepEqual(d.productTypes, ['Women Apparel']);
+test('old category names in saved applications move to the new ones; unknown ones are dropped', () => {
+  const d = normaliseApplicationData({ ...emptyApplicationData(), productTypes: ['Women Apparel', 'Leafy Greens', 'Herbs', 'Exotic', 'Oil', 'Not a category'] });
+  assert.deepEqual(d.productTypes, ['Women Apparels', 'Spinach', 'Vegetables', 'Oil']);
 });
 
 test('every selectable state has a GST state code', () => {

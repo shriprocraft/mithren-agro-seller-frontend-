@@ -11,10 +11,10 @@ beforeEach(() => {
 });
 
 test('categories map to the right form', () => {
-  assert.equal(categoryKind('Women Apparel'), 'apparel');
-  assert.equal(categoryKind('Women Accessories'), 'apparel');
-  for (const c of ['Fruits', 'Vegetables', 'Leafy Greens', 'Root Vegetables', 'Herbs', 'Exotic']) assert.equal(categoryKind(c), 'produce', c);
-  assert.equal(categoryKind('Others'), 'other');
+  assert.equal(categoryKind('Women Apparels'), 'apparel');
+  assert.equal(categoryKind('Fancy Items'), 'apparel');
+  for (const c of ['Spinach', 'Vegetables', 'Fruits', 'Organic Groceries']) assert.equal(categoryKind(c), 'produce', c);
+  for (const c of ['Oil', 'Cosmetics', 'Fertilizers']) assert.equal(categoryKind(c), 'other', c);
   assert.deepEqual([...APPAREL_SIZES], ['S', 'M', 'L', 'XL', 'XXL', 'Free Size']);
 });
 
@@ -33,7 +33,7 @@ const kurti = (overrides = {}) => ({
   name: 'Cotton Kurti',
   slug: 'cotton-kurti',
   description: 'Hand block printed cotton kurti, breathable for summer.',
-  category: 'Women Apparel',
+  category: 'Women Apparels',
   emoji: '👗',
   variants: [
     { id: 'v1', label: 'Size M', sku: 'GV-KRT-M', packSize: 1, unit: 'piece', size: 'M', price: 799, stock: 5 },
@@ -86,7 +86,7 @@ test('apparel maps to a backend body with sizes and integer paise', () => {
   assert.deepEqual(body, {
     title: 'Cotton Kurti',
     description: 'Hand block printed cotton kurti, breathable for summer.',
-    category: 'Women Apparel',
+    category: 'Women Apparels',
     variants: [{ label: 'Size M', sku: 'GV-KRT-M', size: 'M', price_paise: 79950, mrp_paise: 99900, stock: 5 }],
     images: [],
     is_active: true,
@@ -112,19 +112,19 @@ test('a price that is not whole paise is refused, not rounded', () => {
 import { generateSku, toBackendUpdate } from '../dist/catalog.js';
 
 test('SKUs come from category, product name and size or pack', () => {
-  assert.equal(generateSku('Women Apparel', 'Cotton Kurti', { size: 'M', packSize: 1, unit: 'piece' }), 'APP-KURTI-M');
-  assert.equal(generateSku('Women Apparel', 'Cotton Kurti', { size: 'Free Size', packSize: 1, unit: 'piece' }), 'APP-KURTI-FS');
-  assert.equal(generateSku('Women Accessories', 'Silk Scarf', { size: 'XXL', packSize: 1, unit: 'piece' }), 'ACC-SCARF-XXL');
+  assert.equal(generateSku('Women Apparels', 'Cotton Kurti', { size: 'M', packSize: 1, unit: 'piece' }), 'APP-KURTI-M');
+  assert.equal(generateSku('Women Apparels', 'Cotton Kurti', { size: 'Free Size', packSize: 1, unit: 'piece' }), 'APP-KURTI-FS');
+  assert.equal(generateSku('Fancy Items', 'Silk Scarf', { size: 'XXL', packSize: 1, unit: 'piece' }), 'FNC-SCARF-XXL');
   assert.equal(generateSku('Fruits', 'Alphonso Mango', { packSize: 500, unit: 'g' }), 'FRT-MANGO-500G');
   assert.equal(generateSku('Fruits', 'Alphonso Mango 1 kg', { packSize: 1.5, unit: 'kg' }), 'FRT-MANGO-1P5KG');
-  assert.equal(generateSku('Herbs', 'Fresh Coriander bunch', { packSize: 1, unit: 'bunch' }), 'HRB-CORIANDER-1BN');
-  assert.equal(generateSku('Others', '12 34', { packSize: 1, unit: 'box' }), 'OTH-ITEM-1BX');
+  assert.equal(generateSku('Spinach', 'Fresh Palak bunch', { packSize: 1, unit: 'bunch' }), 'SPN-PALAK-1BN');
+  assert.equal(generateSku('Oil', '12 34', { packSize: 1, unit: 'box' }), 'OIL-ITEM-1BX');
 });
 
 test('generated SKUs avoid ones already in use and stay valid', () => {
   const taken = new Set(['APP-KURTI-M', 'APP-KURTI-M-2']);
-  assert.equal(generateSku('Women Apparel', 'Cotton Kurti', { size: 'M', packSize: 1, unit: 'piece' }, taken), 'APP-KURTI-M-3');
-  const long = generateSku('Exotic', 'Supercalifragilisticexpialidocious', { packSize: 1234.567, unit: 'kg' });
+  assert.equal(generateSku('Women Apparels', 'Cotton Kurti', { size: 'M', packSize: 1, unit: 'piece' }, taken), 'APP-KURTI-M-3');
+  const long = generateSku('Organic Groceries', 'Supercalifragilisticexpialidocious', { packSize: 1234.567, unit: 'kg' });
   assert.match(long, /^[A-Z0-9][A-Z0-9-]{2,31}$/);
 });
 

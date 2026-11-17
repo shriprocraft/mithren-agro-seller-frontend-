@@ -7,7 +7,7 @@ import { pageHeader, field, textarea, select, callout, productBadge, icon, showF
 import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { slugify, money, fmtDate, timeAgo, UNIT_LABEL } from '../lib.js';
-import { SELLER_CATEGORIES } from '../data/seed.js';
+import { SELLER_CATEGORIES, currentCategory } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
 import { APPAREL_SIZES, categoryKind, generateSku, toBackendProduct, toBackendUpdate, type ApparelSize } from '../catalog.js';
 import { portalMetaOf } from '../portal-meta.js';
@@ -80,6 +80,8 @@ const page: Page = async ({ root, params, seller }) => {
     const kept = { id: product.id, backendId: product.backendId, status: product.status, archived: product.archived, available: product.available, sellerId: product.sellerId, updatedAt: product.updatedAt };
     product = { ...product, ...(restored.data.product as Partial<Product>), ...kept };
   }
+  // A product saved under a category name used before 18 Nov 2026 opens under its new name.
+  product = { ...product, category: product.category ? currentCategory(product.category) : product.category };
   const docs = (await api.listDocuments()).filter((d) => d.type === 'organic_cert');
   const approved = seller.status === 'approved';
   const readOnly = seller.status === 'suspended';
