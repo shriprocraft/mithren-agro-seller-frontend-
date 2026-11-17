@@ -104,7 +104,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
                   <ul>
                     ${g.items.map(
                       (it) => html`<li><a href="#${it.href}" class="nav-link ${navKey === it.key ? 'active' : ''}" ${navKey === it.key ? raw('aria-current="page"') : ''}>
-                        ${icon(it.icon, 18)}<span>${it.label}</span><span class="nav-count" data-count="${it.key}" hidden></span></a></li>`,
+                        ${icon(it.icon, 18)}<span>${it.label}</span><span class="nav-dot" data-dot="${it.key}" hidden></span><span class="nav-count" data-count="${it.key}" hidden></span></a></li>`,
                     )}
                   </ul>
                 </div>`,
@@ -231,6 +231,13 @@ async function render() {
     return;
   }
   main.innerHTML = html`${banner}<div class="page">${loadingState(6)}</div>`.value;
+  // Opening Orders or Reviews puts out its green menu dot.
+  const section = path.startsWith('/seller/orders') ? 'orders' : path.startsWith('/seller/reviews') ? 'reviews' : null;
+  if (section) {
+    const dot = $(`[data-dot=${section}]`);
+    if (dot) dot.hidden = true;
+    void api.markSectionSeen(section);
+  }
   updateBadges();
 
   const page = await m.route.page();
@@ -361,9 +368,9 @@ async function updateBadges() {
   if (!$('[data-action=notifs]')) return;
   try {
     const [orders, notifs] = await Promise.all([api.listOrders({ status: 'awaiting_confirmation' }), api.listNotifications()]);
-    // A new order that arrives while the portal is open gets a pop-up message, once.
+    // A new order or review that arrives while the portal is open gets a pop-up message, once.
     for (const n of notifs) {
-      if (n.topic !== 'new_order' || n.read || announced.has(n.id)) continue;
+      if ((n.topic !== 'new_order' && n.topic !== 'new_review') || n.read || announced.has(n.id)) continue;
       announced.add(n.id);
       if (!firstBadgeLoad) toast(`${n.title}. ${n.body}`);
     }
@@ -373,6 +380,18 @@ async function updateBadges() {
       c.hidden = orders.length === 0;
       c.textContent = String(orders.length);
       c.setAttribute('aria-label', `${orders.length} awaiting confirmation`);
+    }
+    // Green menu dots: something new in Orders or Reviews since the seller last opened it.
+    const fresh = api.newInSections();
+    const here = location.hash.slice(1).split('?')[0];
+    for (const section of ['orders', 'reviews'] as const) {
+      const d = $(`[data-dot=${section}]`);
+      if (!d) continue;
+      const open = here.startsWith(`/seller/${section}`);
+      if (open && fresh[section]) void api.markSectionSeen(section);
+      d.hidden = open || fresh[section] === 0;
+      d.setAttribute('aria-label', section === 'orders' ? 'New orders' : 'New reviews');
+      d.setAttribute('role', 'status');
     }
     const unread = notifs.filter((n) => !n.read).length;
     const dot = $('[data-unread]');

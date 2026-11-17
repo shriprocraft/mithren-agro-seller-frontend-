@@ -74,7 +74,8 @@ const page: Page = async ({ root, params, seller }) => {
   }
   // Unsaved changes from an earlier visit (a reload, cleared site data, another device) come back.
   const draftKey = (isNew ? 'new' : product.backendId ?? product.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'new';
-  const restored = readOnlyFor(seller.status) ? null : await api.productDrafts.load(draftKey).catch(() => null);
+  const draftOwner = seller.id || 'me';
+  const restored = readOnlyFor(seller.status) ? null : await api.productDrafts.load(draftOwner, draftKey).catch(() => null);
   if (restored?.data.product) {
     const kept = { id: product.id, backendId: product.backendId, status: product.status, archived: product.archived, available: product.available, sellerId: product.sellerId, updatedAt: product.updatedAt };
     product = { ...product, ...(restored.data.product as Partial<Product>), ...kept };
@@ -612,25 +613,38 @@ const page: Page = async ({ root, params, seller }) => {
       return null;
     }
   };
-  let lastKept = restored?.data.product ? '' : snapshot() ?? '';
+  const untouched = snapshot();
+  let lastKept = restored?.data.product ? '' : untouched ?? '';
+  let lastHere = lastKept;
   let keepTimer = 0;
   const keepDraft = () => {
-    if (readOnly) return;
+    if (readOnly || !root.isConnected) return;
+    // This browser keeps every change at once, so even an instant reload loses nothing.
+    const now = snapshot();
+    if (now && now !== lastHere && (now !== untouched || restored?.data.product)) {
+      lastHere = now;
+      api.productDrafts.keepHere(draftOwner, draftKey, JSON.parse(now));
+    }
+    // The server copy (for cleared site data and other devices) follows shortly after.
     window.clearTimeout(keepTimer);
     keepTimer = window.setTimeout(() => {
       if (!root.isConnected) return;
-      const now = snapshot();
-      if (!now || now === lastKept) return;
-      lastKept = now;
-      void api.productDrafts.save(draftKey, JSON.parse(now)).catch(() => undefined);
+      const latest = snapshot();
+      if (!latest || latest === lastKept) return;
+      lastKept = latest;
+      void api.productDrafts.save(draftKey, JSON.parse(latest)).catch(() => undefined);
     }, 800);
   };
+  // Leaving or reloading the page keeps the very latest too.
+  const keepOnLeave = () => keepDraft();
+  window.addEventListener('pagehide', keepOnLeave);
   on(root, 'input', '[data-role=form]', keepDraft);
   on(root, 'change', '[data-role=form]', keepDraft);
   on(root, 'click', '[data-role=form] button', keepDraft);
   on(root, 'click', '[data-action=discard-draft]', async () => {
     window.clearTimeout(keepTimer);
-    await api.productDrafts.forget(draftKey);
+    window.removeEventListener('pagehide', keepOnLeave);
+    await api.productDrafts.forget(draftOwner, draftKey);
     lastKept = '';
     window.location.reload();
   });
@@ -699,7 +713,8 @@ const page: Page = async ({ root, params, seller }) => {
         );
       }
       window.clearTimeout(keepTimer);
-      await api.productDrafts.forget(draftKey);
+      window.removeEventListener('pagehide', keepOnLeave);
+      await api.productDrafts.forget(draftOwner, draftKey);
       releaseImages();
       toast(
         isNew
@@ -743,7 +758,8 @@ const page: Page = async ({ root, params, seller }) => {
       }
       await api.archiveProduct(product.id, true);
       window.clearTimeout(keepTimer);
-      await api.productDrafts.forget(draftKey);
+      window.removeEventListener('pagehide', keepOnLeave);
+      await api.productDrafts.forget(draftOwner, draftKey);
       releaseImages();
       toast('Product deleted');
       navigate('/seller/products', true);

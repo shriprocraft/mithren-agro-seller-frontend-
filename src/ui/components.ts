@@ -377,9 +377,13 @@ export function bindPager(root: HTMLElement, refresh: () => void) {
   });
 }
 
-export function tabs(items: { href: string; label: string; count?: number; active: boolean }[], label: string) {
+export function tabs(items: { href: string; label: string; count?: number; active: boolean; disabled?: string }[], label: string) {
   return html`<nav class="tabs" aria-label="${label}">
-    ${items.map((t) => html`<a href="#${t.href}" class="tab ${t.active ? 'active' : ''}" ${t.active ? raw('aria-current="page"') : ''}>${t.label}${t.count !== undefined ? html` <span class="tab-count">${t.count}</span>` : ''}</a>`)}
+    ${items.map((t) =>
+      t.disabled
+        ? html`<span class="tab tab-disabled" aria-disabled="true" title="${t.disabled}" data-tip="${t.disabled}">${t.label}</span>`
+        : html`<a href="#${t.href}" class="tab ${t.active ? 'active' : ''}" ${t.active ? raw('aria-current="page"') : ''}>${t.label}${t.count !== undefined ? html` <span class="tab-count">${t.count}</span>` : ''}</a>`,
+    )}
   </nav>`;
 }
 

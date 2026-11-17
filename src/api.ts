@@ -331,16 +331,25 @@ export interface ProductFormDraft {
   data: Record<string, unknown>;
   updatedAt: string;
 }
-const draftStorageKey = (key: string) => `mithren.productForm:${sellerSession.shopName() ?? 'me'}:${key}`;
+// One per seller and form, so it is found again whatever else has (or hasn't) loaded yet.
+const draftStorageKey = (owner: string, key: string) => `mithren.productForm:${owner}:${key}`;
 /**
- * The product form's unsaved fields, kept on the server (so they survive reloads, cleared site data
- * and other devices) and in this browser (for when the server can't be reached).
+ * The product form's unsaved fields, kept in this browser on every change (so even an instant reload
+ * keeps them) and on the server shortly after (so they survive cleared site data and other devices).
  */
 export const productDrafts = {
-  async load(key: string): Promise<ProductFormDraft | null> {
+  /** This browser's copy, written at once. */
+  keepHere(owner: string, key: string, data: Record<string, unknown>): void {
+    try {
+      localStorage.setItem(draftStorageKey(owner, key), JSON.stringify({ data, updatedAt: new Date().toISOString() }));
+    } catch {
+      /* storage full or unavailable: the server copy still saves */
+    }
+  },
+  async load(owner: string, key: string): Promise<ProductFormDraft | null> {
     let local: ProductFormDraft | null = null;
     try {
-      local = JSON.parse(localStorage.getItem(draftStorageKey(key)) ?? 'null');
+      local = JSON.parse(localStorage.getItem(draftStorageKey(owner, key)) ?? 'null');
     } catch {
       /* storage unavailable or unreadable */
     }
@@ -349,21 +358,19 @@ export const productDrafts = {
       const r = await backendRequest<{ data: Record<string, unknown>; updated_at: string }>('GET', `seller/product-drafts/${encodeURIComponent(key)}`, undefined, () => undefined);
       const server = { data: r.data, updatedAt: r.updated_at };
       return local && local.updatedAt > server.updatedAt ? local : server;
-    } catch (err) {
-      return err instanceof ApiError && err.status === 404 ? null : local;
+    } catch {
+      // No server copy yet (a reload faster than the server save), or the server is unreachable:
+      // this browser's copy is the latest there is.
+      return local;
     }
   },
+  /** The server's copy (the browser's is kept by keepHere). */
   async save(key: string, data: Record<string, unknown>): Promise<void> {
-    try {
-      localStorage.setItem(draftStorageKey(key), JSON.stringify({ data, updatedAt: new Date().toISOString() }));
-    } catch {
-      /* storage full or unavailable: the server copy still saves */
-    }
     if (sellerSession.isSignedIn()) await backendRequest('PUT', `seller/product-drafts/${encodeURIComponent(key)}`, { data }, () => undefined);
   },
-  async forget(key: string): Promise<void> {
+  async forget(owner: string, key: string): Promise<void> {
     try {
-      localStorage.removeItem(draftStorageKey(key));
+      localStorage.removeItem(draftStorageKey(owner, key));
     } catch {
       /* nothing to remove */
     }
@@ -411,14 +418,22 @@ const localListNotifications = rpc('listNotifications');
 const localMarkNotificationsRead = rpc('markNotificationsRead');
 interface BackendNotification {
   id: string;
-  topic: 'new_order' | 'order_update';
+  topic: 'new_order' | 'order_update' | 'new_review';
   title: string;
   body: string;
-  order_id: string;
-  order_number: string;
+  link: string;
+  order_id: string | null;
   at: string;
   read: boolean;
 }
+/** New orders and new reviews since the seller last opened those pages: the green menu dots. */
+let menuDots: { orders: number; reviews: number } = { orders: 0, reviews: 0 };
+export const newInSections = () => ({ ...menuDots });
+/** The seller opened Orders or Reviews: that menu dot goes out (on every device). */
+export const markSectionSeen = async (section: 'orders' | 'reviews'): Promise<void> => {
+  menuDots = { ...menuDots, [section]: 0 };
+  if (sellerSession.isSignedIn()) await backendRequest('POST', 'seller/notifications/seen', { section }, () => undefined).catch(() => undefined);
+};
 /** Server notifications (new orders, customer cancellations) have ids starting with this. */
 const SERVER_NOTIFICATION = 'srv_';
 /**
@@ -429,7 +444,13 @@ export const listNotifications = async (): Promise<AppNotification[]> => {
   const mine = await localListNotifications();
   if (!sellerSession.isSignedIn()) return mine;
   try {
-    const page = await backendRequest<{ items: BackendNotification[]; unread: number }>('GET', 'seller/notifications?limit=30', undefined, () => undefined);
+    const page = await backendRequest<{ items: BackendNotification[]; unread: number; sections?: { orders: number; reviews: number } }>(
+      'GET',
+      'seller/notifications?limit=30',
+      undefined,
+      () => undefined,
+    );
+    if (page.sections) menuDots = { orders: page.sections.orders ?? 0, reviews: page.sections.reviews ?? 0 };
     const sellerId = mine[0]?.sellerId ?? '';
     const fromServer: AppNotification[] = page.items.map((n) => ({
       id: `${SERVER_NOTIFICATION}${n.id}|${n.at}`,
@@ -439,7 +460,7 @@ export const listNotifications = async (): Promise<AppNotification[]> => {
       body: n.body,
       at: n.at,
       read: n.read,
-      link: `/seller/orders/${n.order_id}`,
+      link: n.link || (n.order_id ? `/seller/orders/${n.order_id}` : '/seller'),
     }));
     return [...fromServer, ...mine].sort((a, b) => b.at.localeCompare(a.at));
   } catch {

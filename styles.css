@@ -314,6 +314,22 @@ code {
 .nav-link.active:hover .icon {
   color: var(--sb-active-icon);
 }
+/* Green dot: a new order or review since the seller last opened that page. */
+.nav-dot {
+  margin-left: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+  flex: none;
+}
+.nav-dot[hidden] {
+  display: none;
+}
+.nav-dot:not([hidden]) + .nav-count {
+  margin-left: 6px;
+}
 .nav-count {
   margin-left: auto;
   background: var(--amber);
@@ -980,6 +996,16 @@ a.metric:hover {
 .tab.active {
   color: var(--primary);
   border-bottom-color: var(--primary);
+}
+/* A tab that isn't switched on yet: shown, but greyed out and not clickable. */
+.tab.tab-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+.tab.tab-disabled:hover {
+  background: none;
+  color: inherit;
 }
 .tab-count {
   font-size: 12px;

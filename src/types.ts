@@ -296,7 +296,8 @@ export interface SellerDocument {
 export interface AppNotification {
   id: string;
   sellerId: string;
-  topic: NotificationTopic;
+  /** new_review comes from the backend only (customers' reviews), like new_order. */
+  topic: NotificationTopic | 'new_review';
   title: string;
   body: string;
   at: string;

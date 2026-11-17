@@ -14,7 +14,9 @@ import type { Product, Variant } from '../types.js';
 const STATUS_TABS: [string, string][] = [
   ['', 'All'],
   ['approved', 'Approved'],
+  ['pending', 'Pending'],
   ['draft', 'Drafts'],
+  ['rejected', 'Rejected'],
   ['inactive', 'Inactive'],
   ['archived', 'Archived'],
 ];
@@ -154,7 +156,18 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       html`<button class="btn" type="button" data-action="export">${icon('download', 16)} Export CSV</button>
         ${readOnly ? '' : html`<a class="btn btn-primary" href="#/seller/products/new">${icon('plus', 16)} Add product</a>`}`,
     )}
-    ${tabs(STATUS_TABS.map(([s, l]) => ({ href: `/seller/products${s ? `?status=${s}` : ''}`, label: l, count: countFor(s), active: s === status })), 'Filter by status')}
+    ${tabs(
+      STATUS_TABS.map(([s, l]) => ({
+        href: `/seller/products${s ? `?status=${s}` : ''}`,
+        label: l,
+        count: countFor(s),
+        active: s === status,
+        // Product review by the Mithren team arrives with the super admin portal; until then every
+        // published product goes live at once, so these stay switched off.
+        ...(s === 'pending' || s === 'rejected' ? { disabled: 'Product review by the Mithren team is coming soon. For now, published products go live right away.' } : {}),
+      })),
+      'Filter by status',
+    )}
     <form class="product-filters" role="search" data-role="filters" aria-label="Filter products">
       <div class="toolbar">
         <div class="search">
