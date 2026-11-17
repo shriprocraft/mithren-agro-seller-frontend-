@@ -667,24 +667,50 @@ export const sellerSession = {
 };
 const SHOP_NAME_KEY = 'mithren.shopName';
 
-let refreshing: Promise<boolean> | null = null;
-/** Swaps the refresh token for a new pair. Concurrent callers share one request. */
-function refreshTokens(): Promise<boolean> {
-  refreshing ??= (async () => {
-    const t = sellerSession.tokens();
-    if (!t) return false;
-    try {
-      const res = await fetch(`${OTP_API}/api/v1/auth/refresh`, {
-        method: 'POST',
-        headers: { ...BACKEND_HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: t.refresh }),
-      });
-      if (!res.ok) return false;
-      sellerSession.save((await res.json()) as { access_token: string; refresh_token: string });
-      return true;
-    } catch {
-      return false;
-    }
+type RefreshResult = 'ok' | 'expired' | 'unreachable';
+let refreshing: Promise<RefreshResult> | null = null;
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Gets a new access token. Tabs of this browser share their tokens, so only one of them refreshes at
+ * a time (a Web Lock); a tab that waited finds the new token another tab saved and uses it, instead
+ * of refreshing with the old one (which the server would treat as a stolen token).
+ * - ok: there is a fresh token to retry with.
+ * - expired: the server says the sign-in is no longer valid (sign in again).
+ * - unreachable: the server couldn't be asked (network, ngrok, server down); the seller stays signed in.
+ */
+function refreshTokens(stale: string | undefined): Promise<RefreshResult> {
+  refreshing ??= (async (): Promise<RefreshResult> => {
+    const run = async (): Promise<RefreshResult> => {
+      const now = sellerSession.tokens();
+      if (!now) return 'expired';
+      if (stale && now.access !== stale) return 'ok'; // another tab already refreshed
+      let res: Response;
+      try {
+        res = await fetch(`${OTP_API}/api/v1/auth/refresh`, {
+          method: 'POST',
+          headers: { ...BACKEND_HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: now.refresh }),
+        });
+      } catch {
+        return 'unreachable';
+      }
+      if (res.ok) {
+        sellerSession.save((await res.json()) as { access_token: string; refresh_token: string });
+        return 'ok';
+      }
+      if (res.status === 409) {
+        // Another tab refreshed with this token a moment ago: its new token arrives in storage.
+        for (let i = 0; i < 10; i++) {
+          await pause(200);
+          if (sellerSession.tokens()?.refresh !== now.refresh) return 'ok';
+        }
+        return 'unreachable';
+      }
+      return res.status === 401 || res.status === 403 ? 'expired' : 'unreachable';
+    };
+    const locks = typeof navigator !== 'undefined' ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+    return locks ? locks.request('mithren-token-refresh', run) : run();
   })().finally(() => (refreshing = null));
   return refreshing;
 }
@@ -711,17 +737,24 @@ async function backendFetch(method: string, path: string, body: unknown): Promis
  */
 async function sendWithRefresh(method: string, path: string, body: unknown): Promise<Response> {
   try {
+    const used = sellerSession.tokens()?.access;
     let res = await backendFetch(method, path, body);
-    const sessionCall = !path.startsWith('auth/');
+    // Every call made with the seller's token refreshes it when it has expired; the sign-in calls
+    // themselves don't carry one.
+    const sessionCall = !/^auth\/(login|register|refresh|logout|forgot-password|reset-password)\b/.test(path);
     if (res.status === 401 && sessionCall && sellerSession.isSignedIn()) {
-      if (await refreshTokens()) res = await backendFetch(method, path, body);
-      if (res.status === 401) {
+      const refreshed = await refreshTokens(used);
+      // A network problem while refreshing is not a sign-out: the seller stays signed in and retries.
+      if (refreshed === 'unreachable') throw new ApiError(503, 'Can’t reach the server right now. You’re still signed in; try again in a moment.');
+      if (refreshed === 'ok') res = await backendFetch(method, path, body);
+      if (refreshed === 'expired' || res.status === 401) {
         sellerSession.clear();
         window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
       }
     }
     return res;
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
     throw new ApiError(503, 'Can’t reach the server. Check that it is running and try again.');
   }
 }
