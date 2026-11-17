@@ -44,10 +44,24 @@ const page: Page = async ({ root, params, seller, refresh }) => {
   const deadline = placedMs + seller.fulfilment.acceptWindowMins * 60_000;
   const minsLeft = Math.round((deadline - Date.now()) / 60_000);
 
+  // When the acceptance time runs out with the page open, load the order again: the server cancels it.
+  if (o.status === 'awaiting_confirmation' && o.backendId && deadline > Date.now()) {
+    const timer = window.setTimeout(() => {
+      if (root.isConnected && location.hash.includes(`/seller/orders/${o.id}`)) refresh();
+    }, deadline - Date.now() + 3_000);
+    window.addEventListener('hashchange', () => window.clearTimeout(timer), { once: true });
+  }
+
   root.innerHTML = html`
     ${pageHeader(`Order ${o.id}`, `Placed ${fmtDate(o.placedAt, true)} · delivery slot ${o.deliverySlot}`, html`${orderBadge(o.status)}${EMBEDDED ? '' : html`<div class="print-actions">${canInvoice ? html`<button type="button" class="btn btn-sm print-btn" data-action="invoice">${icon('print', 16)} Print GST invoice</button>` : ''}<button type="button" class="btn btn-sm print-btn" data-action="print">${icon('print', 16)} Print packing slip</button></div>`}`, { href: '/seller/orders', label: 'Orders' })}
     ${o.status === 'awaiting_confirmation'
-      ? callout(minsLeft > 0 ? 'warn' : 'error', minsLeft > 0 ? `Confirm within ${minsLeft} min` : 'Confirmation window has passed', minsLeft > 0 ? 'Unconfirmed orders may be auto-cancelled by the platform and count towards your cancellation rate.' : 'The platform may auto-cancel this order. Accept now if you can still fulfil it.')
+      ? callout(
+          minsLeft > 0 ? 'warn' : 'error',
+          minsLeft > 0 ? `Accept within ${minsLeft} min` : 'Acceptance time is over',
+          minsLeft > 0
+            ? `If you don’t accept it in time, the order is cancelled automatically and the customer is told.`
+            : `You didn’t accept this order within ${seller.fulfilment.acceptWindowMins} minutes, so it is being cancelled automatically.`,
+        )
       : ''}
 
     <section class="card">
