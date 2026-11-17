@@ -7,12 +7,23 @@ import * as core from './api-core.js';
 import { ApiError } from './errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS, type RpcName } from './rpc.js';
 import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, BankInput } from './application.js';
-import type { AdjustmentReason, AppNotification, InventoryAdjustment, OrderStatus, Review, SubOrder } from './types.js';
+import type { AdjustmentReason, AppNotification, CommissionRule, InventoryAdjustment, LedgerEntry, OrderStatus, PayoutRequest, Review, Settlement, SubOrder } from './types.js';
 import { toReview, type BackendReview, type BackendReviewPage } from './backend-reviews.js';
 import { hasPortalMeta, portalMetaOf, type PortalMeta } from './portal-meta.js';
 import { changedSettings, fromBackendSettings, hasSettings, settingsOf, toBackendSettings, type BackendSettings, type SettingsPatch } from './seller-settings.js';
 import { BACKEND_STATUS, toSubOrder, type BackendOrder } from './backend-orders.js';
 import { toDashboardMetrics, type BackendDashboard } from './backend-analytics.js';
+import {
+  toCommissionRules,
+  toLedgerEntry,
+  toPayoutRequest,
+  toSettlement,
+  type BackendCommissionRules,
+  type BackendEarningsPage,
+  type BackendPayoutRequest,
+  type BackendPayoutRequests,
+  type BackendSettlement,
+} from './backend-earnings.js';
 
 export { ApiError };
 export type { DashboardMetrics, ProductFilter, ProductInput, OrderFilter, LedgerEntry, Settlement } from './api-core.js';
@@ -380,11 +391,39 @@ export const productDrafts = {
 /** TEMPORARY: mark an order picked up or delivered, standing in for the delivery partner. */
 export const testDelivery = (id: string, step: 'pickup' | 'deliver'): Promise<SubOrder> => backendOrders.testDelivery(id, step);
 export const markItemUnavailable = rpc('markItemUnavailable');
-export const getLedger = rpc('getLedger');
-export const listSettlements = rpc('listSettlements');
-export const listPayoutRequests = rpc('listPayoutRequests');
-export const getCommissionRules = rpc('getCommissionRules');
-export const requestPayout = rpc('requestPayout');
+// ---------- earnings & settlements: from the FastAPI backend when signed in there ----------
+const localGetLedger = rpc('getLedger');
+const localListSettlements = rpc('listSettlements');
+const localListPayoutRequests = rpc('listPayoutRequests');
+const localGetCommissionRules = rpc('getCommissionRules');
+const localRequestPayout = rpc('requestPayout');
+/** One row per delivered order: gross, discount, commission and net. */
+export const getLedger = async (): Promise<LedgerEntry[]> => {
+  if (!sellerSession.isSignedIn()) return localGetLedger();
+  const [page, seller] = await Promise.all([backendRequest<BackendEarningsPage>('GET', 'seller/earnings', undefined, () => undefined), getSeller()]);
+  return page.items.map((e) => toLedgerEntry(e, seller.id));
+};
+export const getCommissionRules = async (): Promise<CommissionRule[]> =>
+  sellerSession.isSignedIn() ? toCommissionRules(await backendRequest<BackendCommissionRules>('GET', 'seller/earnings/commission-rules', undefined, () => undefined)) : localGetCommissionRules();
+export const listSettlements = async (): Promise<Settlement[]> => {
+  if (!sellerSession.isSignedIn()) return localListSettlements();
+  const [rows, seller] = await Promise.all([backendRequest<BackendSettlement[]>('GET', 'seller/settlements', undefined, () => undefined), getSeller()]);
+  return rows.map((s) => toSettlement(s, seller.id));
+};
+/** The seller's payout requests, and whether the platform lets sellers make them. */
+export const getPayoutRequests = async (): Promise<{ items: PayoutRequest[]; enabled: boolean }> => {
+  const seller = await getSeller();
+  if (!sellerSession.isSignedIn()) return { items: await localListPayoutRequests(), enabled: seller.payoutRequestsEnabled };
+  const r = await backendRequest<BackendPayoutRequests>('GET', 'seller/payout-requests', undefined, () => undefined);
+  return { items: r.items.map((p) => toPayoutRequest(p, seller.id)), enabled: r.enabled };
+};
+export const listPayoutRequests = async (): Promise<PayoutRequest[]> => (await getPayoutRequests()).items;
+/** Asks to be paid `amount` rupees from the eligible balance. */
+export const requestPayout = async (amount: number): Promise<PayoutRequest> => {
+  if (!sellerSession.isSignedIn()) return localRequestPayout(amount);
+  const r = await backendRequest<BackendPayoutRequest>('POST', 'seller/payout-requests', { amount_paise: Math.round(amount * 100) }, (loc) => (loc.includes('amount_paise') ? 'amount' : undefined));
+  return toPayoutRequest(r, (await getSeller()).id);
+};
 const localListReviews = rpc('listReviews');
 const localReplyToReview = rpc('replyToReview');
 const localReportReview = rpc('reportReview');

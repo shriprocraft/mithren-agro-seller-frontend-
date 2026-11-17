@@ -10,7 +10,9 @@ import { round2 } from '../data/seed.js';
 import type { Settlement } from '../types.js';
 
 const page: Page = async ({ root, query, seller, refresh }) => {
-  const [settlements, ledger, requests] = await Promise.all([api.listSettlements(), api.getLedger(), api.listPayoutRequests()]);
+  const [settlements, ledger, payouts] = await Promise.all([api.listSettlements(), api.getLedger(), api.getPayoutRequests()]);
+  const requests = payouts.items;
+  const payoutsOn = payouts.enabled;
   const stPage = paginate(settlements, query, 'st');
   const prPage = paginate(requests, query, 'pr');
   const eligible = round2(ledger.filter((l) => l.state === 'eligible' && !l.settlementId).reduce((s, l) => s + l.net, 0));
@@ -24,7 +26,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     ${pageHeader(
       'Settlements',
       'Payouts to your bank account. A settlement is shown as paid only once a transaction reference is recorded.',
-      html`${seller.payoutRequestsEnabled && seller.status === 'approved' ? html`<button type="button" class="btn btn-primary" data-action="request" ${eligible - openReq >= 500 ? '' : raw('disabled')}>Request payout</button>` : ''}`,
+      html`${payoutsOn && seller.status === 'approved' ? html`<button type="button" class="btn btn-primary" data-action="request" ${eligible - openReq >= 500 ? '' : raw('disabled')}>Request payout</button>` : ''}`,
     )}
     ${failed.length ? callout('error', `${failed.length} settlement${failed.length > 1 ? 's' : ''} failed`, failed[0]!.failureReason ?? 'The bank rejected the transfer. The amount has returned to eligible and will be retried.') : ''}
 
@@ -41,7 +43,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
         <div><dt>Bank account</dt><dd>${seller.bank.accountName} · ••••${seller.bank.last4} · ${seller.bank.ifsc} ${seller.bank.verified ? badge('Verified', 'green') : badge('Verification pending', 'amber')}</dd></div>
         <div><dt>Cycle</dt><dd>Weekly, for entries eligible by Sunday</dd></div>
         <div><dt>Method</dt><dd>Manual bank transfer with UTR reference <span class="muted small">(automated payouts need a configured payout provider)</span></dd></div>
-        <div><dt>Payout requests</dt><dd>${seller.payoutRequestsEnabled ? 'Enabled — minimum ₹500, reviewed by the platform' : 'Not enabled for your account'}</dd></div>
+        <div><dt>Payout requests</dt><dd>${payoutsOn ? 'Enabled — minimum ₹500, reviewed by the platform' : 'Not enabled for your account'}</dd></div>
       </dl>
       <p class="muted small">To change bank details, upload new bank proof on <a href="#/seller/documents">Documents</a>. Changes are re-verified before the next payout.</p>
     </section>
