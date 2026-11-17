@@ -84,6 +84,8 @@ const page: Page = async ({ root, params, seller }) => {
   const approved = seller.status === 'approved';
   const readOnly = seller.status === 'suspended';
   let variants: Variant[] = structuredClone(product.variants);
+  // Which option the customer preview shows: the one the seller last clicked or typed in.
+  let previewIndex = 0;
   let slugTouched = !isNew || restored?.data.slugTouched === true;
   // SKUs are generated from category, name and size or pack until the seller types their own.
   // Saved variants keep their SKU, so an edit never renames stock that already exists.
@@ -268,7 +270,7 @@ const page: Page = async ({ root, params, seller }) => {
   const renderVariants = () => {
     $('#variants', root)!.innerHTML = html`<div class="variant-list">
       ${variants.map(
-        (v, i) => html`<fieldset class="variant" data-index="${i}">
+        (v, i) => html`<fieldset class="variant ${i === previewIndex ? 'is-previewed' : ''}" data-index="${i}">
           <legend>Variant ${i + 1}</legend>
           <div class="variant-grid">
             ${field({ name: `variant_${i}_label`, label: 'Label', required: true, value: v.label, placeholder: apparel ? 'e.g. Size M' : 'e.g. 500 g', attrs: `data-v="label" data-i="${i}"` })}
@@ -447,7 +449,8 @@ const page: Page = async ({ root, params, seller }) => {
 
   const renderPreview = () => {
     const p = readForm();
-    const v = p.variants[0];
+    if (previewIndex >= p.variants.length) previewIndex = Math.max(0, p.variants.length - 1);
+    const v = p.variants[previewIndex];
     const cert = docs.find((d) => d.id === p.certificateId);
     const labelOk = p.organicClaim !== 'none' && cert?.status === 'approved' && (!cert.expiresAt || cert.expiresAt >= new Date().toISOString().slice(0, 10));
     $('#preview', root)!.innerHTML = html`
@@ -457,8 +460,30 @@ const page: Page = async ({ root, params, seller }) => {
         <strong>${p.name || 'Product name'}</strong>
         ${apparel ? '' : html`<span class="muted small">${p.origin || 'Origin'}</span>`}
         ${v ? html`<span>${v.price ? money(v.price) : '₹—'} ${v.mrp && v.mrp > v.price ? html`<s class="muted small">${money(v.mrp)}</s>` : ''} <span class="muted small">/ ${v.label || 'pack'}</span></span>` : ''}
-      </div>`.value;
+        ${v ? html`<span class="small ${v.stock > 0 ? 'ok-text' : 'error-text'}">${v.stock > 0 ? 'In stock' : 'Out of stock'}</span>` : ''}
+      </div>
+      ${p.variants.length > 1
+        ? html`<div class="preview-options" role="group" aria-label="Preview an option">
+            ${p.variants.map(
+              (o, i) => html`<button type="button" class="preview-option ${i === previewIndex ? 'active' : ''}" data-preview="${i}" aria-pressed="${i === previewIndex}">${o.label || (apparel ? o.size : '') || `Option ${i + 1}`}</button>`,
+            )}
+          </div>`
+        : ''}`.value;
   };
+  // Clicking or typing in an option shows it in the customer preview.
+  const showInPreview = (i: number) => {
+    if (i === previewIndex || Number.isNaN(i)) return;
+    previewIndex = i;
+    root.querySelectorAll('fieldset.variant').forEach((f) => f.classList.toggle('is-previewed', Number((f as HTMLElement).dataset.index) === i));
+    renderPreview();
+  };
+  on(root, 'focusin', 'fieldset.variant', (_e, el) => showInPreview(Number(el.dataset.index)));
+  on(root, 'click', 'fieldset.variant', (_e, el) => showInPreview(Number(el.dataset.index)));
+  on(root, 'click', '[data-preview]', (_e, el) => {
+    const i = Number(el.dataset.preview);
+    showInPreview(i);
+    (root.querySelector(`fieldset.variant[data-index="${i}"]`) as HTMLElement | null)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
 
   renderVariants();
   renderImages();

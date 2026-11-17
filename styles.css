@@ -4555,3 +4555,89 @@ textarea {
   white-space: nowrap;
   margin: 0;
 }
+
+/* ---------- product form: the option shown in the customer preview ---------- */
+fieldset.variant {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: default;
+}
+fieldset.variant.is-previewed {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+#preview {
+  flex-wrap: wrap;
+}
+.preview-options {
+  grid-column: 1 / -1;
+  flex: 1 0 100%;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+.preview-option {
+  border: 1px solid var(--border, #d1d5db);
+  background: #fff;
+  color: var(--text-2, #374151);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.preview-option:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.preview-option.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ---------- registration: document Upload buttons ---------- */
+.upload-btn.btn,
+label.upload-btn {
+  min-height: 38px;
+  padding: 8px 18px 8px 14px;
+  gap: 8px;
+  border: 1.5px solid var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: none;
+}
+.upload-btn.btn:hover,
+label.upload-btn:hover {
+  background: var(--primary);
+  color: #fff;
+}
+.upload-btn .icon {
+  flex: none;
+}
+
+/* ---------- "← Products" and other back links: a clear button ---------- */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 6px 14px 6px 10px;
+  border: 1.5px solid var(--primary);
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.back-link:hover,
+.back-link:focus-visible {
+  background: var(--primary);
+  color: #fff;
+}
