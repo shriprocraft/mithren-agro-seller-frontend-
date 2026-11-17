@@ -1,4 +1,4 @@
-// /seller/orders/:id — fulfil a single sub-order.
+// /seller/orders/:id — fulfil one order.
 
 import type { Page } from '../router.js';
 import { html, raw, on, EMBEDDED, type Raw } from '../ui/dom.js';
@@ -49,7 +49,6 @@ const page: Page = async ({ root, params, seller, refresh }) => {
     ${o.status === 'awaiting_confirmation'
       ? callout(minsLeft > 0 ? 'warn' : 'error', minsLeft > 0 ? `Confirm within ${minsLeft} min` : 'Confirmation window has passed', minsLeft > 0 ? 'Unconfirmed orders may be auto-cancelled by the platform and count towards your cancellation rate.' : 'The platform may auto-cancel this order. Accept now if you can still fulfil it.')
       : ''}
-    ${o.otherSellerCount ? callout('info', 'Part of a multi-seller checkout', `The customer’s order ${o.parentOrderId} includes items from ${o.otherSellerCount} other seller(s). You only see and fulfil your own items; the platform coordinates delivery.`) : ''}
 
     <section class="card">
       <h2 class="sr-only">Progress</h2>
@@ -83,7 +82,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
           <dl class="totals">
             <div><dt>Items total</dt><dd>${money2(gross)}</dd></div>
             ${o.discountAllocation ? html`<div><dt data-tip="Your share of the customer’s coupon, allocated by the platform in proportion to item value.">Discount allocation</dt><dd>−${money2(o.discountAllocation)}</dd></div>` : ''}
-            <div class="total"><dt>Sub-order value</dt><dd>${money2(gross - o.discountAllocation)}</dd></div>
+            <div class="total"><dt>Order total</dt><dd>${money2(gross - o.discountAllocation)}</dd></div>
           </dl>
           <p class="muted small">Commission and your net payout for this order are shown on the <a href="#/seller/earnings">Earnings</a> page once it is delivered.</p>
         </section>

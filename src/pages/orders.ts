@@ -1,4 +1,4 @@
-// /seller/orders — the seller's own sub-orders only.
+// /seller/orders — the seller's orders.
 
 import type { Page } from '../router.js';
 import { setQuery } from '../router.js';
@@ -26,7 +26,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const canAct = seller.status === 'approved';
 
   root.innerHTML = html`
-    ${pageHeader('Orders', 'Your part of each customer order. Other sellers’ items in the same checkout are not shown.')}
+    ${pageHeader('Orders', 'Orders from your customers. Accept, pack and hand them over from here.')}
     ${tabs(TABS.map(([s, l]) => ({ href: `/seller/orders?status=${s}`, label: l, count: countFor(s), active: s === status })), 'Filter orders')}
     <form class="toolbar" role="search" data-role="filters">
       <div class="search">
@@ -70,7 +70,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
 function row(o: SubOrder, canAct: boolean) {
   const value = o.items.reduce((s, i) => s + (i.unavailable ? 0 : i.qty * i.unitPrice), 0) - o.discountAllocation;
   return html`<tr>
-    <td><a class="mono" href="#/seller/orders/${o.id}">${o.id}</a>${o.otherSellerCount ? html`<span class="muted small block" data-tip="This checkout also included items from ${o.otherSellerCount} other seller(s). Their details are private.">Multi-seller order</span>` : ''}</td>
+    <td><a class="mono" href="#/seller/orders/${o.id}">${o.id}</a></td>
     <td><time datetime="${o.placedAt}" title="${fmtDate(o.placedAt, true)}">${timeAgo(o.placedAt)}</time></td>
     <td>${o.deliverySlot}</td>
     <td>${o.customer.firstName}<span class="muted small block">${o.customer.area}</span></td>
