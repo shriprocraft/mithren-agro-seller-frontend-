@@ -4641,3 +4641,41 @@ label.upload-btn:hover {
   background: var(--primary);
   color: #fff;
 }
+
+/* Store settings, wide screens: the section menu and "Store at a glance" are two matching cards,
+   the same width and height, lined up edge to edge in the pinned left column. */
+@media (min-width: 1025px) {
+  .settings-aside .settings-nav {
+    width: 100%;
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+  .settings-aside .settings-nav ul {
+    flex: 1;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .settings-aside .settings-glance {
+    flex: 1 1 0;
+    box-sizing: border-box;
+  }
+}
+@media (min-width: 1025px) {
+  /* Two equal rows, so both cards are exactly the same height. */
+  .settings-aside {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .settings-aside .settings-nav,
+  .settings-aside .settings-glance {
+    flex: none;
+    min-height: 0;
+    align-self: stretch;
+  }
+  /* Glance text starts on the same line as the menu labels. */
+  .settings-aside .settings-glance {
+    padding: 16px 20px 16px 26px;
+  }
+}
