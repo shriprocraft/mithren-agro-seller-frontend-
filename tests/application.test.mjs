@@ -9,9 +9,9 @@ test('existing categories are kept and the new ones are added', () => {
   for (const c of ['Women Apparel', 'Women Accessories', 'Others']) assert.ok(CATEGORIES.includes(c), c);
 });
 
-test('new categories survive application data normalisation', () => {
+test('new categories survive application data normalisation; "Others" is not offered at registration', () => {
   const d = normaliseApplicationData({ ...emptyApplicationData(), productTypes: ['Women Apparel', 'Others', 'Not a category'] });
-  assert.deepEqual(d.productTypes, ['Women Apparel', 'Others']);
+  assert.deepEqual(d.productTypes, ['Women Apparel']);
 });
 
 test('every selectable state has a GST state code', () => {
