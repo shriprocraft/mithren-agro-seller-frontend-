@@ -8,7 +8,7 @@ import { html, raw, on, $, $$, formValues, type Raw } from '../ui/dom.js';
 import { field, textarea, select, icon, callout, showFieldErrors, badge } from '../ui/components.js';
 import { toast } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { REGISTRATION_CATEGORIES } from '../data/seed.js';
+import { SELLER_CATEGORIES } from '../data/seed.js';
 import { fmtDate, fileSize } from '../lib.js';
 import {
   STEPS,
@@ -350,7 +350,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
   const stepProducts = () => html`
     <fieldset class="field" id="f_productTypes" tabindex="-1">
       <legend>Product types and categories<span class="req" aria-hidden="true"> *</span></legend>
-      <div class="chip-row">${REGISTRATION_CATEGORIES.map((c) => html`<label class="chip"><input type="checkbox" name="productTypes" value="${c}" ${data.productTypes.includes(c) ? raw('checked') : ''}/><span>${c}</span></label>`)}</div>
+      <div class="chip-row">${SELLER_CATEGORIES.map((c) => html`<label class="chip"><input type="checkbox" name="productTypes" value="${c}" ${data.productTypes.includes(c) ? raw('checked') : ''}/><span>${c}</span></label>`)}</div>
       <p class="field-error" id="f_productTypes_err" hidden></p>
     </fieldset>
     <h3 class="sub-title">Pickup location</h3>

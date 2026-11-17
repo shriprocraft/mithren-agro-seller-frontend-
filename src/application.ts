@@ -4,7 +4,7 @@
 // checks), so both sides apply exactly the same rules. Keep this module free of
 // DOM and Node APIs.
 
-import { REGISTRATION_CATEGORIES } from './data/seed.js';
+import { SELLER_CATEGORIES } from './data/seed.js';
 import { ApiError } from './errors.js';
 import type { Seller, SellerDocument, DocumentType } from './types.js';
 
@@ -247,7 +247,7 @@ export function normaliseApplicationData(input: unknown): ApplicationData {
     city: str(i.city, 60),
     pincode: str(i.pincode, 6),
     serviceAreas: strList(i.serviceAreas),
-    productTypes: strList(i.productTypes, 20).filter((c) => REGISTRATION_CATEGORIES.includes(c)),
+    productTypes: strList(i.productTypes, 20).filter((c) => SELLER_CATEGORIES.includes(c)),
     pickupSameAsBusiness: i.pickupSameAsBusiness !== false,
     pickupAddress: str(i.pickupAddress, 240),
     pickupPincode: str(i.pickupPincode, 6),

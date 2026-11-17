@@ -7,7 +7,7 @@ import { pageHeader, field, textarea, select, callout, productBadge, icon, showF
 import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { slugify, money, fmtDate, timeAgo, UNIT_LABEL } from '../lib.js';
-import { CATEGORIES } from '../data/seed.js';
+import { SELLER_CATEGORIES } from '../data/seed.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
 import { APPAREL_SIZES, categoryKind, generateSku, toBackendProduct, toBackendUpdate, type ApparelSize } from '../catalog.js';
 import { portalMetaOf } from '../portal-meta.js';
@@ -111,26 +111,15 @@ const page: Page = async ({ root, params, seller }) => {
     return details;
   };
 
-  // Category: pick from the list, or choose "Others" and type your own (it becomes a category of its
-  // own in the customer app, e.g. "Millet").
-  const categoryField = () => {
-    const own = product.category === 'Others';
-    return html`<div class="field category-field">
-      <label id="category-label" for="${own ? 'f_customCategory' : 'f_category'}">Category<span class="req" aria-hidden="true"> *</span></label>
-      <select id="f_category" name="category" required aria-describedby="f_category_hint f_category_err" ${own ? raw('hidden') : ''}>
+  // Category: one of the approved categories.
+  const categoryField = () => html`<div class="field category-field">
+      <label id="category-label" for="f_category">Category<span class="req" aria-hidden="true"> *</span></label>
+      <select id="f_category" name="category" required aria-describedby="f_category_err">
         <option value="">Select category</option>
-        ${CATEGORIES.map((c) => html`<option value="${c}" ${product.category === c ? raw('selected') : ''}>${c === 'Others' ? 'Others (type your own)' : c}</option>`)}
+        ${SELLER_CATEGORIES.map((c) => html`<option value="${c}" ${product.category === c ? raw('selected') : ''}>${c}</option>`)}
       </select>
-      <div class="own-category" id="own-category" ${own ? '' : raw('hidden')}>
-        <input id="f_customCategory" name="customCategory" type="text" maxlength="40" autocomplete="off" value="${product.customCategory ?? ''}"
-          placeholder="Type your category, e.g. Millet" aria-describedby="f_category_hint f_customCategory_err" />
-        <button type="button" class="link-btn small" data-action="category-list">Choose from list</button>
-      </div>
-      <p class="hint" id="f_category_hint" ${own ? '' : raw('hidden')}>Customers will find it under this name.</p>
       <p class="field-error" id="f_category_err" hidden></p>
-      <p class="field-error" id="f_customCategory_err" hidden></p>
     </div>`;
-  };
 
   const moderationInfo =
     product.status === 'approved' && !isNew
@@ -321,7 +310,7 @@ const page: Page = async ({ root, params, seller }) => {
       slug: f.slug?.trim() ?? '',
       description: f.description ?? '',
       category: f.category ?? '',
-      customCategory: f.category === 'Others' ? (f.customCategory ?? '').trim() : undefined,
+      customCategory: undefined,
       emoji: f.emoji ?? '🥬',
       variants: variants.map(({ size: _size, ...v }) => ({ ...v, sku: v.sku.trim().toUpperCase() })),
       origin: f.origin ?? '',
@@ -571,26 +560,6 @@ const page: Page = async ({ root, params, seller }) => {
     else delete v.size;
     refreshSkus();
     renderPreview();
-  });
-  // "Others": the Category field itself becomes a text box for the seller's own category.
-  const showOwnCategory = (own: boolean) => {
-    const sel = $('#f_category', root) as HTMLSelectElement;
-    const input = $('#f_customCategory', root) as HTMLInputElement;
-    sel.hidden = own;
-    $('#own-category', root)!.hidden = !own;
-    $('#f_category_hint', root)!.hidden = !own;
-    $('#category-label', root)!.setAttribute('for', own ? 'f_customCategory' : 'f_category');
-    if (own) input.focus();
-  };
-  on(root, 'change', '#f_category', (_e, el) => {
-    if ((el as HTMLSelectElement).value === 'Others') showOwnCategory(true);
-  });
-  on(root, 'click', '[data-action=category-list]', () => {
-    const sel = $('#f_category', root) as HTMLSelectElement;
-    sel.value = '';
-    sel.dispatchEvent(new Event('change', { bubbles: true }));
-    showOwnCategory(false);
-    sel.focus();
   });
   // Show the fields that fit the chosen category.
   on(root, 'change', '#f_category', (_e, el) => {

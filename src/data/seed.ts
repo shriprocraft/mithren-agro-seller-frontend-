@@ -53,8 +53,8 @@ export const COMMISSION_RULES: CommissionRule[] = [
 ];
 
 export const CATEGORIES = COMMISSION_RULES.map((r) => r.category);
-/** What a new seller can say they sell when registering: the approved categories, without "Others". */
-export const REGISTRATION_CATEGORIES = CATEGORIES.filter((c) => c !== 'Others');
+/** The approved categories a seller can register for and list products in: no "Others". */
+export const SELLER_CATEGORIES = CATEGORIES.filter((c) => c !== 'Others');
 
 export function createSeed(now = new Date()): DB {
   const t = now.getTime();
