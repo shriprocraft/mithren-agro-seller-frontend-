@@ -33,7 +33,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
         <h2 id="rs-h" class="card-title">Rating summary</h2>
         ${total
           ? html`<div class="rating-summary">
-              <div class="rating-big"><span>${avg.toFixed(1)}</span>${stars(avg, 18)}<span class="muted small">${total} reviews</span></div>
+              <div class="rating-big"><span>${avg.toFixed(1)}</span>${stars(avg, 18)}<span class="muted small">${total} review${total === 1 ? '' : 's'}</span></div>
               ${ratingBars(dist, total)}
             </div>`
           : html`<p class="muted">No reviews yet.</p>`}

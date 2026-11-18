@@ -30,8 +30,7 @@ const REASON_LABEL: Record<AdjustmentReason, string> = {
 const page: Page = async ({ root, query, seller, refresh }) => {
   const filter = query.get('filter') ?? '';
   const q = (query.get('q') ?? '').trim();
-  const products = await api.listProducts();
-  const log = await api.listAdjustments();
+  const [products, log] = await Promise.all([api.listProducts(), api.listAdjustments()]);
   const readOnly = seller.status === 'suspended';
 
   // Low and out of stock go by what customers can still buy: stock on hand minus what open orders hold.

@@ -17,11 +17,16 @@ const TABS: [string, string][] = [
   ['', 'All'],
 ];
 
+const IN_PROGRESS = ['accepted', 'packed', 'ready_for_pickup', 'in_transit'];
+
 const page: Page = async ({ root, query, seller, refresh }) => {
-  const status = query.get('status') ?? 'active';
   const q = query.get('q') ?? '';
-  const [all, list] = await Promise.all([api.listOrders(), api.listOrders({ status, q })]);
-  const countFor = (s: string) => (s ? all.filter((o) => (s === 'active' ? ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit'].includes(o.status) : s === 'issues' ? ['cancelled', 'rejected', 'return_requested', 'returned'].includes(o.status) : o.status === s)).length : all.length);
+  const all = await api.listOrders();
+  // "To confirm" holds new orders; "In progress" is what has been accepted and isn't delivered yet.
+  // With no tab chosen, new orders come first when there are any.
+  const status = query.get('status') ?? (all.some((o) => o.status === 'awaiting_confirmation') ? 'awaiting_confirmation' : 'active');
+  const list = await api.listOrders({ status, q });
+  const countFor = (s: string) => (s ? all.filter((o) => (s === 'active' ? IN_PROGRESS.includes(o.status) : s === 'issues' ? ['cancelled', 'rejected', 'return_requested', 'returned'].includes(o.status) : o.status === s)).length : all.length);
   const { rows: shown, info } = paginate(list, query);
   const canAct = seller.status === 'approved';
 

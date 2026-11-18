@@ -17,14 +17,16 @@ export interface BackendDashboard {
   trends: { daily: { period_start: string; revenue_paise: number; orders: number }[] };
   products: { live: number; total: number };
   low_stock_threshold: number;
-  low_stock: { product_id: string; title: string; variant_label: string | null; stock: number }[];
+  low_stock: { product_id: string; title: string; variant_label: string | null; stock: number; threshold?: number }[];
+  rating_average?: number | null;
+  rating_count?: number;
 }
 
 const rupees = (paise: number) => paise / 100;
 
 /**
- * The backend figures in the dashboard's shape. Reviews, returns, certificates and moderation are
- * not on the backend yet, so those read as none.
+ * The backend figures in the dashboard's shape. Returns, certificates and moderation are not on the
+ * backend yet, so those read as none.
  */
 export function toDashboardMetrics(d: BackendDashboard): DashboardMetrics {
   return {
@@ -35,12 +37,12 @@ export function toDashboardMetrics(d: BackendDashboard): DashboardMetrics {
     ordersPrev: d.orders_prev_total,
     liveProducts: d.products.live,
     totalProducts: d.products.total,
-    lowStock: d.low_stock.map((l) => ({ productId: l.product_id, name: l.title, variant: l.variant_label ?? '', stock: l.stock, threshold: d.low_stock_threshold })),
+    lowStock: d.low_stock.map((l) => ({ productId: l.product_id, name: l.title, variant: l.variant_label ?? '', stock: l.stock, threshold: l.threshold ?? d.low_stock_threshold })),
     cancellations: d.orders.cancelled,
     cancellationRate: d.cancellation_rate,
     returns: 0,
-    rating: null,
-    ratingCount: 0,
+    rating: d.rating_average ?? null,
+    ratingCount: d.rating_count ?? 0,
     netEarnings: rupees(d.net_earnings_paise),
     netEarningsPrev: rupees(d.net_earnings_prev_paise),
     averageOrderValue: rupees(d.average_order_value_paise),

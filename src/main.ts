@@ -238,7 +238,9 @@ async function render() {
     if (dot) dot.hidden = true;
     void api.markSectionSeen(section);
   }
-  updateBadges();
+  // Moving between pages doesn't need fresh notifications every time: the 30-second check and any
+  // change the seller makes keep them current.
+  if (Date.now() - lastBadgeCheck > 20_000) void updateBadges();
 
   const page = await m.route.page();
   if (token !== renderToken) return;
@@ -364,7 +366,17 @@ document.addEventListener('keydown', (e) => {
 const announced = new Set<string>();
 let firstBadgeLoad = true;
 
-async function updateBadges() {
+let lastBadgeCheck = 0;
+let badgeCheck: Promise<void> | null = null;
+
+/** Refreshes the bell and menu dots. Calls made while one is running share it. */
+function updateBadges(): Promise<void> {
+  badgeCheck ??= checkBadges().finally(() => (badgeCheck = null));
+  return badgeCheck;
+}
+
+async function checkBadges() {
+  lastBadgeCheck = Date.now();
   if (!$('[data-action=notifs]')) return;
   try {
     const [orders, notifs] = await Promise.all([api.listOrders({ status: 'awaiting_confirmation' }), api.listNotifications()]);

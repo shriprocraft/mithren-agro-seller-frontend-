@@ -275,8 +275,8 @@ interface BackendAdjustment {
 /** The stock log: from the backend when signed in there (the same on every device), otherwise this browser's. */
 export const listAdjustments = async (productId?: string): Promise<InventoryAdjustment[]> => {
   if (!sellerSession.isSignedIn()) return localListAdjustments(productId);
-  const mine = await listLocalProducts({ includeArchived: true });
-  const byBackend = new Map(mine.filter((p) => p.backendId).map((p) => [p.backendId!, p]));
+  let mine = await listLocalProducts({ includeArchived: true });
+  let byBackend = new Map(mine.filter((p) => p.backendId).map((p) => [p.backendId!, p]));
   const only = productId ? mine.find((p) => p.id === productId)?.backendId : undefined;
   if (productId && !only) return localListAdjustments(productId);
   const rows: BackendAdjustment[] = [];
@@ -289,6 +289,11 @@ export const listAdjustments = async (productId?: string): Promise<InventoryAdju
     );
     rows.push(...page.items);
     if (rows.length >= page.total || !page.items.length) break;
+  }
+  // Loaded alongside the products, the portal's copy may not know a product yet: fetch it once.
+  if (rows.some((r) => !byBackend.has(r.product_id))) {
+    mine = await listProducts({ includeArchived: true });
+    byBackend = new Map(mine.filter((p) => p.backendId).map((p) => [p.backendId!, p]));
   }
   const out: InventoryAdjustment[] = [];
   for (const r of rows) {
@@ -926,7 +931,8 @@ export const uploads = {
 
 // ---------- orders (FastAPI backend) ----------
 
-const ACTIVE: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit'];
+/** "In progress": accepted and not yet delivered. New orders are under "To confirm". */
+const ACTIVE: OrderStatus[] = ['accepted', 'packed', 'ready_for_pickup', 'in_transit'];
 const ISSUES: OrderStatus[] = ['cancelled', 'rejected', 'return_requested', 'returned'];
 
 function allBackendOrders(): Promise<BackendOrder[]> {

@@ -580,7 +580,7 @@ export function listOrders(f: OrderFilter = {}) {
       .filter((o) => o.sellerId === session.sellerId)
       .filter((o) => {
         if (!f.status) return true;
-        if (f.status === 'active') return ACTIVE_STATUSES.includes(o.status);
+        if (f.status === 'active') return ACTIVE_STATUSES.includes(o.status) && o.status !== 'awaiting_confirmation';
         if (f.status === 'issues') return ['cancelled', 'rejected', 'return_requested', 'returned'].includes(o.status);
         return o.status === f.status;
       })

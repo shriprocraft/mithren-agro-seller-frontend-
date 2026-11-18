@@ -6,7 +6,7 @@ import { html, on, type Raw } from '../ui/dom.js';
 import { pageHeader, metric, orderBadge, callout, icon, emptyState } from '../ui/components.js';
 import { salesChart } from '../ui/charts.js';
 import * as api from '../api.js';
-import { money, count, timeAgo } from '../lib.js';
+import { money, money2, count, timeAgo } from '../lib.js';
 
 const RANGES: [number, string][] = [
   [7, 'Last 7 days'],
@@ -42,12 +42,12 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       <div class="metrics">
         ${metric({ label: 'Sales', value: money(m.sales), note: `Avg order ${money(m.averageOrderValue)}`, delta: delta(m.sales, m.salesPrev), definition: 'Value of items in orders placed in this period, after discounts. Excludes cancelled and rejected orders and items marked unavailable. Compared with the previous period of equal length. Average order value is sales divided by those orders.' })}
         ${metric({ label: 'Orders', value: count(m.orders), delta: delta(m.orders, m.ordersPrev), href: '/seller/orders', definition: 'Number of your orders placed in this period, in any status.' })}
-        ${metric({ label: 'Net earnings', value: money(m.netEarnings), delta: delta(m.netEarnings, m.netEarningsPrev), href: '/seller/earnings', definition: 'Ledger amount payable to you for orders delivered in this period: gross − discounts − platform commission ± delivery adjustments − refunds − holds. Includes amounts not yet settled. When your figures come from the server (before payouts exist), this is estimated as sales minus commission at your category rates.' })}
+        ${metric({ label: 'Net earnings', value: money2(m.netEarnings), delta: delta(m.netEarnings, m.netEarningsPrev), href: '/seller/earnings', definition: 'Ledger amount payable to you for orders delivered in this period: gross − discounts − platform commission ± delivery adjustments − refunds − holds. Includes amounts not yet settled. The same figure as the Earnings page.' })}
         ${metric({ label: 'Live products', value: `${m.liveProducts} / ${m.totalProducts}`, href: '/seller/products', definition: 'Approved, available listings visible to customers, out of all non-archived products (including drafts and pending).' })}
         ${metric({ label: 'Low-stock items', value: count(m.lowStock.length), href: '/seller/inventory?filter=low', tone: m.lowStock.length ? 'warn' : undefined, definition: 'Variants of approved or inactive products at or below the product’s low-stock threshold, including out-of-stock variants. Current snapshot, not affected by the date range.' })}
         ${metric({ label: 'Cancellations', value: `${m.cancellations} · ${(m.cancellationRate * 100).toFixed(1)}%`, delta: null, href: '/seller/orders?status=issues', definition: 'Orders placed in this period that were cancelled (by you or the customer) or rejected by you, and that number as a share of all orders in the period.' })}
         ${metric({ label: 'Returns', value: count(m.returns), href: '/seller/orders?status=issues', definition: 'Orders placed in this period with a return requested or completed.' })}
-        ${metric({ label: 'Rating', value: m.rating !== null ? `${m.rating.toFixed(1)} ★` : '—', href: '/seller/reviews', definition: `Average of ${m.ratingCount} verified-purchase review${m.ratingCount === 1 ? '' : 's'} received in this period. Shows “—” when there are none.` })}
+        ${metric({ label: 'Rating', value: m.rating !== null ? `${m.rating.toFixed(1)} ★` : '—', href: '/seller/reviews', definition: `Average of all ${m.ratingCount} verified-purchase review${m.ratingCount === 1 ? '' : 's'} of your products. Shows “—” when there are none.` })}
       </div>
     </section>
 
@@ -72,7 +72,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
                 <td><a href="#/seller/orders/${o.id}" class="mono">${o.id}</a></td>
                 <td>${timeAgo(o.placedAt)}</td>
                 <td>${o.customer.firstName} · ${o.customer.area}</td>
-                <td>${o.items.length}</td>
+                <td>${o.items.filter((i) => !i.unavailable).reduce((s, i) => s + i.qty, 0)}</td>
                 <td class="num">${money(o.items.reduce((s, i) => s + (i.unavailable ? 0 : i.qty * i.unitPrice), 0) - o.discountAllocation)}</td>
                 <td>${orderBadge(o.status)}</td>
               </tr>`,

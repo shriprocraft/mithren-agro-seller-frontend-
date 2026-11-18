@@ -98,7 +98,9 @@ const page: Page = async ({ root, params, seller, refresh }) => {
             ${o.discountAllocation ? html`<div><dt data-tip="Your share of the customer’s coupon, allocated by the platform in proportion to item value.">Discount allocation</dt><dd>−${money2(o.discountAllocation)}</dd></div>` : ''}
             <div class="total"><dt>Order total</dt><dd>${money2(gross - o.discountAllocation)}</dd></div>
           </dl>
-          <p class="muted small">Commission and your net payout for this order are shown on the <a href="#/seller/earnings">Earnings</a> page once it is delivered.</p>
+          <p class="muted small">${o.status === 'delivered'
+            ? html`Commission and your net payout for this order are on the <a href="#/seller/earnings">Earnings</a> page.`
+            : html`Commission and your net payout for this order are shown on the <a href="#/seller/earnings">Earnings</a> page once it is delivered.`}</p>
         </section>
 
         <section class="card">
