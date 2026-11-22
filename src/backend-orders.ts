@@ -16,10 +16,11 @@ export interface BackendOrder {
   payment_method: 'online' | 'cod';
   payment_status: 'paid' | 'cod_pending' | 'refund_pending' | 'refunded';
   delivery_slot: string | null;
-  /** TEMPORARY: the seller may mark pickup and delivery for testing (off in production). */
-  delivery_test_controls?: boolean;
-  /** A delivery partner (or the test controls) has collected it: "In transit". */
-  picked_up?: boolean;
+  /** Set by the delivery partner: assigned (accepted the pickup), picked_up, out_for_delivery, delivered; cancelled if the order was. */
+  delivery_status?: 'assigned' | 'picked_up' | 'out_for_delivery' | 'delivered' | 'cancelled' | null;
+  delivery_partner?: { name: string; phone: string; assigned_at: string } | null;
+  /** While an approved order waits for a partner. */
+  delivery_note?: string | null;
   customer: { name: string; phone: string; address: string; city: string; state: string; pincode: string; instructions: string | null };
   items: { product_id: string | null; variant_id: string | null; title: string; variant_label: string | null; sku: string | null; quantity: number; unit_price_paise: number }[];
   discount_paise: number;
@@ -27,15 +28,18 @@ export interface BackendOrder {
   events: { status: BackendOrderStatus; actor: string; note: string | null; at: string }[];
 }
 
-/** Backend status as the portal's: shipped is "ready for pickup", and a cancel before confirming is a rejection. */
-export function portalStatus(status: BackendOrderStatus, confirmed: boolean): OrderStatus {
+/**
+ * Backend status as the portal's. "shipped" means a delivery partner has collected it: picked up, or in
+ * transit once they set out for the customer. A cancel before confirming is a rejection.
+ */
+export function portalStatus(status: BackendOrderStatus, confirmed: boolean, deliveryStatus?: string | null): OrderStatus {
   switch (status) {
     case 'pending':
       return 'awaiting_confirmation';
     case 'confirmed':
       return 'accepted';
     case 'shipped':
-      return 'ready_for_pickup';
+      return deliveryStatus === 'out_for_delivery' ? 'in_transit' : 'picked_up';
     case 'cancelled':
       return confirmed ? 'cancelled' : 'rejected';
     default:
@@ -45,7 +49,6 @@ export function portalStatus(status: BackendOrderStatus, confirmed: boolean): Or
 export const BACKEND_STATUS: Partial<Record<OrderStatus, BackendOrderStatus>> = {
   accepted: 'confirmed',
   packed: 'packed',
-  ready_for_pickup: 'shipped',
   rejected: 'cancelled',
   cancelled: 'cancelled',
 };
@@ -77,12 +80,21 @@ export function toSubOrder(o: BackendOrder, sellerId = ''): SubOrder {
     })),
     discountAllocation: o.discount_paise / 100,
     deliveryAdjustment: o.delivery_fee_paise / 100,
-    status: o.status === 'shipped' && o.picked_up ? 'in_transit' : portalStatus(o.status, confirmed),
-    ...(o.delivery_test_controls ? { deliveryTestControls: true } : {}),
+    status: portalStatus(o.status, confirmed, o.delivery_status),
+    ...(o.delivery_status || o.delivery_note
+      ? {
+          delivery: {
+            status: o.delivery_status ?? null,
+            ...(o.delivery_partner ? { partner: { name: o.delivery_partner.name, phone: o.delivery_partner.phone, assignedAt: o.delivery_partner.assigned_at } } : {}),
+            ...(o.delivery_note ? { note: o.delivery_note } : {}),
+          },
+        }
+      : {}),
     paymentStatus: o.payment_status,
     paymentMethod: o.payment_method,
     history: o.events.map((e) => ({
-      status: e.status === 'shipped' && e.actor.startsWith('delivery partner') ? 'in_transit' : portalStatus(e.status, confirmed),
+      // The partner's two "shipped" steps: collecting it, then setting out for the customer.
+      status: e.status === 'shipped' ? (e.note?.startsWith('On the way') ? 'in_transit' : 'picked_up') : portalStatus(e.status, confirmed),
       at: e.at,
       actor: e.actor,
       ...(e.note ? { note: e.note } : {}),

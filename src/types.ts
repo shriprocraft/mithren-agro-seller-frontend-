@@ -151,7 +151,10 @@ export type OrderStatus =
   | 'awaiting_confirmation'
   | 'accepted'
   | 'packed'
+  /** Older orders only: the seller used to mark "ready for pickup"; the delivery partner now collects packed orders. */
   | 'ready_for_pickup'
+  /** Set by the delivery partner from here on. */
+  | 'picked_up'
   | 'in_transit'
   | 'delivered'
   | 'rejected'
@@ -181,8 +184,13 @@ export interface StatusEvent {
 
 export interface SubOrder {
   id: string;
-  /** TEMPORARY: the seller may mark pickup and delivery to try the flow (until the delivery app does). */
-  deliveryTestControls?: boolean;
+  /** Delivery, from the delivery partner (read-only for the seller). */
+  delivery?: {
+    status: 'assigned' | 'picked_up' | 'out_for_delivery' | 'delivered' | 'cancelled' | null;
+    partner?: { name: string; phone: string; assignedAt: string };
+    /** While an approved order waits for a partner: what is happening. */
+    note?: string;
+  };
   parentOrderId: string;
   sellerId: string;
   placedAt: string;

@@ -77,7 +77,7 @@ const SHOTS = process.argv[3];
     await expectText('.page-header', /Accepted/);
     await page.click('[data-to=packed]');
     await page.waitForTimeout(900);
-    await page.click('[data-to=ready_for_pickup]');
+    await page.click('[data-action=sim-delivery]');
     await page.waitForTimeout(900);
     await page.click('[data-action=sim-delivery]');
     await page.waitForTimeout(900);

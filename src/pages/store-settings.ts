@@ -77,6 +77,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
           ${sectionHead('Pickup & service areas', readOnly)}
           <div class="section-fields" inert>
           ${textarea({ name: 'pickupAddress', label: 'Pickup address', value: seller.pickupAddress, rows: 2, required: true, placeholder: 'Enter the complete address where orders are collected', hint: 'Where the delivery partner collects orders.' })}
+          ${field({ name: 'pickupPincode', label: 'Pickup PIN code', value: '', placeholder: 'e.g. 641008', hint: 'Delivery partners who serve this PIN code are offered your orders. Leave empty to use your business PIN code.', attrs: 'inputmode="numeric" maxlength="6" pattern="[1-9][0-9]{5}"' })}
           <div class="field" id="f_serviceAreas" tabindex="-1">
             <label for="area-input">Service areas</label>
             <div class="chip-row" id="area-chips"></div>
@@ -186,6 +187,14 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   if (readOnly) $$('input,select,textarea', root).forEach((el) => ((el as HTMLInputElement).disabled = true));
 
   bindPager(root, refresh);
+  // The pickup PIN code lives on the server only (it routes pickups to delivery partners).
+  void api.shopDetails.current().then((shop) => {
+    const input = root.querySelector<HTMLInputElement>('[name=pickupPincode]');
+    if (input && shop?.pickup_pincode && !input.value) {
+      input.value = shop.pickup_pincode;
+      input.defaultValue = shop.pickup_pincode;
+    }
+  });
   // ---------- sub-navigation: highlight the section in view ----------
   const navLinks = Array.from(root.querySelectorAll<HTMLAnchorElement>('[data-jump]'));
   const setActive = (id: string) => {
@@ -367,7 +376,10 @@ const page: Page = async ({ root, query, seller, refresh }) => {
         if (patch.shopName?.trim()) backendPatch.shop_name = patch.shopName.trim();
         backendPatch.description = patch.description?.trim() || null;
       }
-      if (form.dataset.section === 'pickup') backendPatch.pickup_address = patch.pickupAddress?.trim() || null;
+      if (form.dataset.section === 'pickup') {
+        backendPatch.pickup_address = patch.pickupAddress?.trim() || null;
+        backendPatch.pickup_pincode = (f.pickupPincode ?? '').trim() || null;
+      }
       if (Object.keys(backendPatch).length) {
         const me = await api.auth.me();
         if (me?.seller_id) {

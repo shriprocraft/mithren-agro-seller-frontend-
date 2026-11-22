@@ -65,7 +65,8 @@ test('Organic claims require a linked certificate', async () => {
 test('Seller order transitions follow the configured flow', async () => {
   assert.ok(canSellerTransition('awaiting_confirmation', 'accepted'));
   assert.ok(!canSellerTransition('awaiting_confirmation', 'delivered'));
-  assert.ok(!canSellerTransition('ready_for_pickup', 'in_transit'), 'in transit is set by the delivery partner');
+  assert.ok(!canSellerTransition('packed', 'ready_for_pickup'), 'the seller stops at packed');
+  assert.ok(!canSellerTransition('packed', 'picked_up') && !canSellerTransition('picked_up', 'in_transit'), 'pickup and transit are set by the delivery partner');
   const [o] = await api.listOrders({ status: 'awaiting_confirmation' });
   await assert.rejects(api.transitionOrder(o.id, 'delivered'), (e) => e.status === 409);
   await assert.rejects(api.transitionOrder(o.id, 'rejected', ''), (e) => e.status === 422);
@@ -89,9 +90,9 @@ test('Delivering an order adds a ledger entry whose numbers reconcile', async ()
   const o = await api._demoSimulateNewOrder();
   await api.transitionOrder(o.id, 'accepted');
   await api.transitionOrder(o.id, 'packed');
-  await api.transitionOrder(o.id, 'ready_for_pickup');
-  await api._demoAdvanceDelivery(o.id);
-  await api._demoAdvanceDelivery(o.id);
+  await api._demoAdvanceDelivery(o.id); // picked up
+  await api._demoAdvanceDelivery(o.id); // in transit
+  await api._demoAdvanceDelivery(o.id); // delivered
   const entry = (await api.getLedger()).find((l) => l.subOrderId === o.id);
   assert.ok(entry);
   assert.equal(entry.state, 'pending', 'inside the return window');

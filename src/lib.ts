@@ -50,6 +50,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   accepted: 'Accepted',
   packed: 'Packed',
   ready_for_pickup: 'Ready for pickup',
+  picked_up: 'Picked up',
   in_transit: 'In transit',
   delivered: 'Delivered',
   rejected: 'Rejected',
@@ -82,16 +83,17 @@ export const UNIT_LABEL: Record<Unit, string> = { g: 'grams', kg: 'kilograms', b
 export const SELLER_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   awaiting_confirmation: ['accepted', 'rejected'],
   accepted: ['packed', 'cancelled'],
-  packed: ['ready_for_pickup', 'cancelled'],
+  // The seller's part ends at packed: picked up, in transit and delivered come from the delivery partner.
+  packed: ['cancelled'],
 };
 
-export const FULFILMENT_FLOW: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit', 'delivered'];
+export const FULFILMENT_FLOW: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'picked_up', 'in_transit', 'delivered'];
 
 export function canSellerTransition(from: OrderStatus, to: OrderStatus) {
   return (SELLER_TRANSITIONS[from] ?? []).includes(to);
 }
 
-export const ACTIVE_STATUSES: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'in_transit'];
+export const ACTIVE_STATUSES: OrderStatus[] = ['awaiting_confirmation', 'accepted', 'packed', 'ready_for_pickup', 'picked_up', 'in_transit'];
 
 // ---------- validation ----------
 export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;

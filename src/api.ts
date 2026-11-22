@@ -393,8 +393,6 @@ export const productDrafts = {
     if (sellerSession.isSignedIn()) await backendRequest('DELETE', `seller/product-drafts/${encodeURIComponent(key)}`, undefined, () => undefined).catch(() => undefined);
   },
 };
-/** TEMPORARY: mark an order picked up or delivered, standing in for the delivery partner. */
-export const testDelivery = (id: string, step: 'pickup' | 'deliver'): Promise<SubOrder> => backendOrders.testDelivery(id, step);
 export const markItemUnavailable = rpc('markItemUnavailable');
 // ---------- earnings & settlements: from the FastAPI backend when signed in there ----------
 const localGetLedger = rpc('getLedger');
@@ -597,6 +595,8 @@ export interface ShopDetailsPatch extends Partial<ShopDetailsStep2> {
   pan_number?: string | null;
   gstin?: string | null;
   pickup_address?: string | null;
+  /** Where pickups are routed to delivery partners (the business pincode when not set). */
+  pickup_pincode?: string | null;
   description?: string | null;
 }
 export interface ShopDetailsView extends ShopDetailsStep2 {
@@ -634,6 +634,7 @@ const SHOP_FIELD: Record<string, string> = {
   city: 'city',
   state: 'state',
   pincode: 'pincode',
+  pickup_pincode: 'pickupPincode',
   pan_number: 'pan',
   gstin: 'gstin',
   account_holder_name: 'holderName',
@@ -838,6 +839,11 @@ export const shopDetails = {
   /** Steps 3 and 5 (and a revisited Step 2): PATCH /api/v1/seller/shop-details/{seller_id}. */
   update: (sellerId: string, patch: ShopDetailsPatch) =>
     backendRequest<ShopDetailsView>('PATCH', `seller/shop-details/${encodeURIComponent(sellerId)}`, patch, shopField),
+  /** GET /api/v1/seller/shop-details: the signed-in seller's shop (null when not signed in or none yet). */
+  current: () =>
+    sellerSession.isSignedIn()
+      ? backendRequest<ShopDetailsView & { pickup_address?: string | null; pickup_pincode?: string | null }>('GET', 'seller/shop-details', undefined, () => undefined).catch(() => null)
+      : Promise.resolve(null),
   /** Step 6: POST /api/v1/seller/bank-details/{seller_id}. Creates or replaces the payout account. */
   saveBank: (sellerId: string, input: BankDetailsInput) =>
     backendRequest<BankDetailsView>('POST', `seller/bank-details/${encodeURIComponent(sellerId)}`, input, shopField),
@@ -932,7 +938,7 @@ export const uploads = {
 // ---------- orders (FastAPI backend) ----------
 
 /** "In progress": accepted and not yet delivered. New orders are under "To confirm". */
-const ACTIVE: OrderStatus[] = ['accepted', 'packed', 'ready_for_pickup', 'in_transit'];
+const ACTIVE: OrderStatus[] = ['accepted', 'packed', 'ready_for_pickup', 'picked_up', 'in_transit'];
 const ISSUES: OrderStatus[] = ['cancelled', 'rejected', 'return_requested', 'returned'];
 
 function allBackendOrders(): Promise<BackendOrder[]> {
@@ -965,15 +971,6 @@ const backendOrders = {
   },
   async get(id: string): Promise<SubOrder> {
     return toSubOrder(await backendRequest<BackendOrder>('GET', `seller/orders/${encodeURIComponent(id)}`, undefined, () => undefined));
-  },
-  /** TEMPORARY: stands in for the delivery partner (POST /seller/orders/{id}/test-delivery). */
-  async testDelivery(id: string, step: 'pickup' | 'deliver'): Promise<SubOrder> {
-    forgetOrders();
-    try {
-      return toSubOrder(await backendRequest<BackendOrder>('POST', `seller/orders/${encodeURIComponent(id)}/test-delivery`, { step }, () => undefined));
-    } finally {
-      forgetOrders();
-    }
   },
   async transition(id: string, to: OrderStatus, note: string): Promise<SubOrder> {
     const status = BACKEND_STATUS[to];

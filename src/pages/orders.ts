@@ -17,7 +17,7 @@ const TABS: [string, string][] = [
   ['', 'All'],
 ];
 
-const IN_PROGRESS = ['accepted', 'packed', 'ready_for_pickup', 'in_transit'];
+const IN_PROGRESS = ['accepted', 'packed', 'ready_for_pickup', 'picked_up', 'in_transit'];
 
 const page: Page = async ({ root, query, seller, refresh }) => {
   const q = query.get('q') ?? '';

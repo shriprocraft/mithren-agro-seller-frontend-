@@ -584,9 +584,14 @@ const page: Page = async ({ root, account: initialAccount }) => {
     const patch: api.ShopDetailsPatch | null =
       step === 3
         ? { address_line1: data.addressLine1, city: data.city, state: data.state || undefined, pincode: data.pincode }
-        : step === 5
-          ? { pan_number: data.pan || null, gstin: data.gstin || null }
-          : null;
+        : step === 4
+          ? // Where delivery partners collect orders: pickups are routed to partners covering this pincode.
+            data.pickupSameAsBusiness
+            ? { pickup_pincode: data.pincode || null }
+            : { pickup_address: data.pickupAddress || null, pickup_pincode: data.pickupPincode || null }
+          : step === 5
+            ? { pan_number: data.pan || null, gstin: data.gstin || null }
+            : null;
     if (patch) await withSeller(a, (id) => api.shopDetails.update(id, patch));
   }
 

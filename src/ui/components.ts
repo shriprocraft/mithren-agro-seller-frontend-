@@ -57,6 +57,7 @@ const ORDER_TONE: Record<OrderStatus, Tone> = {
   accepted: 'blue',
   packed: 'blue',
   ready_for_pickup: 'purple',
+  picked_up: 'purple',
   in_transit: 'purple',
   delivered: 'green',
   rejected: 'red',

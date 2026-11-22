@@ -692,7 +692,7 @@ export function _demoSimulateNewOrder() {
 export function _demoAdvanceDelivery(id: string) {
   return call(() => {
     const o = ownedOrder(id);
-    const next: Partial<Record<OrderStatus, OrderStatus>> = { ready_for_pickup: 'in_transit', in_transit: 'delivered' };
+    const next: Partial<Record<OrderStatus, OrderStatus>> = { packed: 'picked_up', ready_for_pickup: 'in_transit', picked_up: 'in_transit', in_transit: 'delivered' };
     const to = next[o.status];
     if (!to) throw new ApiError(409, 'The delivery partner can only pick up orders that are ready for pickup.');
     o.status = to;

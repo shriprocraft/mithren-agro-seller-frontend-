@@ -39,7 +39,9 @@ test('a backend order becomes a portal order with rupee amounts', () => {
 
 test('statuses map both ways and match the portal’s seller transitions', () => {
   assert.equal(portalStatus('pending', false), 'awaiting_confirmation');
-  assert.equal(portalStatus('shipped', true), 'ready_for_pickup');
+  // "shipped" is the delivery partner's: picked up, then in transit once out for delivery.
+  assert.equal(portalStatus('shipped', true, 'picked_up'), 'picked_up');
+  assert.equal(portalStatus('shipped', true, 'out_for_delivery'), 'in_transit');
   assert.equal(portalStatus('cancelled', false), 'rejected');
   assert.equal(portalStatus('cancelled', true), 'cancelled');
   // Every move the portal offers has a backend status to send.

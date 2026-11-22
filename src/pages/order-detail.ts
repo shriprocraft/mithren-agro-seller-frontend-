@@ -11,7 +11,6 @@ import type { OrderStatus, SubOrder } from '../types.js';
 const ACTION_LABEL: Partial<Record<OrderStatus, string>> = {
   accepted: 'Accept order',
   packed: 'Mark as packed',
-  ready_for_pickup: 'Ready for pickup',
   rejected: 'Reject',
   cancelled: 'Cancel order',
 };
@@ -38,7 +37,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
   // Backend orders don't support removing single items yet.
   const canMarkUnavailable = canAct && !o.backendId && ['awaiting_confirmation', 'accepted'].includes(o.status) && live.length > 1;
   // The GST invoice comes from the backend, once the order is confirmed.
-  const canInvoice = !!o.backendId && ['accepted', 'packed', 'ready_for_pickup', 'in_transit', 'delivered'].includes(o.status);
+  const canInvoice = !!o.backendId && ['accepted', 'packed', 'ready_for_pickup', 'picked_up', 'in_transit', 'delivered'].includes(o.status);
 
   const placedMs = new Date(o.placedAt).getTime();
   const deadline = placedMs + seller.fulfilment.acceptWindowMins * 60_000;
@@ -71,7 +70,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
         : html`<ol class="progress">
             ${FULFILMENT_FLOW.map((s, i) => html`<li class="${i < stepIdx ? 'done' : i === stepIdx ? 'current' : ''}" ${i === stepIdx ? raw('aria-current="step"') : ''}><span class="pdot" aria-hidden="true">${i < stepIdx ? icon('check', 12) : ''}</span><span>${ORDER_STATUS_LABEL[s]}</span></li>`)}
           </ol>
-          <p class="muted small">In transit and delivered are updated by the delivery partner.</p>`}
+          <p class="muted small">Picked up, in transit and delivered are updated by the delivery partner.</p>`}
     </section>
 
     <div class="grid-main order-layout">
@@ -120,6 +119,7 @@ const page: Page = async ({ root, params, seller, refresh }) => {
 
       <div class="stack">
         ${actionsCard(o, canAct, forward, negative)}
+        ${deliveryCard(o)}
         <section class="card">
           <h2 class="card-title">Delivery</h2>
           <dl class="kv">
@@ -216,20 +216,6 @@ const page: Page = async ({ root, params, seller, refresh }) => {
     }
   });
 
-  // TEMPORARY test controls standing in for the delivery partner.
-  on(root, 'click', '[data-action=test-delivery]', async (_e, el) => {
-    const step = el.dataset.step as 'pickup' | 'deliver';
-    (el as HTMLButtonElement).disabled = true;
-    try {
-      const u = await api.testDelivery(o.id, step);
-      toast(step === 'pickup' ? 'Marked picked up (test). The order is in transit.' : `Marked delivered (test). Order ${u.id} is complete.`);
-      refresh();
-    } catch (err) {
-      (el as HTMLButtonElement).disabled = false;
-      toast((err as Error).message, 'error');
-    }
-  });
-
   on(root, 'click', '[data-action=sim-delivery]', async () => {
     try {
       const u = await api._demoAdvanceDelivery(o.id);
@@ -242,25 +228,45 @@ const page: Page = async ({ root, params, seller, refresh }) => {
 };
 
 function actionsCard(o: SubOrder, canAct: boolean, forward: OrderStatus[], negative: OrderStatus[]): Raw {
-  const sim = api.DEMO_TOOLS && !o.backendId && (o.status === 'ready_for_pickup' || o.status === 'in_transit');
-  // TEMPORARY: until the delivery app assigns orders, the seller can mark pickup and delivery to test.
-  const testStep = o.backendId && o.deliveryTestControls ? (o.status === 'ready_for_pickup' ? 'pickup' : o.status === 'in_transit' ? 'deliver' : null) : null;
-  if (!forward.length && !negative.length && !sim && !testStep) return html``;
+  // The portal's own demo data only: stand in for the delivery partner.
+  const sim = api.DEMO_TOOLS && !o.backendId && ['packed', 'ready_for_pickup', 'picked_up', 'in_transit'].includes(o.status);
+  if (!forward.length && !negative.length && !sim) return html``;
   return html`<section class="card card-accent">
     <h2 class="card-title">Next step</h2>
     ${!canAct && (forward.length || negative.length) ? html`<p class="muted small">Order actions are unavailable while your account is not approved.</p>` : ''}
     <div class="stack-sm">
       ${forward.map((s) => html`<button type="button" class="btn btn-primary btn-block" data-to="${s}" ${canAct ? '' : raw('disabled')}>${ACTION_LABEL[s] ?? s}</button>`)}
       ${negative.map((s) => html`<button type="button" class="btn btn-danger-ghost btn-block" data-to="${s}" ${canAct ? '' : raw('disabled')}>${ACTION_LABEL[s] ?? s}</button>`)}
-      ${testStep
-        ? html`<p class="muted small">${testStep === 'pickup' ? 'Waiting for the delivery partner to collect.' : 'Out for delivery.'} For testing, you can mark this step yourself.</p>
-          <button type="button" class="btn btn-block proto-action" data-action="test-delivery" data-step="${testStep}" ${canAct ? '' : raw('disabled')}>${icon('flask', 14)} ${testStep === 'pickup' ? 'Mark picked up (test)' : 'Mark delivered (test)'}</button>`
-        : ''}
       ${sim
-        ? html`<p class="muted small">${o.status === 'ready_for_pickup' ? 'Waiting for the delivery partner to collect.' : 'Out for delivery.'}</p>
-          <button type="button" class="btn btn-block proto-action" data-action="sim-delivery">${icon('flask', 14)} Simulate ${o.status === 'ready_for_pickup' ? 'courier pickup' : 'delivery'}</button>`
+        ? html`<p class="muted small">${o.status === 'in_transit' ? 'Out for delivery.' : 'Waiting for the delivery partner.'}</p>
+          <button type="button" class="btn btn-block proto-action" data-action="sim-delivery">${icon('flask', 14)} Simulate ${o.status === 'in_transit' ? 'delivery' : 'the next delivery step'}</button>`
         : ''}
     </div>
+  </section>`;
+}
+
+const DELIVERY_LABEL: Record<string, string> = {
+  assigned: 'Partner on the way to collect',
+  picked_up: 'Picked up',
+  out_for_delivery: 'In transit',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+};
+
+/** Who is delivering, read-only: delivery steps are set by the delivery partner. */
+function deliveryCard(o: SubOrder): Raw {
+  const d = o.delivery;
+  if (!d) return html``;
+  if (!d.status) {
+    return d.note ? html`<section class="card"><h2 class="card-title">Delivery partner</h2>${callout(/alerted/.test(d.note) ? 'warn' : 'info', /alerted/.test(d.note) ? 'Waiting for a delivery partner' : 'Finding a delivery partner', d.note)}</section>` : html``;
+  }
+  return html`<section class="card">
+    <h2 class="card-title">Delivery partner</h2>
+    <dl class="kv">
+      <div><dt>Status</dt><dd>${badge(DELIVERY_LABEL[d.status] ?? d.status, d.status === 'delivered' ? 'green' : d.status === 'cancelled' ? 'red' : 'purple')}</dd></div>
+      ${d.partner ? html`<div><dt>Partner</dt><dd>${d.partner.name}</dd></div><div><dt>Phone</dt><dd><a href="tel:${d.partner.phone}">${d.partner.phone}</a></dd></div><div><dt>Accepted</dt><dd>${fmtDate(d.partner.assignedAt, true)}</dd></div>` : ''}
+    </dl>
+    ${d.status === 'assigned' && o.status === 'accepted' ? html`<p class="muted small">Mark the order packed so the partner can collect it.</p>` : ''}
   </section>`;
 }
 
