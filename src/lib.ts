@@ -65,6 +65,29 @@ export const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   inactive: 'Inactive',
 };
 
+/**
+ * Where a product stands, combining the seller's own state with the Super Admin's review: archived,
+ * a draft, waiting for review, rejected, unlisted by Mithren Agro, switched off (inactive), or approved.
+ */
+export type ListingState = 'archived' | 'draft' | 'pending' | 'rejected' | 'unlisted' | 'inactive' | 'approved';
+export function listingState(p: { archived: boolean; status: ProductStatus; review?: { status: string; listing: string } }): ListingState {
+  if (p.archived) return 'archived';
+  if (p.status === 'draft') return 'draft';
+  if (p.review?.status === 'rejected') return 'rejected';
+  if (p.review?.status === 'pending') return 'pending';
+  if (p.review?.listing === 'unlisted') return 'unlisted';
+  return p.status === 'inactive' ? 'inactive' : 'approved';
+}
+export const LISTING_STATE_LABEL: Record<ListingState, string> = {
+  archived: 'Archived',
+  draft: 'Draft',
+  pending: 'Pending review',
+  rejected: 'Rejected',
+  unlisted: 'Unlisted by Mithren Agro',
+  inactive: 'Inactive',
+  approved: 'Approved',
+};
+
 export const SETTLEMENT_LABEL: Record<SettlementState, string> = {
   pending: 'Pending',
   eligible: 'Eligible',

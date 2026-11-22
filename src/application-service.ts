@@ -296,7 +296,8 @@ export class ApplicationService {
   adoptServerApproval(acc: AccountInfo, data: Record<string, unknown>, bank: BankView | null): ApplicationView {
     return this.store.transaction(() => {
       const app = this.mine(acc);
-      if (app.status === 'approved' || app.status === 'suspended') return this.view(acc);
+      // Already approved here; a suspended seller the Super Admin reinstated becomes approved again.
+      if (app.status === 'approved') return this.view(acc);
       const t = now();
       app.data = normaliseApplicationData({ ...(app.data as unknown as Record<string, unknown>), ...data });
       app.status = 'approved';
@@ -310,6 +311,24 @@ export class ApplicationService {
       this.store.updateApplication(app);
       if (bank && !this.store.getBank(app.id)) this.store.saveBank(app.id, bank, '');
       this.store.audit({ actorType: 'seller', actorId: acc.userId, action: 'application.approval_synced', applicationId: app.id });
+      this.syncWorkspace(app);
+      return this.view(acc);
+    });
+  }
+
+  /**
+   * The Super Admin Portal rejected or suspended this seller on the backend: this browser's copy follows,
+   * so the portal shows the same status (and stops listing and order actions).
+   */
+  adoptServerDecision(acc: AccountInfo, status: 'rejected' | 'suspended'): ApplicationView {
+    return this.store.transaction(() => {
+      const app = this.mine(acc);
+      if (app.status === status) return this.view(acc);
+      app.status = status;
+      app.reviewedAt = now();
+      app.updatedAt = app.reviewedAt;
+      this.store.updateApplication(app);
+      this.store.audit({ actorType: 'seller', actorId: acc.userId, action: `application.${status}_synced`, applicationId: app.id });
       this.syncWorkspace(app);
       return this.view(acc);
     });

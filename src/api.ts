@@ -205,7 +205,12 @@ export const listProducts: typeof listLocalProducts = (async (...args: Parameter
   await syncProductsFromBackend();
   return listLocalProducts(...args);
 }) as typeof listLocalProducts;
-export const getProduct = rpc('getProduct');
+const localGetProduct = rpc('getProduct');
+/** One product, after bringing the backend's copy in (so its review status is current). */
+export const getProduct: typeof localGetProduct = (async (...args: Parameters<typeof localGetProduct>) => {
+  await syncProductsFromBackend();
+  return localGetProduct(...args);
+}) as typeof localGetProduct;
 export const saveProduct = rpc('saveProduct');
 export const setProductAvailability = rpc('setProductAvailability');
 export const archiveProduct = rpc('archiveProduct');
@@ -601,7 +606,7 @@ export interface ShopDetailsPatch extends Partial<ShopDetailsStep2> {
 }
 export interface ShopDetailsView extends ShopDetailsStep2 {
   seller_id: string;
-  approval_status: 'pending' | 'approved' | 'rejected';
+  approval_status: 'pending' | 'approved' | 'rejected' | 'suspended';
   address_line1: string | null;
   city: string | null;
   state: string | null;
@@ -1297,9 +1302,13 @@ interface ServerDraft {
  * showing an empty application. Null when there's nothing to take over.
  */
 async function adoptServerApproval(view: ApplicationView): Promise<ApplicationView | null> {
-  if (!local || view.status === 'approved' || view.status === 'suspended') return null;
+  if (!local) return null;
   const profile = await backendProfile();
-  if (profile?.approval_status !== 'approved' || !profile.seller_id) return null;
+  if (!profile?.seller_id) return null;
+  // The Super Admin Portal decides on the backend: a rejection or suspension shows here too.
+  const decided = profile.approval_status;
+  if ((decided === 'rejected' || decided === 'suspended') && view.status !== decided) return local.localApplication.adoptServerDecision(decided);
+  if (decided !== 'approved' || view.status === 'approved') return null;
   const quiet = <T,>(path: string) => backendRequest<T>('GET', path, undefined, () => undefined).catch(() => null);
   const [shop, bank, draft] = await Promise.all([
     quiet<ShopDetailsView & { pickup_address?: string | null; description?: string | null }>('seller/shop-details'),

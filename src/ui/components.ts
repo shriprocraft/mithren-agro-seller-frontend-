@@ -2,7 +2,7 @@
 
 import { html, raw, esc, type Raw, $, $$ } from './dom.js';
 import { setQuery } from '../router.js';
-import { ORDER_STATUS_LABEL, PRODUCT_STATUS_LABEL, SETTLEMENT_LABEL, SELLER_STATUS_LABEL } from '../lib.js';
+import { ORDER_STATUS_LABEL, PRODUCT_STATUS_LABEL, SETTLEMENT_LABEL, SELLER_STATUS_LABEL, LISTING_STATE_LABEL, type ListingState } from '../lib.js';
 import type { OrderStatus, ProductStatus, SettlementState, SellerStatus } from '../types.js';
 
 // ---------- icons (24px stroke icons, drawn for this project) ----------
@@ -69,6 +69,10 @@ export const orderBadge = (s: OrderStatus) => badge(ORDER_STATUS_LABEL[s], ORDER
 
 const PRODUCT_TONE: Record<ProductStatus, Tone> = { draft: 'neutral', approved: 'green', inactive: 'neutral' };
 export const productBadge = (s: ProductStatus) => badge(PRODUCT_STATUS_LABEL[s], PRODUCT_TONE[s]);
+
+const LISTING_TONE: Record<ListingState, Tone> = { archived: 'neutral', draft: 'neutral', pending: 'amber', rejected: 'red', unlisted: 'red', inactive: 'neutral', approved: 'green' };
+/** The product's status including the Super Admin's review (see listingState). */
+export const listingBadge = (s: ListingState) => badge(LISTING_STATE_LABEL[s], LISTING_TONE[s]);
 
 const SETTLE_TONE: Record<SettlementState, Tone> = { pending: 'neutral', eligible: 'blue', processing: 'amber', paid: 'green', failed: 'red', reversed: 'purple' };
 export const settlementBadge = (s: SettlementState) => badge(SETTLEMENT_LABEL[s], SETTLE_TONE[s]);

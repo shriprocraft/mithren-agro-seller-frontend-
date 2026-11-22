@@ -3,10 +3,10 @@
 import type { Page } from '../router.js';
 import { setQuery, navigate } from '../router.js';
 import { html, raw, on } from '../ui/dom.js';
-import { pageHeader, productBadge, icon, emptyState, tabs, badge, paginate, pager, bindPager } from '../ui/components.js';
+import { pageHeader, listingBadge, icon, emptyState, tabs, badge, paginate, pager, bindPager } from '../ui/components.js';
 import { toast, confirmDialog, saveFile, busyButton } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { availableStock, money, timeAgo, toCsv } from '../lib.js';
+import { availableStock, money, timeAgo, toCsv, listingState } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
 import { categoryLabel } from '../catalog.js';
 import type { Product, Variant } from '../types.js';
@@ -17,6 +17,7 @@ const STATUS_TABS: [string, string][] = [
   ['pending', 'Pending'],
   ['draft', 'Drafts'],
   ['rejected', 'Rejected'],
+  ['unlisted', 'Unlisted'],
   ['inactive', 'Inactive'],
   ['archived', 'Archived'],
 ];
@@ -134,11 +135,12 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   // One request for every product (archived too): the tab counts and the filtered list both come from it.
   const all = await api.listProducts({ includeArchived: true });
   const needle = q.toLowerCase();
+  // Tabs follow the product's state including the Super Admin's review (pending, rejected, unlisted).
   const fetched = all
-    .filter((p) => (status === 'archived' ? p.archived : !p.archived && (!status || p.status === status)))
+    .filter((p) => (status === 'archived' ? p.archived : !p.archived && (!status || listingState(p) === status)))
     .filter((p) => !category || p.category === category)
     .filter((p) => !needle || p.name.toLowerCase().includes(needle) || p.variants.some((v) => v.sku.toLowerCase().includes(needle)));
-  const countFor = (s: string) => (s === '' ? all.filter((p) => !p.archived).length : s === 'archived' ? all.filter((p) => p.archived).length : all.filter((p) => !p.archived && p.status === s).length);
+  const countFor = (s: string) => (s === '' ? all.filter((p) => !p.archived).length : all.filter((p) => listingState(p) === s).length);
   const readOnly = seller.status === 'suspended';
 
   const list = sortProducts(refine(fetched, query), sort);
@@ -152,7 +154,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   root.innerHTML = html`
     ${pageHeader(
       'Products',
-      'Create and manage your listings. Published products go live for customers right away.',
+      'Create and manage your listings. Published products go live for customers once Mithren Agro approves them.',
       html`<button class="btn" type="button" data-action="export">${icon('download', 16)} Export CSV</button>
         ${readOnly ? '' : html`<a class="btn btn-primary" href="#/seller/products/new">${icon('plus', 16)} Add product</a>`}`,
     )}
@@ -162,9 +164,6 @@ const page: Page = async ({ root, query, seller, refresh }) => {
         label: l,
         count: countFor(s),
         active: s === status,
-        // Product review by the Mithren team arrives with the super admin portal; until then every
-        // published product goes live at once, so these stay switched off.
-        ...(s === 'pending' || s === 'rejected' ? { disabled: 'Product review by the Mithren team is coming soon. For now, published products go live right away.' } : {}),
       })),
       'Filter by status',
     )}
@@ -381,7 +380,7 @@ function row(p: Product, readOnly: boolean) {
         <span><strong>${p.name}</strong><span class="muted small">${categoryLabel(p)}${p.organicClaim === 'certified' ? ' · Certified organic' : p.organicClaim === 'in_conversion' ? ' · In conversion' : ''}</span></span>
       </a>
     </td>
-    <td>${p.archived ? badge('Archived') : productBadge(p.status)}</td>
+    <td>${listingBadge(listingState(p))}${p.review?.status === 'rejected' && p.review.reason ? html`<span class="muted small block" title="${p.review.reason}">${p.review.reason.length > 60 ? `${p.review.reason.slice(0, 60)}…` : p.review.reason}</span>` : ''}</td>
     <td>${p.variants.length
       ? html`<button type="button" class="expander" data-action="expand" data-id="${p.id}" aria-expanded="${String(open)}" aria-controls="vr_${p.id}">${icon('chevronDown', 14)}<span>${p.variants.length} variant${p.variants.length === 1 ? '' : 's'}</span></button>`
       : html`<span class="muted">None</span>`}</td>
@@ -417,7 +416,7 @@ function variantPanel(p: Product) {
           <td class="num"><strong>${money(v.price)}</strong>${v.mrp && v.mrp > v.price ? html` <s class="muted small">${money(v.mrp)}</s>` : ''}</td>
           <td class="num">${availableStock(v)}${v.reserved ? html` <span class="muted small">(${v.reserved} reserved)</span>` : ''}</td>
           <td>${!p.available ? badge('Hidden', 'neutral') : availableStock(v) === 0 ? badge('Out of stock', 'red') : isLow(p, v) ? badge('Low stock', 'amber') : badge('In stock', 'green')}</td>
-          <td>${p.archived ? badge('Archived') : productBadge(p.status)}</td>
+          <td>${listingBadge(listingState(p))}</td>
         </tr>`,
       )}</tbody>
     </table>

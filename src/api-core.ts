@@ -366,6 +366,10 @@ export interface BackendCatalogProduct {
   updated_at: string;
   /** The portal's listing details saved on the backend; {} until a portal saves them. */
   portal?: PortalMeta;
+  /** The Super Admin Portal's review (pending until approved; rejected with a reason; unlisted). */
+  admin_status?: 'pending' | 'approved' | 'rejected';
+  admin_listing?: 'listed' | 'unlisted';
+  admin_rejection_reason?: string | null;
   variants: {
     label: string;
     sku: string;
@@ -386,6 +390,16 @@ export interface BackendCatalogProduct {
  * products get the backend's name, description, category, photos and variants; missing ones are
  * added (active ones as pending review, inactive ones as drafts). Portal-only fields are kept.
  */
+/** Copies the Super Admin's review from the backend onto the portal's product (left as is when not sent). */
+function setReview(p: Product, b: BackendCatalogProduct) {
+  if (!b.admin_status) return;
+  p.review = {
+    status: b.admin_status,
+    listing: b.admin_listing ?? 'listed',
+    ...(b.admin_rejection_reason ? { reason: b.admin_rejection_reason } : {}),
+  };
+}
+
 export function syncBackendProducts(items: BackendCatalogProduct[]) {
   return call(() => {
     const s = me();
@@ -425,6 +439,7 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
         });
         // The backend's copy of the portal details wins: it's what every other device sees.
         if (hasPortalMeta(b.portal)) applyPortalMeta(existing, b.portal);
+        setReview(existing, b);
       } else {
         db.products.unshift({
           id: uid('p'),
@@ -451,6 +466,7 @@ export function syncBackendProducts(items: BackendCatalogProduct[]) {
           images: b.images,
         });
         if (hasPortalMeta(b.portal)) applyPortalMeta(db.products[0], b.portal);
+        setReview(db.products[0]!, b);
         added += 1;
       }
     }

@@ -2,9 +2,9 @@
 
 import type { Page } from '../router.js';
 import { html, raw, on, type Raw } from '../ui/dom.js';
-import { pageHeader, productBadge, icon, emptyState, badge, callout } from '../ui/components.js';
+import { pageHeader, listingBadge, icon, emptyState, badge, callout } from '../ui/components.js';
 import * as api from '../api.js';
-import { money, fmtDate } from '../lib.js';
+import { money, fmtDate, listingState } from '../lib.js';
 import { categoryKind, categoryLabel } from '../catalog.js';
 import type { Product, Variant } from '../types.js';
 
@@ -45,11 +45,22 @@ const page: Page = async ({ root, params, seller }) => {
   const editHref = `#/seller/products/${encodeURIComponent(p.id)}/edit`;
   const photos = (p.images ?? []).map(api.imageUrl);
 
-  const status = html`${p.archived ? badge('Archived') : productBadge(p.status)} ${p.available ? '' : badge('Hidden from customers', 'neutral')}`;
+  const state = listingState(p);
+  const status = html`${listingBadge(state)} ${p.available ? '' : badge('Hidden from customers', 'neutral')}`;
+  // The Super Admin's review, explained.
+  const review =
+    state === 'pending'
+      ? callout('info', 'Waiting for Mithren Agro to review', 'Customers will see this product once Mithren Agro approves it. You can still edit it meanwhile.')
+      : state === 'rejected'
+        ? callout('error', 'Rejected by Mithren Agro', `${p.review?.reason ? `Reason: ${p.review.reason}. ` : ''}Fix it and save: it goes back for review.`)
+        : state === 'unlisted'
+          ? callout('warn', 'Unlisted by Mithren Agro', 'Mithren Agro has taken this product off the storefront. Contact seller support to know more.')
+          : '';
   const editButton = readOnly ? '' : html`<a class="btn btn-primary" href="${editHref}" data-action="edit-product">${icon('edit', 16)} Edit Product</a>`;
 
   root.innerHTML = html`
     ${pageHeader(p.name, `${categoryLabel(p)} · Last updated ${fmtDate(p.updatedAt, true)}`, html`${status}${editButton}`, { href: '/seller/products', label: 'Products' })}
+    ${review}
     ${readOnly ? callout('error', 'Read-only', 'Your account is suspended, so listings can’t be edited.') : ''}
 
     <div class="grid-main product-view">

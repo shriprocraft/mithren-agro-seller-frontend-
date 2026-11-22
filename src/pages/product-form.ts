@@ -712,9 +712,11 @@ const page: Page = async ({ root, params, seller }) => {
       window.removeEventListener('pagehide', keepOnLeave);
       await api.productDrafts.forget(draftOwner, draftKey);
       releaseImages();
+      // Pick up the Super Admin's review status (pending for new and resubmitted products) at once.
+      api.forgetProductSync();
       toast(
         isNew
-          ? submit ? 'Product published' : 'Draft saved'
+          ? submit ? 'Product submitted. Customers see it once Mithren Agro approves it.' : 'Draft saved'
           : `${submit ? 'Changes saved' : 'Draft saved'}${synced ? '' : ' (this product isn’t in the catalogue)'}`,
       );
       navigate(`/seller/products/${saved.id}`, isNew);

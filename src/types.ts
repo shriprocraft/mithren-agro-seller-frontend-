@@ -120,6 +120,11 @@ export interface Product {
   backendId?: string;
   /** Uploaded photos as server paths (POST /api/v1/uploads/product-image), primary first. */
   images?: string[];
+  /**
+   * The Super Admin Portal's review, from the backend (the seller can't change it). Customers see a
+   * product only once it's approved and listed. A rejected product goes back for review when edited.
+   */
+  review?: { status: 'pending' | 'approved' | 'rejected'; listing: 'listed' | 'unlisted'; reason?: string };
 }
 
 export type AdjustmentReason =

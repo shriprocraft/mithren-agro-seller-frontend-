@@ -347,6 +347,9 @@ export const localApplication = {
   async adoptServerApproval(data: Record<string, unknown>, bank: BankView | null): Promise<ApplicationView> {
     return service.adoptServerApproval(accountOf(currentUser()), data, bank);
   },
+  async adoptServerDecision(status: 'rejected' | 'suspended'): Promise<ApplicationView> {
+    return service.adoptServerDecision(accountOf(currentUser()), status);
+  },
   async saveDraft(data: unknown, nextStep: number, validateStep: number | null): Promise<ApplicationView> {
     return service.saveDraft(accountOf(currentUser()), data, nextStep, validateStep);
   },
