@@ -320,7 +320,7 @@ export class ApplicationService {
    * The Super Admin Portal rejected or suspended this seller on the backend: this browser's copy follows,
    * so the portal shows the same status (and stops listing and order actions).
    */
-  adoptServerDecision(acc: AccountInfo, status: 'rejected' | 'suspended'): ApplicationView {
+  adoptServerDecision(acc: AccountInfo, status: 'pending' | 'rejected' | 'suspended'): ApplicationView {
     return this.store.transaction(() => {
       const app = this.mine(acc);
       if (app.status === status) return this.view(acc);

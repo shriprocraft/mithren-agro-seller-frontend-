@@ -60,8 +60,8 @@ export function loadAppConfig() {
     adminTokens: adminTokens(),
     deliverCode: codeDelivery(),
     demoTools: env.DEMO_TOOLS === '1',
-    // No admin review yet: applications and listings are approved at once. SELLER_AUTO_APPROVE=0 turns review back on.
-    autoApprove: env.SELLER_AUTO_APPROVE !== '0',
+    // The Super Admin Portal reviews applications. SELLER_AUTO_APPROVE=1 approves at once (local testing only).
+    autoApprove: env.SELLER_AUTO_APPROVE === '1',
     // FastAPI backend that verifies seller OTPs; its /auth/me is the source of truth for verification.
     backendUrl: (env.BACKEND_URL ?? 'http://127.0.0.1:8000').replace(/\/+$/, ''),
   };

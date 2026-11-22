@@ -157,7 +157,9 @@ const store: ApplicationStore = {
   newId: rid,
 };
 
-const service = new ApplicationService(store, { autoApprove: true });
+// The Super Admin Portal approves sellers on the backend: a submitted application waits here as pending
+// until the backend says approved (see adoptServerApproval in api.ts).
+const service = new ApplicationService(store, { autoApprove: false });
 
 /** The preview's pre-existing demo seller (already approved), created on first run. */
 async function ensureDemoAccount() {
@@ -371,7 +373,7 @@ export const localApplication = {
   async adoptServerApproval(data: Record<string, unknown>, bank: BankView | null): Promise<ApplicationView> {
     return service.adoptServerApproval(accountOf(currentUser()), data, bank);
   },
-  async adoptServerDecision(status: 'rejected' | 'suspended'): Promise<ApplicationView> {
+  async adoptServerDecision(status: 'pending' | 'rejected' | 'suspended'): Promise<ApplicationView> {
     return service.adoptServerDecision(accountOf(currentUser()), status);
   },
   async saveDraft(data: unknown, nextStep: number, validateStep: number | null): Promise<ApplicationView> {

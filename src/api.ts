@@ -1316,6 +1316,8 @@ async function adoptServerApproval(view: ApplicationView): Promise<ApplicationVi
   // The Super Admin Portal decides on the backend: a rejection or suspension shows here too.
   const decided = profile.approval_status;
   if ((decided === 'rejected' || decided === 'suspended') && view.status !== decided) return local.localApplication.adoptServerDecision(decided);
+  // Approved only in this browser (older portal versions approved on submit): wait for the Super Admin.
+  if (decided === 'pending' && view.status === 'approved') return local.localApplication.adoptServerDecision('pending');
   if (decided !== 'approved' || view.status === 'approved') return null;
   const quiet = <T,>(path: string) => backendRequest<T>('GET', path, undefined, () => undefined).catch(() => null);
   const [shop, bank, draft] = await Promise.all([
