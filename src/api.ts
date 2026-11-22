@@ -137,8 +137,21 @@ async function syncSellerFromBackend(): Promise<void> {
     sellerSyncedAt = 0; // offline or no shop yet: try again next time
   }
 }
+let approvalCheckedAt = 0;
+/**
+ * The Super Admin decides approval on the backend. Before the header and pages read this browser's
+ * copy of the seller, bring its status in line (at most every 10 s), so they never show "Approved"
+ * while the backend still has the seller pending, rejected or suspended.
+ */
+async function syncApprovalFromBackend(): Promise<void> {
+  if (!local || !sellerSession.isSignedIn() || Date.now() - approvalCheckedAt < 10_000) return;
+  approvalCheckedAt = Date.now();
+  await adoptServerApproval(await local.localApplication.get()).catch(() => {
+    approvalCheckedAt = 0;
+  });
+}
 export const getSeller = sharedWhileLoading(async () => {
-  await syncSellerFromBackend();
+  await Promise.all([syncSellerFromBackend(), syncApprovalFromBackend()]);
   return localGetSeller();
 });
 /**
