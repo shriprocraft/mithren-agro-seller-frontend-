@@ -260,6 +260,30 @@ export const localAuth = {
     const u = state.users.find((x) => x.id === state.sessionUserId);
     return u ? { fullName: u.fullName, email: u.email, phone: u.phone } : null;
   },
+  /**
+   * The server just accepted a new account with this email and phone, so they are free there: an
+   * account this browser still keeps with either (one deleted on the server, for example) is stale.
+   * Removes it with its application, documents and bank summary.
+   */
+  async forgetStale(email: string, phone: string): Promise<number> {
+    await ready;
+    const e = String(email).trim().toLowerCase();
+    const p = String(phone).replace(/\D/g, '').slice(-10);
+    const stale = state.users.filter((u) => u.email === e || u.phone.replace(/\D/g, '').slice(-10) === p);
+    if (!stale.length) return 0;
+    const ids = new Set(stale.map((u) => u.id));
+    const apps = new Set(state.apps.filter((a) => ids.has(a.userId)).map((a) => a.id));
+    state.users = state.users.filter((u) => !ids.has(u.id));
+    state.apps = state.apps.filter((a) => !apps.has(a.id));
+    state.docs = state.docs.filter((d) => !apps.has(d.applicationId));
+    for (const id of apps) {
+      delete state.banks[id];
+      delete state.organic[id];
+    }
+    if (state.sessionUserId && ids.has(state.sessionUserId)) state.sessionUserId = null;
+    save();
+    return stale.length;
+  },
   async signUp(input: { fullName: string; email: string; phone: string; password: string }): Promise<AccountView> {
     await ready;
     const v = validateSignUp(input);

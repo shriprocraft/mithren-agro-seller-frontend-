@@ -1116,7 +1116,11 @@ export const auth = {
       registerField,
     );
     sellerSession.save(r);
-    return local ? local.localAuth.signUp(input) : http<{ account: AccountView }>('POST', '/api/auth/signup', input).then((x) => x.account);
+    if (!local) return http<{ account: AccountView }>('POST', '/api/auth/signup', input).then((x) => x.account);
+    // The server is the source of truth: it accepted this email and phone, so a copy this browser kept
+    // of an older account with them (since deleted on the server) mustn't block the new one.
+    await local.localAuth.forgetStale(input.email, input.phone);
+    return local.localAuth.signUp(input);
   },
   /** Email codes are sent by the FastAPI backend. The preview has no SMS provider, so it returns the phone code to display. */
   /**
@@ -1182,8 +1186,12 @@ export const auth = {
     } catch (e) {
       // Signed in on the server but this browser has no portal account yet: create it from the profile.
       if (!local || !(e instanceof ApiError) || e.status !== 401) throw e;
+      const phone = profile.phone.replace(/^\+91/, '');
+      // The server account has no shop yet, so a portal account this browser keeps under the same email
+      // with another password is left over from an older account deleted on the server: replace it.
+      if (!profile.seller_id) await local.localAuth.forgetStale(profile.email, phone);
       try {
-        await local.localAuth.signUp({ fullName: profile.full_name, email: profile.email, phone: profile.phone.replace(/^\+91/, ''), password });
+        await local.localAuth.signUp({ fullName: profile.full_name, email: profile.email, phone, password });
       } catch {
         sellerSession.clear();
         throw new ApiError(409, 'This browser has a different password saved for this account. Sign in with that password.');
