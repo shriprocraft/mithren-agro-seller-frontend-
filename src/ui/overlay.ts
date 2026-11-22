@@ -52,10 +52,12 @@ export function modal(o: ModalOpts): { close: () => void; el: HTMLElement } {
     previouslyFocused?.focus?.();
   };
   const focusables = () => $$('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])', dialog);
+  // While a dialog is saving (see busyButton), Esc, the backdrop and Cancel don't close it.
+  const isBusy = () => dialog.dataset.busy === 'true';
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
-      close();
+      if (!isBusy()) close();
     }
     if (e.key === 'Tab') {
       const f = focusables();
@@ -73,16 +75,51 @@ export function modal(o: ModalOpts): { close: () => void; el: HTMLElement } {
   };
   document.addEventListener('keydown', onKey, true);
   backdrop.addEventListener('mousedown', (e) => {
-    if (e.target === backdrop) close();
+    if (e.target === backdrop && !isBusy()) close();
   });
-  $$('[data-close]', backdrop).forEach((b) => b.addEventListener('click', close));
+  $$('[data-close]', backdrop).forEach((b) => b.addEventListener('click', () => !isBusy() && close()));
   o.onMount?.(dialog, close);
   const auto = $('[autofocus]', dialog) ?? focusables()[1] ?? focusables()[0];
   auto?.focus();
   return { close, el: dialog };
 }
 
-export function confirmDialog(o: { title: string; message: string; confirmLabel: string; danger?: boolean; reasonLabel?: string; reasonRequired?: boolean }): Promise<{ ok: boolean; reason: string }> {
+/**
+ * Shows that a button's action is running: the button says `label` (e.g. "Archiving…") with a spinner,
+ * and every button around it (its whole dialog, when in one) is disabled, so nothing is clicked twice.
+ * Inside a dialog, Esc, the backdrop and Cancel wait too. Returns a function that puts it all back.
+ */
+export function busyButton(btn: HTMLButtonElement, label: string): () => void {
+  const dialog = btn.closest<HTMLElement>('.modal');
+  const scope = dialog ?? btn.parentElement ?? document.body;
+  const buttons = $$<HTMLButtonElement>('button', scope).filter((b) => !b.disabled);
+  const before = btn.innerHTML;
+  buttons.forEach((b) => (b.disabled = true));
+  btn.innerHTML = html`<span class="btn-spinner" aria-hidden="true"></span>${label}`.value;
+  btn.setAttribute('aria-busy', 'true');
+  if (dialog) dialog.dataset.busy = 'true';
+  return () => {
+    buttons.forEach((b) => (b.disabled = false));
+    btn.innerHTML = before;
+    btn.removeAttribute('aria-busy');
+    if (dialog) dialog.dataset.busy = 'false';
+  };
+}
+
+/**
+ * A confirmation. With `action`, the dialog stays open while it runs (`busyLabel` on the button, every
+ * button disabled) and closes once it succeeds; an error is shown in the dialog so the seller can retry.
+ */
+export function confirmDialog(o: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger?: boolean;
+  reasonLabel?: string;
+  reasonRequired?: boolean;
+  action?: (reason: string) => Promise<unknown>;
+  busyLabel?: string;
+}): Promise<{ ok: boolean; reason: string }> {
   return new Promise((resolve) => {
     let settled = false;
     const m = modal({
@@ -97,6 +134,7 @@ export function confirmDialog(o: { title: string; message: string; confirmLabel:
                 <p class="field-error" id="f_reason_err" hidden></p>
               </div>`
             : ''}
+          <p class="form-error" role="alert" hidden></p>
           <div class="modal-actions">
             <button type="button" class="btn" data-close>Cancel</button>
             <button type="submit" class="btn ${o.danger ? 'btn-danger' : 'btn-primary'}" ${o.reasonLabel ? '' : raw('autofocus')}>${o.confirmLabel}</button>
@@ -115,9 +153,30 @@ export function confirmDialog(o: { title: string; message: string; confirmLabel:
             $('#f_reason', el)?.focus();
             return;
           }
-          settled = true;
-          close();
-          resolve({ ok: true, reason });
+          if (!o.action) {
+            settled = true;
+            close();
+            resolve({ ok: true, reason });
+            return;
+          }
+          const btn = form.querySelector('[type=submit]') as HTMLButtonElement;
+          if (btn.disabled) return;
+          const error = form.querySelector('.form-error') as HTMLElement;
+          error.hidden = true;
+          const done = busyButton(btn, o.busyLabel ?? 'Saving…');
+          o.action(reason).then(
+            () => {
+              done();
+              settled = true;
+              close();
+              resolve({ ok: true, reason });
+            },
+            (err: unknown) => {
+              done();
+              error.textContent = (err as Error)?.message || 'Something went wrong. Try again.';
+              error.hidden = false;
+            },
+          );
         });
       },
     });

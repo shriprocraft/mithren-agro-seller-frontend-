@@ -485,6 +485,8 @@ export function archiveProduct(id: string, archived = true) {
       throw new ApiError(409, 'This product is part of an active order. Archive it after those orders are fulfilled.');
     p.archived = archived;
     p.available = !archived && p.available;
+    // Restored products come back switched off: an approved listing is Inactive until turned on again.
+    if (!archived && !p.available && p.status === 'approved') p.status = 'inactive';
     p.updatedAt = nowIso();
     return p;
   }, true);
@@ -530,6 +532,9 @@ export function adjustStock(productId: string, variantId: string, delta: number,
     if (!v) throw new ApiError(404, 'Variant not found.');
     if (!Number.isInteger(delta) || delta === 0) throw new ApiError(422, 'Enter a whole-number change other than 0.', { delta: 'Enter a whole number other than 0.' });
     if (v.stock + delta < 0) throw new ApiError(422, `Stock can’t go below 0 (currently ${v.stock}).`, { delta: `Max decrease is ${v.stock}.` });
+    // A restock or customer return only adds stock; damage only removes it (the backend checks the same).
+    if (delta < 0 && (reason === 'restock' || reason === 'return')) throw new ApiError(422, 'A restock can only add stock. To remove stock, choose Damaged or Count correction.', { reason: 'To remove stock, choose Damaged or Count correction.' });
+    if (delta > 0 && reason === 'damage') throw new ApiError(422, 'Damaged stock can only be removed. To add stock, choose Restock or Count correction.', { reason: 'To add stock, choose Restock or Count correction.' });
     if (['damage', 'correction'].includes(reason) && !note.trim()) throw new ApiError(422, 'Add a note explaining this adjustment.', { note: 'A note is required for damage and corrections.' });
     v.stock += delta;
     p.updatedAt = nowIso();

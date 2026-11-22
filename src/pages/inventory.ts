@@ -4,7 +4,7 @@ import type { Page } from '../router.js';
 import { html, on, $ } from '../ui/dom.js';
 import { setQuery } from '../router.js';
 import { pageHeader, emptyState, tabs, icon, badge, field, select, textarea, showFieldErrors, fileInput, paginate, pager, bindPager } from '../ui/components.js';
-import { toast, modal, saveFile } from '../ui/overlay.js';
+import { toast, modal, saveFile, busyButton } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { availableStock, fmtDate, toCsv, validateInventoryCsv, money } from '../lib.js';
 import type { AdjustmentReason, Product, Variant } from '../types.js';
@@ -15,6 +15,9 @@ const REASONS: [AdjustmentReason, string][] = [
   ['correction', 'Count correction'],
   ['return', 'Customer return restocked'],
 ];
+/** Reasons that can add stock, and reasons that can remove it (the backend checks the same). */
+const REASONS_ADD = new Set<string>(['restock', 'return', 'correction']);
+const REASONS_REMOVE = new Set<string>(['damage', 'correction']);
 const REASON_LABEL: Record<AdjustmentReason, string> = {
   restock: 'Restock',
   damage: 'Damage',
@@ -160,10 +163,25 @@ function openAdjust(p: Product, v: Variant, refresh: () => void) {
         $('#adj-preview', el)!.textContent = Number.isFinite(d) && d ? `New stock will be ${v.stock + d}.` : '';
       };
       form.addEventListener('input', preview);
+      // Reasons go one way: a restock or a customer return only adds, damage only removes, and a count
+      // correction goes either way. Only the reasons that fit the chosen change can be picked, and
+      // picking a one-way reason sets the change to match.
+      const direction = form.elements.namedItem('direction') as HTMLSelectElement;
+      const reasonSelect = form.elements.namedItem('reason') as HTMLSelectElement;
+      const fitReasons = () => {
+        const adding = direction.value === '1';
+        for (const o of Array.from(reasonSelect.options)) o.disabled = adding ? !REASONS_ADD.has(o.value) : !REASONS_REMOVE.has(o.value);
+        if (reasonSelect.selectedOptions[0]?.disabled) reasonSelect.value = adding ? 'restock' : 'damage';
+      };
+      fitReasons();
       form.addEventListener('change', (e) => {
-        if ((e.target as HTMLElement).id === 'f_direction' || (e.target as HTMLElement).id === 'f_reason') preview();
-        const reason = (form.elements.namedItem('reason') as HTMLSelectElement).value;
-        if (reason === 'damage' || reason === 'correction') (form.elements.namedItem('direction') as HTMLSelectElement).value = reason === 'damage' ? '-1' : (form.elements.namedItem('direction') as HTMLSelectElement).value;
+        if ((e.target as HTMLElement).id === 'f_reason') {
+          const r = reasonSelect.value;
+          if (REASONS_ADD.has(r) && !REASONS_REMOVE.has(r)) direction.value = '1';
+          if (REASONS_REMOVE.has(r) && !REASONS_ADD.has(r)) direction.value = '-1';
+        }
+        fitReasons();
+        preview();
       });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -173,19 +191,24 @@ function openAdjust(p: Product, v: Variant, refresh: () => void) {
         const err = form.querySelector('.form-error') as HTMLElement;
         err.hidden = true;
         if (!Number.isInteger(qty) || qty <= 0) return showFieldErrors(form, { delta: 'Enter a whole number greater than 0.' });
+        const reason = String(fd.get('reason'));
+        if (delta < 0 && !REASONS_REMOVE.has(reason)) return showFieldErrors(form, { reason: 'To remove stock, choose Damaged or Count correction.' });
+        if (delta > 0 && !REASONS_ADD.has(reason)) return showFieldErrors(form, { reason: 'To add stock, choose Restock, Customer return or Count correction.' });
         const btn = form.querySelector('[type=submit]') as HTMLButtonElement;
-        btn.disabled = true;
+        if (btn.disabled) return;
+        const done = busyButton(btn, 'Saving…');
         try {
           await api.adjustStock(p.id, v.id, delta, fd.get('reason') as AdjustmentReason, String(fd.get('note') ?? ''));
+          done();
           toast(`Stock updated to ${v.stock + delta}`);
           close();
           refresh();
         } catch (ex) {
+          done();
           const ae = ex as api.ApiError;
           err.textContent = ae.message;
           err.hidden = false;
           if (ae.fieldErrors) showFieldErrors(form, ae.fieldErrors);
-          btn.disabled = false;
         }
       });
     },

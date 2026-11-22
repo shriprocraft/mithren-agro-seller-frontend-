@@ -4,7 +4,7 @@ import type { Page } from '../router.js';
 import { setQuery, navigate } from '../router.js';
 import { html, raw, on } from '../ui/dom.js';
 import { pageHeader, productBadge, icon, emptyState, tabs, badge, paginate, pager, bindPager } from '../ui/components.js';
-import { toast, confirmDialog, saveFile } from '../ui/overlay.js';
+import { toast, confirmDialog, saveFile, busyButton } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { availableStock, money, timeAgo, toCsv } from '../lib.js';
 import { CATEGORIES } from '../data/seed.js';
@@ -293,21 +293,19 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     return change();
   }
 
+  // The dialogs stay open, showing "Deleting\u2026" / "Archiving\u2026", until the server answers.
   on(root, 'click', '[data-action=delete]', async (_e, el) => {
     const c = await confirmDialog({
       title: `Delete ${el.dataset.name ?? 'this product'}?`,
       message: 'It will be removed for good, with its options and photos, and taken out of customers\u2019 carts. This can\u2019t be undone. A product that has orders or reviews can\u2019t be deleted; it stays archived.',
       confirmLabel: 'Delete',
+      busyLabel: 'Deleting\u2026',
       danger: true,
+      action: () => api.deleteProduct(el.dataset.id!),
     });
     if (!c.ok) return;
-    try {
-      await api.deleteProduct(el.dataset.id!);
-      toast('Product deleted');
-      refresh();
-    } catch (err) {
-      toast((err as Error).message, 'error');
-    }
+    toast('Product deleted');
+    refresh();
   });
 
   on(root, 'change', '[data-action=toggle-available]', async (_e, el) => {
@@ -329,19 +327,33 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   on(root, 'click', '[data-action=archive]', async (_e, el) => {
     const id = el.dataset.id!;
     const archived = el.dataset.archived !== 'true';
-    if (archived) {
-      const c = await confirmDialog({ title: 'Archive product?', message: 'Archived products are hidden from customers and from your main list. Order history is kept. You can restore it later.', confirmLabel: 'Archive' });
-      if (!c.ok) return;
-    }
-    try {
-      const after = await changeAndPublish(
+    const run = () =>
+      changeAndPublish(
         id,
         (backendId) => (archived ? api.products.archive(backendId) : api.products.restore(backendId)),
         () => api.archiveProduct(id, archived),
       );
-      toast(archived ? 'Product archived and hidden from customers' : isLive(after) ? 'Product restored' : 'Product restored. Turn on Available to show it to customers.');
+    if (archived) {
+      const c = await confirmDialog({
+        title: 'Archive product?',
+        message: 'Archived products are hidden from customers and from your main list. Order history is kept. You can restore it later.',
+        confirmLabel: 'Archive',
+        busyLabel: 'Archiving…',
+        action: run,
+      });
+      if (!c.ok) return;
+      toast('Product archived and hidden from customers');
+      refresh();
+      return;
+    }
+    // Restore has no dialog: the button itself shows "Restoring…" until the server answers.
+    const done = busyButton(el as HTMLButtonElement, 'Restoring…');
+    try {
+      const after = await run();
+      toast(isLive(after) ? 'Product restored' : 'Product restored as Inactive. Turn on Available to show it to customers.');
       refresh();
     } catch (err) {
+      done();
       toast((err as Error).message, 'error');
     }
   });
