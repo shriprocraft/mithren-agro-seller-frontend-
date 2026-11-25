@@ -27,8 +27,8 @@ const KIND_HELP: Record<ApplicationDocKind, string> = {
   bank_proof: 'Cancelled cheque or bank statement showing the account name and IFSC.',
   organic_cert: 'Only if you sell organic products. Must cover the farms and products you list.',
   organic_evidence: 'Optional supporting documents: inspection reports, farm photos or supplier documents.',
-  fssai: 'Your own FSSAI licence or registration. Needed to sell food categories such as Oil and Organic Groceries.',
-  fertilizer_licence: 'Your fertilizer dealer licence from the state agriculture department. Needed to sell Fertilizers.',
+  fssai: 'Optional. Your own FSSAI licence or registration, if you have one. Products made under Mithren Agro’s FSSAI licence don’t need it.',
+  fertilizer_licence: 'Optional. Your fertilizer dealer licence from the state agriculture department, if you have one.',
   logo: 'Optional store logo, PNG or JPG up to 2 MB.',
   additional: 'Anything else a reviewer has asked for.',
 };
@@ -66,7 +66,7 @@ const page: Page = async ({ root, refresh }) => {
     ${view.status === 'changes_requested' && (view.reviewerMessage || view.requestedItems.length)
       ? callout('warn', 'A reviewer has asked for changes', html`${view.reviewerMessage ?? ''}${view.requestedItems.length ? html`<ul class="requested">${view.requestedItems.map((i) => html`<li>${i}</li>`)}</ul>` : ''}`, html`<a class="btn btn-sm" href="#/seller/register">Update application</a>`)
       : ''}
-    ${view.status === 'pending' ? callout('info', 'Your application is under review', 'Documents are locked while it’s reviewed. You can still add category documents (FSSAI, dealer licence) and additional documents a reviewer asks for.') : ''}
+    ${view.status === 'pending' ? callout('info', 'Your application is under review', 'Documents are locked while it’s reviewed. You can still add optional documents (such as an FSSAI or fertilizer dealer licence) and additional documents a reviewer asks for.') : ''}
     ${expiring.map((d) => {
       const left = daysLeft(d.expires_on!);
       const name = DOC_KIND_LABEL[(ORDER.find((k) => api.SERVER_DOC_TYPE[k] === d.doc_type) ?? 'additional') as ApplicationDocKind];

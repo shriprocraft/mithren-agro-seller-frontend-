@@ -88,7 +88,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
         : html`<p class="muted">No categories yet. Add the categories you sell in below.</p>`}
       ${canChangeCategories && others.length
         ? html`<h3 class="sub-title">Add a category</h3>
-          <p class="muted small">Some categories need a document, such as an FSSAI licence for Oil. Add it here with the category; the category becomes active once Mithren Agro verifies it.</p>
+${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categories need a document. Add it here with the category; the category becomes active once Mithren Agro verifies it.</p>` : ''}
           <div class="cat-add">
             ${(() => {
               const picked = others.find((c) => c.slug === addPick);

@@ -24,7 +24,7 @@ export const DETAIL_FIELDS: Record<CategoryFieldType, DetailField[]> = {
   // Fresh produce keeps the origin, harvest and storage fields the form already has.
   fresh_produce: [],
   packaged_food: [
-    { key: 'manufacturer_fssai', label: 'Manufacturer FSSAI number', required: true, kind: 'text', placeholder: 'The 14-digit number on the pack', hint: 'Printed on the packet with the FSSAI logo.' },
+    { key: 'manufacturer_fssai', label: 'Manufacturer FSSAI number', required: false, kind: 'text', placeholder: 'The 14-digit number on the pack', hint: 'Optional. Leave it empty for products made under Mithren Agro’s FSSAI licence.' },
     { key: 'best_before', label: 'Best before date', required: true, kind: 'date' },
     { key: 'manufacturer', label: 'Manufacturer or packer', required: true, kind: 'text', placeholder: 'Name and town on the pack' },
     { key: 'product_type', label: 'Type', required: false, kind: 'text', placeholder: 'e.g. Cold-pressed, Refined, Stone-ground' },
