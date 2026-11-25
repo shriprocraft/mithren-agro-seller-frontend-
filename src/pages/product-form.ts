@@ -7,7 +7,8 @@ import { pageHeader, field, textarea, select, callout, productBadge, icon, showF
 import { toast, confirmDialog } from '../ui/overlay.js';
 import * as api from '../api.js';
 import { slugify, money, fmtDate, timeAgo, UNIT_LABEL } from '../lib.js';
-import { SELLER_CATEGORIES, currentCategory } from '../data/seed.js';
+import { currentCategory } from '../data/seed.js';
+import { DETAIL_FIELDS, detailErrors, keepDetails, type DetailField } from '../category-details.js';
 import type { Product, Variant, Unit, OrganicClaim, SellerDocument } from '../types.js';
 import { APPAREL_SIZES, categoryKind, generateSku, toBackendProduct, toBackendUpdate, type ApparelSize } from '../catalog.js';
 import { portalMetaOf } from '../portal-meta.js';
@@ -83,6 +84,18 @@ const page: Page = async ({ root, params, seller }) => {
   // A product saved under a category name used before 18 Nov 2026 opens under its new name.
   product = { ...product, category: product.category ? currentCategory(product.category) : product.category };
   const docs = (await api.listDocuments()).filter((d) => d.type === 'organic_cert');
+  // The Super Admin's categories: what each asks for, and whether this seller may sell in it yet.
+  const cats = await api.sellerCategories.list().catch(() => [] as api.SellerCategoryView[]);
+  const catOf = (name: string) => cats.find((c) => c.name === name);
+  const fieldTypeOf = (name: string): api.CategoryFieldType => {
+    const known = catOf(name)?.field_type;
+    if (known) return known;
+    const kind = categoryKind(name);
+    return kind === 'apparel' ? 'apparel' : kind === 'produce' ? 'fresh_produce' : 'packaged_food';
+  };
+  const showsOrigin = (name: string) => categoryKind(name) === 'produce';
+  const showsOrganic = (name: string) => ['fresh_produce', 'packaged_food'].includes(fieldTypeOf(name)) && categoryKind(name) !== 'apparel';
+  let details: Record<string, string> = { ...(product.details ?? {}) };
   const approved = seller.status === 'approved';
   const readOnly = seller.status === 'suspended';
   let variants: Variant[] = structuredClone(product.variants);
@@ -113,15 +126,58 @@ const page: Page = async ({ root, params, seller }) => {
     return details;
   };
 
-  // Category: one of the approved categories.
-  const categoryField = () => html`<div class="field category-field">
+  // Category: the seller's categories from the Super Admin's list (all of them if none is chosen yet).
+  // Locked ones are shown but can't be picked until their document is verified.
+  const LOCK_TEXT: Record<api.CategoryLock, string> = {
+    needs_document: 'needs a document',
+    document_pending: 'document waiting for review',
+    document_rejected: 'document rejected',
+    document_expired: 'document expired',
+  };
+  const categoryField = () => {
+    const mine = cats.some((c) => c.chosen) ? cats.filter((c) => c.chosen || c.name === product.category) : cats;
+    const names = mine.map((c) => c.name);
+    const extra = product.category && !names.includes(product.category) ? [product.category] : [];
+    const locked = mine.filter((c) => !c.open && c.name !== product.category);
+    return html`<div class="field category-field">
       <label id="category-label" for="f_category">Category<span class="req" aria-hidden="true"> *</span></label>
-      <select id="f_category" name="category" required aria-describedby="f_category_err">
+      <select id="f_category" name="category" required aria-describedby="f_category_err f_category_hint">
         <option value="">Select category</option>
-        ${SELLER_CATEGORIES.map((c) => html`<option value="${c}" ${product.category === c ? raw('selected') : ''}>${c}</option>`)}
+        ${mine.map((c) => {
+          const off = !c.open && c.name !== product.category;
+          return html`<option value="${c.name}" ${product.category === c.name ? raw('selected') : ''} ${off ? raw('disabled') : ''}>${c.name}${off && c.lock ? ` (locked: ${LOCK_TEXT[c.lock]})` : ''}</option>`;
+        })}
+        ${extra.map((c) => html`<option value="${c}" selected>${c}</option>`)}
       </select>
+      ${locked.length
+        ? html`<p class="hint" id="f_category_hint">${locked.map((c) => c.name).join(', ')} ${locked.length === 1 ? 'opens' : 'open'} once your ${[...new Set(locked.map((c) => c.required_document_label))].join(' / ')} is verified. <a href="#/seller/documents">Documents</a></p>`
+        : html`<p class="hint" id="f_category_hint">More categories: <a href="#/seller/store-settings">Store settings → Categories</a>.</p>`}
       <p class="field-error" id="f_category_err" hidden></p>
     </div>`;
+  };
+
+  const detailInput = (f: DetailField) => {
+    const name = `details_${f.key}`;
+    const value = details[f.key] ?? '';
+    if (f.kind === 'long') return textarea({ name, label: f.label, required: f.required, value, rows: 2, placeholder: f.placeholder ?? '', hint: f.hint, attrs: `data-detail="${f.key}" maxlength="1500"` });
+    if (f.kind === 'choice') return select({ name, label: f.label, required: f.required, value, placeholder: 'Select', options: f.choices ?? [], hint: f.hint, attrs: `data-detail="${f.key}"` });
+    return field({ name, label: f.label, required: f.required, value, type: f.kind === 'date' ? 'date' : 'text', placeholder: f.placeholder ?? '', hint: f.hint, attrs: `data-detail="${f.key}" maxlength="200"` });
+  };
+  const renderDetails = (category: string) => {
+    const box = $('#details-card', root);
+    if (!box) return;
+    const fields = DETAIL_FIELDS[fieldTypeOf(category)] ?? [];
+    box.hidden = !category || fields.length === 0;
+    box.innerHTML = fields.length
+      ? html`<h2 class="card-title">${category} details</h2>
+          <p class="muted small">Shown to customers on the product page. Fields marked <span class="req" aria-hidden="true">*</span> are required to publish.</p>
+          <div class="details-grid">${fields.map(detailInput)}</div>`.value
+      : '';
+  };
+  const readDetails = () => {
+    for (const el of $$<HTMLInputElement>('[data-detail]', root)) details[el.dataset.detail!] = el.value;
+    return keepDetails(fieldTypeOf(($('#f_category', root) as HTMLSelectElement | null)?.value ?? product.category), details);
+  };
 
   const moderationInfo =
     product.status === 'approved' && !isNew
@@ -187,7 +243,7 @@ const page: Page = async ({ root, params, seller }) => {
             <p class="muted small">Platform commission for this category is set by the marketplace and shown on your Earnings page. It can’t be changed here.</p>
           </section>
 
-          <section class="card" id="origin-card" ${apparel ? raw('hidden') : ''}>
+          <section class="card" id="origin-card" ${showsOrigin(product.category) ? '' : raw('hidden')}>
             <h2 class="card-title">Origin, freshness &amp; storage</h2>
             <p class="muted small">Customers rely on these details to judge freshness. Every field marked <span class="req" aria-hidden="true">*</span> is required to publish.</p>
             ${field({ name: 'origin', label: 'Origin', required: true, value: product.origin, placeholder: 'Enter the farm or region, e.g. Mulshi, Pune', hint: 'Farm or region where it is grown.' })}
@@ -211,10 +267,12 @@ const page: Page = async ({ root, params, seller }) => {
             </div>
             ${textarea({ name: 'storage', label: 'Storage guidance', required: true, value: product.storage, rows: 2, placeholder: 'Enter storage guidance, e.g. Refrigerate at 2–4 °C. Best within 3 days.', hint: 'How customers should store it, and how long it keeps.' })}
           </section>
+
+          <section class="card" id="details-card" hidden></section>
         </div>
 
         <aside class="form-side">
-          <section class="card" id="organic-card" ${apparel ? raw('hidden') : ''}>
+          <section class="card" id="organic-card" ${showsOrganic(product.category) ? '' : raw('hidden')}>
             <h2 class="card-title">Organic claim</h2>
             <fieldset class="field">
               <legend class="sr-only">Organic claim</legend>
@@ -222,16 +280,16 @@ const page: Page = async ({ root, params, seller }) => {
                 ${(
                   [
                     ['none', 'No organic claim', 'Product is sold without an organic label.'],
-                    ['certified', 'Certified organic', 'Requires a linked, verified certificate.'],
-                    ['in_conversion', 'In conversion', 'Farm is transitioning; requires a certificate showing conversion status.'],
+                    ['certified', 'Organic', 'Requires a linked, verified organic document.'],
+                    ['in_conversion', 'In conversion', 'Farm is transitioning; requires a document showing conversion status.'],
                   ] as [OrganicClaim, string, string][]
                 ).map(([v, l, d]) => html`<label class="radio-card"><input type="radio" name="organicClaim" value="${v}" ${product.organicClaim === v ? 'checked' : ''}/><span><strong>${l}</strong><span class="muted small">${d}</span></span></label>`)}
               </div>
             </fieldset>
             <div id="cert-field" ${product.organicClaim === 'none' ? raw('hidden') : ''}>
-              ${select({ name: 'certificateId', label: 'Certificate', value: product.certificateId, options: [['', docs.length ? 'Choose a certificate…' : 'No certificates uploaded'], ...docs.map((d) => [d.id, certLabel(d)] as [string, string])] })}
+              ${select({ name: 'certificateId', label: 'Organic document', value: product.certificateId, options: [['', docs.length ? 'Choose a document…' : 'No organic documents uploaded'], ...docs.map((d) => [d.id, certLabel(d)] as [string, string])] })}
               <div id="cert-status">${certStatus(docs.find((d) => d.id === product.certificateId))}</div>
-              <a class="small link" href="#/seller/documents">Upload a certificate</a>
+              <a class="small link" href="#/seller/documents">Upload an organic document</a>
             </div>
           </section>
 
@@ -303,8 +361,10 @@ const page: Page = async ({ root, params, seller }) => {
         minQty: Number(f.minQty),
         maxQty: Number(f.maxQty),
         lowStockThreshold: Number(f.lowStockThreshold),
+        details: readDetails(),
       } as api.ProductInput;
     }
+    const organicShown = showsOrganic(f.category ?? '');
     return {
       ...(isNew ? {} : { id: product.id }),
       ...(product.backendId ? { backendId: product.backendId } : {}),
@@ -321,12 +381,13 @@ const page: Page = async ({ root, params, seller }) => {
       harvestDate: f.harvestDate || undefined,
       packedDate: f.packedDate || undefined,
       storage: f.storage ?? '',
-      organicClaim: (f.organicClaim as OrganicClaim) ?? 'none',
-      certificateId: f.organicClaim !== 'none' ? f.certificateId || undefined : undefined,
+      organicClaim: organicShown ? ((f.organicClaim as OrganicClaim) ?? 'none') : 'none',
+      certificateId: organicShown && f.organicClaim !== 'none' ? f.certificateId || undefined : undefined,
       available: product.available,
       minQty: Number(f.minQty),
       maxQty: Number(f.maxQty),
       lowStockThreshold: Number(f.lowStockThreshold),
+      details: readDetails(),
     } as api.ProductInput;
   };
 
@@ -447,7 +508,7 @@ const page: Page = async ({ root, params, seller }) => {
     $('#preview', root)!.innerHTML = html`
       <div class="preview-img" aria-hidden="${images[0] ? 'false' : 'true'}">${images[0] ? html`<img src="${images[0].url}" alt="Primary product image" />` : p.emoji}</div>
       <div class="preview-body">
-        ${labelOk ? badge(p.organicClaim === 'certified' ? 'Certified organic' : 'In conversion', 'green') : p.organicClaim !== 'none' ? html`<span class="muted small" data-tip="The label shows once a verified, unexpired certificate is linked.">No organic label yet</span>` : ''}
+        ${labelOk ? badge(p.organicClaim === 'certified' ? 'Organic' : 'In conversion', 'green') : p.organicClaim !== 'none' ? html`<span class="muted small" data-tip="The label shows once a verified, unexpired organic document is linked.">No organic label yet</span>` : ''}
         <strong>${p.name || 'Product name'}</strong>
         ${apparel ? '' : html`<span class="muted small">${p.origin || 'Origin'}</span>`}
         ${v ? html`<span>${v.price ? money(v.price) : '₹—'} ${v.mrp && v.mrp > v.price ? html`<s class="muted small">${money(v.mrp)}</s>` : ''} <span class="muted small">/ ${v.label || 'pack'}</span></span>` : ''}
@@ -477,6 +538,7 @@ const page: Page = async ({ root, params, seller }) => {
   });
 
   renderVariants();
+  renderDetails(product.category);
   renderImages();
 
   // Connected from the banner while this form is open: upload the photos picked so far and clear
@@ -565,11 +627,14 @@ const page: Page = async ({ root, params, seller }) => {
   });
   // Show the fields that fit the chosen category.
   on(root, 'change', '#f_category', (_e, el) => {
-    const next = categoryKind((el as HTMLSelectElement).value) === 'apparel';
+    const name = (el as HTMLSelectElement).value;
+    readDetails();
+    renderDetails(name);
+    $('#origin-card', root)!.hidden = !showsOrigin(name);
+    $('#organic-card', root)!.hidden = !showsOrganic(name);
+    const next = categoryKind(name) === 'apparel';
     if (next === apparel) return;
     apparel = next;
-    $('#origin-card', root)!.hidden = apparel;
-    $('#organic-card', root)!.hidden = apparel;
     $('#variant-hint', root)!.textContent = variantHint();
     for (const v of variants) {
       if (apparel) {
@@ -678,6 +743,10 @@ const page: Page = async ({ root, params, seller }) => {
       const input = { ...readForm(), images: imagePaths() };
       // The FastAPI catalogue is written first, after the same checks as saving, so a listing the
       // portal would refuse never reaches it. Publish sends it active; Save draft sends it inactive.
+      if (submit) {
+        const missing = detailErrors(fieldTypeOf(input.category), input.details ?? {});
+        if (Object.keys(missing).length) throw new api.ApiError(422, 'Add the required details for this category.', missing);
+      }
       await api.checkProduct(input, submit);
       const convert = <T>(build: () => T): T => {
         try {

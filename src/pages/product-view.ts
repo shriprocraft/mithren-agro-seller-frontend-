@@ -7,12 +7,21 @@ import * as api from '../api.js';
 import { money, fmtDate, listingState } from '../lib.js';
 import { categoryKind, categoryLabel } from '../catalog.js';
 import type { Product, Variant } from '../types.js';
+import { DETAIL_FIELDS } from '../category-details.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const ORGANIC_LABEL: Record<Product['organicClaim'], string> = {
   none: 'No organic claim',
-  certified: 'Certified organic',
+  certified: 'Organic',
   in_conversion: 'In conversion',
+};
+
+/** Every product detail field by key, for labels and choice names (the category decides which are filled). */
+const DETAIL_BY_KEY = new Map(Object.values(DETAIL_FIELDS).flat().reverse().map((f) => [f.key, f])); // first definition wins
+const detailText = (key: string, value: string) => {
+  const f = DETAIL_BY_KEY.get(key);
+  if (f?.kind === 'date') return fmtDate(value);
+  return f?.choices?.find((c) => c[0] === value)?.[1] ?? value;
 };
 
 const row = (label: string, value: string | Raw | undefined) => html`<div><dt>${label}</dt><dd>${value === '' || value === undefined ? '—' : value}</dd></div>`;
@@ -139,7 +148,13 @@ const page: Page = async ({ root, params, seller }) => {
           </dl>
         </section>
 
-        ${apparel
+        ${Object.keys(p.details ?? {}).length
+          ? html`<section class="card">
+              <h2 class="card-title">${p.category} details</h2>
+              <dl class="kv">${Object.entries(p.details ?? {}).map(([k, v]) => row(DETAIL_BY_KEY.get(k)?.label ?? k, detailText(k, v)))}</dl>
+            </section>`
+          : ''}
+        ${apparel || categoryKind(p.category) !== 'produce'
           ? ''
           : html`<section class="card">
               <h2 class="card-title">Origin, freshness &amp; storage</h2>

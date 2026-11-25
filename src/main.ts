@@ -95,7 +95,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
         : html`<aside class="sidebar" id="sidebar" aria-label="Seller navigation">
             <a href="#/seller" class="brand brand-logo" title="Home">
               <img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="168" height="70" />
-              <span>Seller Portal</span>
+              
             </a>
             <nav>
               ${NAV.map(
@@ -117,7 +117,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
           <div class="scrim" data-action="close-nav" hidden></div>`}
       <div class="main-col">
         <header class="topbar">
-          ${bare ? html`<a href="#/seller" class="brand brand-inline" title="Home"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="36" /><span>Seller Portal</span></a>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
+          ${bare ? html`<a href="#/seller" class="brand brand-inline" title="Home"><img src="assets/mithren-logo.png" alt="Mithren Agro Pvt. Ltd." width="86" height="36" /></a>` : html`<button class="icon-btn menu-btn" type="button" data-action="open-nav" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">${icon('menu', 22)}</button>`}
           ${account
             ? html`<div class="topbar-shop">
                 <span class="shop-avatar" style="background:${seller.brandColor}" aria-hidden="true">${(seller.shopName || account.fullName).slice(0, 1)}</span>
@@ -486,8 +486,8 @@ function openPrototypeControls() {
                 <button class="btn btn-sm" type="button" data-decide="reinstate">Reinstate</button>
               </div>
               <div class="row-wrap">
-                <button class="btn btn-sm" type="button" data-organic="verified">Verify organic certificate</button>
-                <button class="btn btn-sm" type="button" data-organic="rejected">Reject organic certificate</button>
+                <button class="btn btn-sm" type="button" data-organic="verified">Verify organic document</button>
+                <button class="btn btn-sm" type="button" data-organic="rejected">Reject organic document</button>
               </div>
             </fieldset>`
           : ''}
@@ -527,7 +527,7 @@ function openPrototypeControls() {
           const msg = (el.querySelector('#proto-msg') as HTMLTextAreaElement).value;
           try {
             await admin!.reviewOrganic(b.dataset.organic as 'verified', msg);
-            after(b.dataset.organic === 'verified' ? 'Organic certificate verified' : 'Organic certificate rejected', '/seller/documents');
+            after(b.dataset.organic === 'verified' ? 'Organic document verified' : 'Organic document rejected', '/seller/documents');
           } catch (err) {
             toast((err as Error).message, 'error');
           }

@@ -953,6 +953,125 @@ export const uploads = {
   },
 };
 
+// ---------- categories and verification documents (FastAPI backend) ----------
+
+/** Which product details a category asks for (set by the Super Admin on the category). */
+export type CategoryFieldType = 'fresh_produce' | 'packaged_food' | 'cosmetics' | 'apparel' | 'crafts' | 'farm_inputs';
+export type CategoryLock = 'needs_document' | 'document_pending' | 'document_rejected' | 'document_expired';
+
+export interface SellerCategoryView {
+  slug: string;
+  name: string;
+  field_type: CategoryFieldType;
+  required_document: 'fssai' | 'fertilizer_licence' | null;
+  required_document_label: string | null;
+  chosen: boolean;
+  open: boolean;
+  lock: CategoryLock | null;
+}
+
+export interface ServerDocumentView {
+  id: string;
+  doc_type: string;
+  file_name: string;
+  content_type: string;
+  size_bytes: number;
+  doc_number: string | null;
+  expires_on: string | null;
+  status: 'pending' | 'verified' | 'rejected';
+  review_note: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+/** The portal's document kinds as the backend names them (the store logo isn't a verification document). */
+export const SERVER_DOC_TYPE: Partial<Record<ApplicationDocKind, string>> = {
+  pan: 'pan',
+  gst: 'gst',
+  business_registration: 'business_registration',
+  address_proof: 'address_proof',
+  bank_proof: 'bank_proof',
+  organic_cert: 'organic',
+  organic_evidence: 'organic_evidence',
+  fssai: 'fssai',
+  fertilizer_licence: 'fertilizer_licence',
+  additional: 'additional',
+};
+
+/** The nine categories, as a stand-in when the backend can't be reached (or isn't signed in yet). */
+const FALLBACK_CATEGORIES: SellerCategoryView[] = (
+  [
+    ['spinach', 'Spinach', 'fresh_produce', null],
+    ['vegetables', 'Vegetables', 'fresh_produce', null],
+    ['fruits', 'Fruits', 'fresh_produce', null],
+    ['organic-groceries', 'Organic Groceries', 'packaged_food', 'fssai'],
+    ['oil', 'Oil', 'packaged_food', 'fssai'],
+    ['cosmetics', 'Cosmetics', 'cosmetics', null],
+    ['fancy-items', 'Fancy Items', 'crafts', null],
+    ['womens-apparel', 'Women Apparels', 'apparel', null],
+    ['fertilizers', 'Fertilizers', 'farm_inputs', 'fertilizer_licence'],
+  ] as const
+).map(([slug, name, field_type, required_document]) => ({
+  slug,
+  name,
+  field_type,
+  required_document,
+  required_document_label: required_document === 'fssai' ? 'FSSAI licence or registration' : required_document ? 'Fertilizer dealer licence' : null,
+  chosen: false,
+  open: true,
+  lock: null,
+}));
+
+export const sellerCategories = {
+  /** The Super Admin's active categories, with what each needs and whether it is open to this seller. */
+  list: async (): Promise<SellerCategoryView[]> => {
+    if (!sellerSession.isSignedIn()) return FALLBACK_CATEGORIES;
+    try {
+      return (await backendRequest<{ items: SellerCategoryView[] }>('GET', 'seller/categories', undefined, () => undefined)).items;
+    } catch (e) {
+      // No shop details yet (403) or the backend is down: show the usual list.
+      if (e instanceof ApiError && (e.status === 403 || e.status >= 500 || e.status === 0)) return FALLBACK_CATEGORIES;
+      throw e;
+    }
+  },
+  /** Saves the categories this seller sells in: the whole list, or (add) more of them. */
+  save: (slugs: string[], add = false) =>
+    backendRequest<{ items: SellerCategoryView[] }>('PUT', 'seller/categories', { slugs, add }, () => 'categories').then((r) => r.items),
+};
+
+export const serverDocuments = {
+  available: () => sellerSession.isSignedIn(),
+  list: () => backendRequest<{ items: ServerDocumentView[] }>('GET', 'seller/documents', undefined, () => undefined).then((r) => r.items),
+  /** Uploads to Mithren Agro's private storage, where the Super Admin reviews it. */
+  upload: (docType: string, file: File, extra: { docNumber?: string; expiresOn?: string } = {}) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('doc_type', docType);
+    if (extra.docNumber) form.append('doc_number', extra.docNumber);
+    if (extra.expiresOn) form.append('expires_on', extra.expiresOn);
+    return backendRequest<ServerDocumentView>('POST', 'seller/documents', form, (loc) => {
+      const f = String(loc.at(-1) ?? '');
+      return f === 'doc_number' ? 'docNumber' : f === 'expires_on' ? 'expiresOn' : f ? 'file' : undefined;
+    });
+  },
+  /** Opens a document in a new tab: through a 5-minute signed link, or the file itself. */
+  open: async (id: string): Promise<void> => {
+    const tab = window.open('', '_blank');
+    try {
+      const res = await sendWithRefresh('GET', `seller/documents/${encodeURIComponent(id)}/file`, undefined);
+      if (!res.ok) throw new ApiError(res.status, 'This document could not be opened.');
+      const url = (res.headers.get('content-type') ?? '').includes('application/json')
+        ? ((await res.json()) as { url: string }).url
+        : URL.createObjectURL(await res.blob());
+      if (tab && !tab.closed) tab.location.href = url;
+      else window.location.assign(url); // the popup was blocked: open it here instead
+    } catch (e) {
+      tab?.close();
+      throw e;
+    }
+  },
+};
+
 // ---------- orders (FastAPI backend) ----------
 
 /** "In progress": accepted and not yet delivered. New orders are under "To confirm". */
@@ -1414,8 +1533,21 @@ export const application = {
     return view;
   },
   saveBank: (input: BankInput): Promise<ApplicationView> => (local ? local.localApplication.saveBank(input) : http('PUT', '/api/application/bank', input)),
-  uploadDocument: (kind: ApplicationDocKind, file: File, cert?: Record<string, string>): Promise<ApplicationView> => {
-    if (local) return local.localApplication.uploadDocument(kind, file, cert);
+  /**
+   * Browser mode: the file goes to Mithren Agro's private document storage first (where the Super
+   * Admin reviews it), then this browser records it for the application. cert may carry docNumber and
+   * expiresOn (FSSAI, dealer licence) or the organic document's details.
+   */
+  uploadDocument: async (kind: ApplicationDocKind, file: File, cert?: Record<string, string>): Promise<ApplicationView> => {
+    const serverType = SERVER_DOC_TYPE[kind];
+    if (local && serverType && sellerSession.isSignedIn()) {
+      await serverDocuments.upload(serverType, file, {
+        docNumber: cert?.docNumber ?? cert?.certNumber ?? '',
+        expiresOn: cert?.expiresOn ?? cert?.certExpiryDate ?? '',
+      });
+    }
+    const localCert = cert ? Object.fromEntries(Object.entries(cert).filter(([k]) => k !== 'docNumber' && k !== 'expiresOn')) : undefined;
+    if (local) return local.localApplication.uploadDocument(kind, file, localCert && Object.keys(localCert).length ? localCert : undefined);
     const q = new URLSearchParams({ kind, name: file.name, ...(cert ?? {}) });
     return http('POST', `/api/application/documents?${q}`, undefined, { data: file, type: file.type });
   },

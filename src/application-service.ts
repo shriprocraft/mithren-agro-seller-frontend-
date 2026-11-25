@@ -238,7 +238,7 @@ export class ApplicationService {
           const c = normaliseApplicationData({ ...app.data, ...meta.cert, claimsOrganic: true });
           const errors = validateStep(7, c, { ...this.ctx(app, acc), documentKinds: ['organic_cert'] });
           delete errors.doc_organic_cert;
-          if (Object.keys(errors).length) throw new ApiError(422, 'Please fix the certificate details.', errors);
+          if (Object.keys(errors).length) throw new ApiError(422, 'Please fix the organic document details.', errors);
           app.data = { ...app.data, claimsOrganic: true, certBody: c.certBody, certNumber: c.certNumber, certIssueDate: c.certIssueDate, certExpiryDate: c.certExpiryDate };
         }
         this.store.saveOrganic(app.id, { status: 'submitted', documentId: doc.id, reviewerNote: null, reviewedAt: null });

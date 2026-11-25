@@ -176,10 +176,10 @@ export function createSeed(now = new Date()): DB {
 
   const notifications: AppNotification[] = [
     { id: 'n1', sellerId: SELLER_A, topic: 'new_order', title: 'New order awaiting confirmation', body: 'Accept or reject within your 30-minute window.', at: iso(20 * 60_000), read: false, link: '/seller/orders?status=awaiting_confirmation' },
-    { id: 'n2', sellerId: SELLER_A, topic: 'moderation', title: 'Listing rejected: Hass Avocado', body: 'Certificate scope does not cover this product’s origin.', at: iso(1 * DAY), read: false, link: '/seller/products/p_avocado' },
+    { id: 'n2', sellerId: SELLER_A, topic: 'moderation', title: 'Listing rejected: Hass Avocado', body: 'Organic document scope does not cover this product’s origin.', at: iso(1 * DAY), read: false, link: '/seller/products/p_avocado' },
     { id: 'n3', sellerId: SELLER_A, topic: 'low_stock', title: '3 variants are low on stock', body: 'Baby Spinach, Tender Okra and Alphonso Mango box.', at: iso(5 * 3_600_000), read: false, link: '/seller/inventory?filter=low' },
     { id: 'n4', sellerId: SELLER_A, topic: 'settlement', title: 'Settlement processing', body: 'A settlement for last period is being processed.', at: iso(2 * DAY), read: true, link: '/seller/settlements' },
-    { id: 'n5', sellerId: SELLER_A, topic: 'moderation', title: 'Organic certificate expires in 21 days', body: 'Upload a renewed certificate to keep organic labels on your listings.', at: iso(1 * DAY), read: true, link: '/seller/documents' },
+    { id: 'n5', sellerId: SELLER_A, topic: 'moderation', title: 'Organic document expires in 21 days', body: 'Upload a renewed document to keep organic labels on your listings.', at: iso(1 * DAY), read: true, link: '/seller/documents' },
     { id: 'n6', sellerId: SELLER_A, topic: 'moderation', title: 'Green Zucchini is pending approval', body: 'Moderation usually completes within 1 business day.', at: iso(7 * 3_600_000), read: false, link: '/seller/products/p_zucchini' },
     { id: 'n7', sellerId: SELLER_A, topic: 'settlement', title: 'Payout request PR-0007 paid', body: '₹4,200 was included in the weekly settlement.', at: iso(25 * DAY), read: true, link: '/seller/settlements' },
     { id: 'n8', sellerId: SELLER_A, topic: 'order_update', title: 'Order delivered', body: 'The delivery partner marked an order as delivered.', at: iso(14 * 3_600_000), read: true, link: '/seller/orders?status=delivered' },

@@ -57,12 +57,12 @@ const page: Page = async ({ root, seller, query }) => {
           ${view.lastSubmittedAt && view.lastSubmittedAt !== view.submittedAt ? html`<div><dt>Resubmitted</dt><dd>${fmtDate(view.lastSubmittedAt, true)}</dd></div>` : ''}
           ${view.reviewedAt ? html`<div><dt>Last reviewed</dt><dd>${fmtDate(view.reviewedAt, true)}</dd></div>` : ''}
           <div><dt>Last updated</dt><dd>${fmtDate(view.updatedAt, true)}</dd></div>
-          ${view.status === 'incomplete' ? html`<div><dt>Progress</dt><dd>Step ${view.currentStep} of ${STEPS.length}: ${STEPS[view.currentStep - 1]?.label ?? ''}</dd></div>` : ''}
+          ${view.status === 'incomplete' ? html`<div><dt>Progress</dt><dd>Step ${view.currentStep} of ${STEPS.length}: ${STEPS[view.currentStep - 1]?.title ?? ''}</dd></div>` : ''}
         </dl>
       </section>
 
       <section class="card" aria-labelledby="org-h">
-        <h2 id="org-h" class="card-title">Organic certification</h2>
+        <h2 id="org-h" class="card-title">Organic document</h2>
         ${organicSummary(view)}
       </section>
     </div>
@@ -118,10 +118,10 @@ function organicSummary(v: ApplicationView): Raw {
     <p>${badge(CERTIFICATION_STATUS_LABEL[s], s === 'verified' ? 'green' : s === 'submitted' ? 'amber' : s === 'not_submitted' ? 'neutral' : 'red')}</p>
     <dl class="kv kv-compact">
       <div><dt>Issued by</dt><dd>${v.data.certBody || '—'}</dd></div>
-      ${v.data.certNumber ? html`<div><dt>Certificate no.</dt><dd class="mono">${v.data.certNumber}</dd></div>` : ''}
+      ${v.data.certNumber ? html`<div><dt>Document no.</dt><dd class="mono">${v.data.certNumber}</dd></div>` : ''}
       ${v.data.certExpiryDate ? html`<div><dt>Expires</dt><dd>${fmtDate(v.data.certExpiryDate)}</dd></div>` : ''}
     </dl>
-    <p class="muted small">${s === 'verified' ? 'Verified by an authorised reviewer. Organic labels can appear on your approved listings.' : 'Organic labels stay hidden on your listings until a reviewer verifies your certificate.'}</p>
+    <p class="muted small">${s === 'verified' ? 'Verified by an authorised reviewer. Organic labels can appear on your approved listings.' : 'Organic labels stay hidden on your listings until a reviewer verifies your organic document.'}</p>
     ${v.organic.reviewerNote ? html`<p class="small ${s === 'rejected' ? 'error-text' : ''}">Reviewer: ${v.organic.reviewerNote}</p>` : ''}`;
 }
 

@@ -125,6 +125,8 @@ export interface Product {
    * product only once it's approved and listed. A rejected product goes back for review when edited.
    */
   review?: { status: 'pending' | 'approved' | 'rejected'; listing: 'listed' | 'unlisted'; reason?: string };
+  /** The category's product details (expiry, ingredients, fabric, manufacturer FSSAI number...), see category-details.ts. */
+  details?: Record<string, string>;
 }
 
 export type AdjustmentReason =
@@ -284,6 +286,7 @@ export type DocumentType =
   | 'bank_proof'
   | 'address_proof'
   | 'fssai'
+  | 'fertilizer_licence'
   | 'organic_cert'
   | 'business_registration'
   | 'organic_evidence'

@@ -22,6 +22,8 @@ export interface PortalMeta {
   low_stock_threshold?: number;
   emoji?: string;
   custom_category?: string;
+  /** The category's product details; the backend checks them against the category's field type. */
+  details?: Record<string, string>;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,6 +50,8 @@ export function portalMetaOf(p: Product): PortalMeta {
     ...(p.emoji ? { emoji: p.emoji.slice(0, 8) } : {}),
     // Always sent, so clearing it (another category chosen) reaches other devices too.
     custom_category: p.category === 'Others' ? (p.customCategory ?? '').trim().slice(0, 40) : '',
+    // Always sent whole, so the backend checks the category's required details.
+    details: { ...(p.details ?? {}) },
   };
 }
 
@@ -75,4 +79,5 @@ export function applyPortalMeta(p: Product, m: PortalMeta): void {
   if (m.low_stock_threshold !== undefined) p.lowStockThreshold = m.low_stock_threshold;
   if (m.emoji !== undefined) p.emoji = m.emoji;
   if (m.custom_category !== undefined) p.customCategory = m.custom_category || undefined;
+  if (m.details !== undefined && m.details && typeof m.details === 'object') p.details = { ...m.details };
 }

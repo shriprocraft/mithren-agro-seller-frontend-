@@ -4,7 +4,7 @@
 // checks), so both sides apply exactly the same rules. Keep this module free of
 // DOM and Node APIs.
 
-import { SELLER_CATEGORIES, currentCategory } from './data/seed.js';
+import { currentCategory } from './data/seed.js';
 import { ApiError } from './errors.js';
 import type { Seller, SellerDocument, DocumentType } from './types.js';
 
@@ -22,6 +22,9 @@ export type ApplicationDocKind =
   | 'bank_proof'
   | 'organic_cert'
   | 'organic_evidence'
+  /** Needed for categories the Super Admin marks with required_document (Oil, Organic Groceries; Fertilizers). */
+  | 'fssai'
+  | 'fertilizer_licence'
   | 'logo'
   | 'additional';
 
@@ -159,12 +162,14 @@ export const GST_STATUSES: [GstStatus, string][] = [
 
 export const DOC_KIND_LABEL: Record<ApplicationDocKind, string> = {
   pan: 'PAN card',
-  gst: 'GST registration certificate',
-  business_registration: 'Business registration certificate',
+  gst: 'GST registration document',
+  business_registration: 'Business registration document',
   address_proof: 'Business address proof',
   bank_proof: 'Bank proof (cancelled cheque or statement)',
-  organic_cert: 'Organic certificate',
-  organic_evidence: 'Supporting organic evidence',
+  organic_cert: 'Organic document',
+  organic_evidence: 'Supporting organic document',
+  fssai: 'FSSAI licence or registration',
+  fertilizer_licence: 'Fertilizer dealer licence',
   logo: 'Store logo',
   additional: 'Additional document',
 };
@@ -191,15 +196,16 @@ export const GST_STATE_CODES: Record<string, string> = {
 /** The state a GST state code belongs to, if any. */
 export const gstStateName = (code: string) => Object.keys(GST_STATE_CODES).find((s) => GST_STATE_CODES[s] === code);
 
+/** label: the short name in the step bar (it always fits); title: the step's full heading. */
 export const STEPS = [
-  { n: 1, key: 'account', label: 'Account verification' },
-  { n: 2, key: 'shop', label: 'Shop & owner details' },
-  { n: 3, key: 'address', label: 'Address & service area' },
-  { n: 4, key: 'products', label: 'Products & pickup' },
-  { n: 5, key: 'kyc', label: 'Business & KYC' },
-  { n: 6, key: 'bank', label: 'Bank & payout' },
-  { n: 7, key: 'organic', label: 'Organic certification' },
-  { n: 8, key: 'review', label: 'Review & submit' },
+  { n: 1, key: 'account', label: 'Account', title: 'Account verification' },
+  { n: 2, key: 'shop', label: 'Shop', title: 'Shop & owner details' },
+  { n: 3, key: 'address', label: 'Address', title: 'Address & service area' },
+  { n: 4, key: 'products', label: 'Products', title: 'Products & pickup' },
+  { n: 5, key: 'kyc', label: 'KYC', title: 'Business & KYC' },
+  { n: 6, key: 'bank', label: 'Bank', title: 'Bank & payout' },
+  { n: 7, key: 'organic', label: 'Documents', title: 'Documents' },
+  { n: 8, key: 'review', label: 'Review', title: 'Review & submit' },
 ] as const;
 
 /** Payout details are needed before approval because settlements are paid by bank transfer. */
@@ -247,7 +253,8 @@ export function normaliseApplicationData(input: unknown): ApplicationData {
     city: str(i.city, 60),
     pincode: str(i.pincode, 6),
     serviceAreas: strList(i.serviceAreas),
-    productTypes: [...new Set(strList(i.productTypes, 20).map(currentCategory))].filter((c) => SELLER_CATEGORIES.includes(c)),
+    // Category names from the Super Admin's list (older names are mapped to today's).
+    productTypes: [...new Set(strList(i.productTypes, 20).map(currentCategory))],
     pickupSameAsBusiness: i.pickupSameAsBusiness !== false,
     pickupAddress: str(i.pickupAddress, 240),
     pickupPincode: str(i.pickupPincode, 6),
@@ -328,6 +335,8 @@ export interface ValidationContext {
   emailVerified: boolean;
   phoneVerified: boolean;
   today?: string;
+  /** Step 7: set when every chosen category needs a document and none of those documents is uploaded. */
+  categoryDocsMissing?: string;
 }
 
 type Errors = Record<string, string>;
@@ -397,13 +406,14 @@ export function validateStep(step: number, d: ApplicationData, ctx: ValidationCo
       if (PAYOUT_DETAILS_REQUIRED && docMissing('bank_proof')) e.doc_bank_proof = 'Upload a cancelled cheque or bank statement.';
       break;
     case 7:
-      if (d.claimsOrganic === null) e.claimsOrganic = 'Tell us whether you sell certified organic products.';
+      if (ctx.categoryDocsMissing) e.categoryDocs = ctx.categoryDocsMissing;
+      if (d.claimsOrganic === null) e.claimsOrganic = 'Tell us whether you sell organic products with an organic document.';
       if (d.claimsOrganic) {
-        if (d.certBody.length < 3) e.certBody = 'Enter the certification body or issuing organisation.';
+        if (d.certBody.length < 3) e.certBody = 'Enter the organisation that issued your organic document.';
         if (d.certIssueDate && d.certIssueDate > today) e.certIssueDate = 'Issue date can’t be in the future.';
-        if (d.certExpiryDate && d.certExpiryDate <= today) e.certExpiryDate = 'This certificate has expired. Upload a current certificate.';
+        if (d.certExpiryDate && d.certExpiryDate <= today) e.certExpiryDate = 'This document has expired. Upload a current one.';
         if (d.certIssueDate && d.certExpiryDate && d.certExpiryDate <= d.certIssueDate) e.certExpiryDate = 'Expiry date must be after the issue date.';
-        if (docMissing('organic_cert')) e.doc_organic_cert = 'Upload your organic certificate.';
+        if (docMissing('organic_cert')) e.doc_organic_cert = 'Upload your organic document.';
       }
       break;
   }
@@ -513,9 +523,10 @@ export function canUpload(status: ApplicationStatus, kind: ApplicationDocKind): 
     case 'changes_requested':
       return true;
     case 'pending':
-      return kind === 'additional';
+      // Category documents can be added while waiting: they open categories after approval.
+      return ['additional', 'fssai', 'fertilizer_licence'].includes(kind);
     case 'approved':
-      return ['organic_cert', 'organic_evidence', 'additional', 'logo'].includes(kind);
+      return ['organic_cert', 'organic_evidence', 'additional', 'logo', 'fssai', 'fertilizer_licence'].includes(kind);
     case 'suspended':
       return kind === 'additional';
     default:
@@ -570,6 +581,8 @@ const DOC_TO_WORKSPACE: Record<ApplicationDocKind, DocumentType> = {
   bank_proof: 'bank_proof',
   organic_cert: 'organic_cert',
   organic_evidence: 'organic_evidence',
+  fssai: 'fssai',
+  fertilizer_licence: 'fertilizer_licence',
   logo: 'logo',
   additional: 'additional',
 };

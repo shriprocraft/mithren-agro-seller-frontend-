@@ -14,8 +14,9 @@ test('the stored details cover what other devices need, within the backend limit
   assert.deepEqual(meta, {
     origin: 'Ratnagiri', seasonality: 'seasonal', season_months: [4, 5], harvest_date: '2026-04-01', storage: 'Cool, dry place',
     organic_claim: 'none', status: 'approved', available: true, archived: false, min_qty: 1, max_qty: 5, low_stock_threshold: 3, emoji: '🥭',
-    custom_category: '',
+    custom_category: '', details: {},
   });
+  assert.deepEqual(portalMetaOf({ ...product(), details: { best_before: '2027-01-01' } }).details, { best_before: '2027-01-01' });
   assert.equal(portalMetaOf({ ...product(), category: 'Others', customCategory: ' Honey ' }).custom_category, 'Honey');
   assert.equal(portalMetaOf({ ...product(), origin: 'x'.repeat(200) }).origin.length, 120);
   assert.deepEqual(portalStateOf(product()), { status: 'approved', available: true, archived: false });

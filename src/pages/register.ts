@@ -8,7 +8,6 @@ import { html, raw, on, $, $$, formValues, type Raw } from '../ui/dom.js';
 import { field, textarea, select, icon, callout, showFieldErrors, badge } from '../ui/components.js';
 import { toast } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { SELLER_CATEGORIES } from '../data/seed.js';
 import { fmtDate, fileSize } from '../lib.js';
 import {
   STEPS,
@@ -100,6 +99,35 @@ const page: Page = async ({ root, account: initialAccount }) => {
 
   const docsOf = (kind: ApplicationDocKind) => (view?.documents ?? []).filter((d) => d.kind === kind);
 
+  // The Super Admin's categories (what each needs), and this seller's documents on the server.
+  let categories: api.SellerCategoryView[] = [];
+  let serverDocs: api.ServerDocumentView[] = [];
+  async function loadCategories() {
+    categories = await api.sellerCategories.list().catch(() => categories);
+    if (account && api.serverDocuments.available()) serverDocs = await api.serverDocuments.list().catch(() => serverDocs);
+  }
+  /** The document types the chosen categories need, with the categories that need each. */
+  const categoryDocNeeds = (): { kind: 'fssai' | 'fertilizer_licence'; label: string; categories: string[] }[] => {
+    const out = new Map<'fssai' | 'fertilizer_licence', { kind: 'fssai' | 'fertilizer_licence'; label: string; categories: string[] }>();
+    for (const c of categories) {
+      if (!c.required_document || !data.productTypes.includes(c.name)) continue;
+      const entry = out.get(c.required_document) ?? { kind: c.required_document, label: c.required_document_label ?? DOC_KIND_LABEL[c.required_document], categories: [] };
+      entry.categories.push(c.name);
+      out.set(c.required_document, entry);
+    }
+    return [...out.values()];
+  };
+  const hasDoc = (kind: ApplicationDocKind) =>
+    docsOf(kind).some((d) => d.status !== 'rejected') || serverDocs.some((d) => d.doc_type === api.SERVER_DOC_TYPE[kind] && d.status !== 'rejected');
+  /** Step 7 can't finish when every chosen category needs a document and none of them is uploaded. */
+  function categoryDocsMissing(): string | undefined {
+    const chosen = categories.filter((c) => data.productTypes.includes(c.name));
+    if (!chosen.length || chosen.some((c) => !c.required_document)) return undefined;
+    const needs = categoryDocNeeds();
+    if (needs.some((n) => hasDoc(n.kind))) return undefined;
+    return `Every category you chose needs a document (${needs.map((n) => n.label).join(' or ')}). Upload one, or choose another category in Step 4, so you can sell once approved.`;
+  }
+
   // ---------- rendering ----------
   const render = () => {
     const furthest = view ? Math.max(view.currentStep, step) : 1;
@@ -113,7 +141,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
           ? callout('warn', 'A reviewer has asked for changes', html`${view.reviewerMessage ?? ''}${view.requestedItems.length ? html`<ul class="requested">${view.requestedItems.map((i) => html`<li>${i}</li>`)}</ul>` : ''}`)
           : ''}
         <nav aria-label="Application progress">
-          <p class="sr-only" aria-live="polite">Step ${step} of ${STEPS.length}: ${STEPS[step - 1]!.label}</p>
+          <p class="sr-only" aria-live="polite">Step ${step} of ${STEPS.length}: ${STEPS[step - 1]!.title}</p>
           <ol class="wizard-steps wizard-8">
             ${STEPS.map((s) => {
               const state = s.n < step ? 'done' : s.n === step ? 'current' : '';
@@ -126,7 +154,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
           </ol>
         </nav>
         <form class="card register-card" novalidate data-role="step">
-          <h2 class="card-title">Step ${step} of ${STEPS.length}: ${STEPS[step - 1]!.label}</h2>
+          <h2 class="card-title">Step ${step} of ${STEPS.length}: ${STEPS[step - 1]!.title}</h2>
           ${body()}
           <p class="form-error" role="alert" hidden></p>
           ${actions()}
@@ -350,8 +378,14 @@ const page: Page = async ({ root, account: initialAccount }) => {
   const stepProducts = () => html`
     <fieldset class="field" id="f_productTypes" tabindex="-1">
       <legend>Product types and categories<span class="req" aria-hidden="true"> *</span></legend>
-      <div class="chip-row">${SELLER_CATEGORIES.map((c) => html`<label class="chip"><input type="checkbox" name="productTypes" value="${c}" ${data.productTypes.includes(c) ? raw('checked') : ''}/><span>${c}</span></label>`)}</div>
+      <div class="chip-row">${categories.map((c) => html`<label class="chip"><input type="checkbox" name="productTypes" value="${c.name}" ${data.productTypes.includes(c.name) ? raw('checked') : ''}/><span>${c.name}</span></label>`)}</div>
       <p class="field-error" id="f_productTypes_err" hidden></p>
+      ${categories.some((c) => c.required_document)
+        ? html`<p class="hint">${categories
+            .filter((c) => c.required_document)
+            .map((c) => `${c.name}: ${c.required_document_label}`)
+            .join(' · ')}. You can upload these in Step 7 (Documents) or later; until then those categories stay locked.</p>`
+        : ''}
     </fieldset>
     <h3 class="sub-title">Pickup location</h3>
     <label class="check-row"><input type="checkbox" name="pickupSameAsBusiness" ${data.pickupSameAsBusiness ? raw('checked') : ''}/> <span>Orders are picked up from my business address</span></label>
@@ -408,28 +442,54 @@ const page: Page = async ({ root, account: initialAccount }) => {
     <h3 class="sub-title">Bank proof</h3>
     ${docSlot('bank_proof', PAYOUT_DETAILS_REQUIRED, 'Upload a cancelled cheque or bank statement: PDF, JPG or PNG, up to 5 MB.')}`;
 
+  const categoryDocBlock = (need: { kind: 'fssai' | 'fertilizer_licence'; label: string; categories: string[] }) => {
+    const onServer = serverDocs.find((d) => d.doc_type === need.kind);
+    const state = onServer
+      ? onServer.status === 'verified'
+        ? badge('Verified', 'green')
+        : onServer.status === 'rejected'
+          ? badge('Rejected', 'red')
+          : badge('Waiting for review', 'amber')
+      : '';
+    return html`<div class="cat-doc">
+      <p><strong>${need.label}</strong> ${state} <span class="muted small block">For ${need.categories.join(', ')}. Optional now: without it, ${need.categories.length > 1 ? 'these categories stay' : 'this category stays'} locked until you upload it and Mithren Agro verifies it.</span></p>
+      ${onServer?.status === 'rejected' && onServer.review_note ? html`<p class="small error-text">${onServer.review_note}</p>` : ''}
+      <div class="row-2">
+        ${field({ name: `docnum_${need.kind}`, label: need.kind === 'fssai' ? 'FSSAI number' : 'Licence number', value: onServer?.doc_number ?? '', required: need.kind === 'fssai', placeholder: need.kind === 'fssai' ? 'Enter the 14-digit FSSAI number' : 'Enter the licence number', attrs: need.kind === 'fssai' ? 'inputmode="numeric" maxlength="17"' : 'maxlength="60"' })}
+        ${field({ name: `docexp_${need.kind}`, label: 'Valid until', type: 'date', value: onServer?.expires_on ?? '', required: true, hint: 'The expiry date on the document.' })}
+      </div>
+      ${docSlot(need.kind, false, 'Enter the number and date above, then upload the document: PDF, JPG or PNG, up to 5 MB.')}
+    </div>`;
+  };
+
   const stepOrganic = () => {
     const status = view?.organic.status ?? 'not_submitted';
+    const needs = categoryDocNeeds();
     return html`
+      ${needs.length
+        ? html`<h3 class="sub-title">Documents for your categories</h3>
+            <div class="field" id="f_categoryDocs" tabindex="-1">${needs.map(categoryDocBlock)}<p class="field-error" id="f_categoryDocs_err" hidden></p></div>
+            <h3 class="sub-title">Organic</h3>`
+        : ''}
       <fieldset class="field" id="f_claimsOrganic" tabindex="-1">
-        <legend>Do you sell certified organic products?<span class="req" aria-hidden="true"> *</span></legend>
+        <legend>Do you sell organic products with an organic document?<span class="req" aria-hidden="true"> *</span></legend>
         <div class="radio-stack">
-          <label class="radio-card"><input type="radio" name="claimsOrganic" value="no" ${data.claimsOrganic === false ? raw('checked') : ''}/><span><strong>No</strong><span class="muted small">My products are sold without an organic label. That’s fine: certification isn’t required to sell.</span></span></label>
-          <label class="radio-card"><input type="radio" name="claimsOrganic" value="yes" ${data.claimsOrganic ? raw('checked') : ''}/><span><strong>Yes, certified organic</strong><span class="muted small">Upload your certificate. It stays unverified until a reviewer checks it.</span></span></label>
+          <label class="radio-card"><input type="radio" name="claimsOrganic" value="no" ${data.claimsOrganic === false ? raw('checked') : ''}/><span><strong>No</strong><span class="muted small">My products are sold without an organic label. That’s fine: an organic document isn’t required to sell.</span></span></label>
+          <label class="radio-card"><input type="radio" name="claimsOrganic" value="yes" ${data.claimsOrganic ? raw('checked') : ''}/><span><strong>Yes, organic with a document</strong><span class="muted small">Upload your organic document. It stays unverified until a reviewer checks it.</span></span></label>
         </div>
         <p class="field-error" id="f_claimsOrganic_err" hidden></p>
       </fieldset>
       <div id="organic-wrap" ${data.claimsOrganic ? '' : raw('hidden')}>
-        <p class="cert-status">Certification status: ${certBadge(status)}</p>
-        ${field({ name: 'certBody', label: 'Certification body or issuing organisation', value: data.certBody, required: true, placeholder: 'Enter the certification body, e.g. APEDA-accredited agency', attrs: 'maxlength="120"' })}
-        ${field({ name: 'certNumber', label: 'Certificate number', value: data.certNumber, placeholder: 'Enter your certificate number', hint: 'If your certificate has one.', attrs: 'maxlength="60"' })}
+        <p class="cert-status">Organic document status: ${certBadge(status)}</p>
+        ${field({ name: 'certBody', label: 'Issuing organisation', value: data.certBody, required: true, placeholder: 'Enter who issued it, e.g. an APEDA-accredited agency or PGS-India', attrs: 'maxlength="120"' })}
+        ${field({ name: 'certNumber', label: 'Document number', value: data.certNumber, placeholder: 'Enter the document number', hint: 'If your document has one.', attrs: 'maxlength="60"' })}
         <div class="row-2">
           ${field({ name: 'certIssueDate', label: 'Issue date', type: 'date', value: data.certIssueDate, hint: 'If available. Use the date picker.' })}
           ${field({ name: 'certExpiryDate', label: 'Expiry date', type: 'date', value: data.certExpiryDate, hint: 'If available. Use the date picker.' })}
         </div>
         <div class="doc-slots">
-          ${docSlot('organic_cert', true, 'Upload your organic certificate: PDF, JPG or PNG, up to 5 MB.')}
-          ${docSlot('organic_evidence', false, 'Optional: inspection reports, farm photos or supplier certificates.')}
+          ${docSlot('organic_cert', true, 'Upload your organic document: PDF, JPG or PNG, up to 5 MB.')}
+          ${docSlot('organic_evidence', false, 'Optional: inspection reports, farm photos or supplier documents.')}
         </div>
       </div>`;
   };
@@ -449,7 +509,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${section(4, 'Products and pickup', html`${row('Categories', d.productTypes.join(', '))}${row('Pickup', d.pickupSameAsBusiness ? 'Business address' : `${d.pickupAddress}, ${d.pickupPincode}`)}`)}
       ${section(5, 'Business and KYC', html`${row('Business type', BUSINESS_TYPES.find((b) => b[0] === d.businessType)?.[1] ?? '')}${row('GST', GST_STATUSES.find((g) => g[0] === d.gstStatus)?.[1] ?? '')}${row('GSTIN', d.gstin)}${row('PAN', d.pan ? `${d.pan.slice(0, 2)}•••••${d.pan.slice(-3)}` : '')}${row(kycRules(d).registrationLabel, d.registrationNumber)}`)}
       ${section(6, 'Bank and payout', html`${row('Account', view?.bank ? `${view.bank.holderName} · ${maskAccount(view.bank.last4)} · ${view.bank.ifsc}` : 'Not added')}`)}
-      ${section(7, 'Organic certification', html`${row('Claim', d.claimsOrganic ? `Yes — ${d.certBody}${d.certNumber ? `, ${d.certNumber}` : ''}` : 'No organic claim')}${d.claimsOrganic ? row('Status', 'Unverified until a reviewer checks your certificate') : ''}`)}
+      ${section(7, 'Documents', html`${categoryDocNeeds().map((n) => row(n.label, hasDoc(n.kind) ? `Uploaded, for ${n.categories.join(', ')}` : `Not uploaded: ${n.categories.join(', ')} stay locked until it is`))}${row('Organic', d.claimsOrganic ? `Yes — ${d.certBody}${d.certNumber ? `, ${d.certNumber}` : ''}` : 'No organic claim')}${d.claimsOrganic ? row('Status', 'Unverified until a reviewer checks your organic document') : ''}`)}
       <section class="review-block">
         <h3 class="sub-title">Documents</h3>
         <ul class="doc-check">
@@ -460,7 +520,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
         </ul>
       </section>
       <div class="field" id="f_consent" tabindex="-1">
-        <label class="check-row"><input type="checkbox" name="consent" /> <span>I confirm this information is accurate, that any organic claim is truthful and backed by a valid certificate, and I agree to the seller terms.</span></label>
+        <label class="check-row"><input type="checkbox" name="consent" /> <span>I confirm this information is accurate, that any organic claim is truthful and backed by a valid document, and I agree to the seller terms.</span></label>
         <p class="field-error" id="f_consent_err" hidden></p>
       </div>`;
   };
@@ -520,6 +580,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     bankProvided: !!view?.bank,
     emailVerified: !!account?.emailVerified,
     phoneVerified: !!account?.phoneVerified,
+    categoryDocsMissing: step === 7 ? categoryDocsMissing() : undefined,
   });
 
   async function guarded(btn: HTMLButtonElement | null, label: string, fn: () => Promise<void>) {
@@ -593,6 +654,14 @@ const page: Page = async ({ root, account: initialAccount }) => {
             ? { pan_number: data.pan || null, gstin: data.gstin || null }
             : null;
     if (patch) await withSeller(a, (id) => api.shopDetails.update(id, patch));
+    if (step === 4 && api.sellerSession.isSignedIn()) {
+      // The categories this seller sells in, by the Super Admin's slugs.
+      const slugs = categories.filter((c) => data.productTypes.includes(c.name)).map((c) => c.slug);
+      categories = await api.sellerCategories.save(slugs).catch((e: api.ApiError) => {
+        if (e.status === 422) throw e;
+        return categories; // saved again next time; the backend isn't required for the application
+      });
+    }
   }
 
   async function goTo(target: number, validate: boolean) {
@@ -613,6 +682,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       view = await api.application.saveDraft(data, target, 1);
     }
     step = target;
+    if (step >= 4) await loadCategories();
     render();
     window.scrollTo(0, 0);
   }
@@ -659,6 +729,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     if (account) clearAutosave(account.userId);
   }
 
+  if (account && step >= 4) await loadCategories();
   render();
   if (account && step >= 2 && readAutosave(account.userId)) {
     // Restored from this tab after a reload: put it on the server too.
@@ -831,11 +902,26 @@ const page: Page = async ({ root, account: initialAccount }) => {
     const max = isLogo ? UPLOAD_LIMITS.logoMaxBytes : UPLOAD_LIMITS.maxBytes;
     if (!types.includes(file.type)) return showError('That file type isn’t accepted.', { [`doc_${kind}`]: isLogo ? 'Logos must be PNG or JPG images.' : 'Upload a PDF, JPG or PNG file.' });
     if (file.size > max) return showError('That file is too large.', { [`doc_${kind}`]: `Files must be ${max / 1048576} MB or smaller.` });
+    let extra: Record<string, string> | undefined;
+    if (kind === 'fssai' || kind === 'fertilizer_licence') {
+      const number = (root.querySelector<HTMLInputElement>(`[name=docnum_${kind}]`)?.value ?? '').replace(/\s/g, '');
+      const expiresOn = root.querySelector<HTMLInputElement>(`[name=docexp_${kind}]`)?.value ?? '';
+      const errors: Record<string, string> = {};
+      if (kind === 'fssai' && !/^\d{14}$/.test(number)) errors[`docnum_${kind}`] = 'The FSSAI number has 14 digits.';
+      if (!expiresOn) errors[`docexp_${kind}`] = 'Enter the date it is valid until.';
+      else if (expiresOn < new Date().toISOString().slice(0, 10)) errors[`docexp_${kind}`] = 'This document has expired. Upload the renewed one.';
+      if (Object.keys(errors).length) {
+        input.value = '';
+        return showError('Enter the document’s number and date first.', errors);
+      }
+      extra = { docNumber: number, expiresOn };
+    }
     void guarded(null, '', async () => {
       if (step >= 2) collect();
-      view = await api.application.uploadDocument(kind, file);
+      view = await api.application.uploadDocument(kind, file, extra);
+      if (api.serverDocuments.available()) serverDocs = await api.serverDocuments.list().catch(() => serverDocs);
       render();
-      toast(`${DOC_KIND_LABEL[kind]} uploaded. It stays unverified until reviewed.`);
+      toast(`${DOC_KIND_LABEL[kind]} uploaded. It stays unverified until Mithren Agro reviews it.`);
     });
   });
 

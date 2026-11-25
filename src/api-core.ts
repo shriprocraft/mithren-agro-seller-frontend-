@@ -264,6 +264,8 @@ function validateProduct(input: ProductInput, submitting: boolean): Record<strin
   }
   if (input.variants.length === 0) e.variants = 'Add at least one variant.';
   const apparel = categoryKind(input.category) === 'apparel';
+  // Origin, harvest and storage belong to produce (Spinach, Vegetables, Fruits, Organic Groceries) only.
+  const produce = categoryKind(input.category) === 'produce';
   const skus = new Set<string>();
   const sizes = new Set<string>();
   input.variants.forEach((v, i) => {
@@ -295,14 +297,14 @@ function validateProduct(input: ProductInput, submitting: boolean): Record<strin
     if (input.description.trim().length < 20) e.description = 'Write at least 20 characters so customers know what they’re buying.';
     // Apparel and accessories have no origin, freshness or organic fields.
     // Origin, freshness and storage: every field is required to publish (drafts may be incomplete).
-    if (!apparel && !input.origin.trim()) e.origin = 'Origin is required to publish.';
-    if (!apparel && !input.harvestDate) e.harvestDate ??= 'Harvest date is required to publish.';
-    if (!apparel && !input.packedDate) e.packedDate ??= 'Packed date is required to publish.';
-    if (!apparel && !input.storage.trim()) e.storage = 'Storage guidance is required to publish.';
+    if (produce && !input.origin.trim()) e.origin = 'Origin is required to publish.';
+    if (produce && !input.harvestDate) e.harvestDate ??= 'Harvest date is required to publish.';
+    if (produce && !input.packedDate) e.packedDate ??= 'Packed date is required to publish.';
+    if (produce && !input.storage.trim()) e.storage = 'Storage guidance is required to publish.';
     if (apparel && input.organicClaim !== 'none') e.organicClaim = 'Organic claims apply to produce only.';
     else if (input.organicClaim !== 'none') {
       const cert = db.documents.find((d) => d.id === input.certificateId && d.sellerId === session.sellerId && d.type === 'organic_cert');
-      if (!cert) e.certificateId = 'Link an organic certificate to make an organic claim.';
+      if (!cert) e.certificateId = 'Link an organic document to make an organic claim.';
       else if (cert.expiresAt && cert.expiresAt < new Date().toISOString().slice(0, 10)) e.certificateId = 'This certificate has expired.';
     }
   }

@@ -26,7 +26,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const outOfStock = m.lowStock.filter((l) => l.stock === 0).length;
   if (m.lowStock.length) alerts.push(alertItem(outOfStock ? 'red' : 'amber', `${m.lowStock.length} variant${m.lowStock.length > 1 ? 's' : ''} low on stock${outOfStock ? ` (${outOfStock} out of stock)` : ''}`, m.lowStock.slice(0, 3).map((l) => `${l.name} ${l.variant}`).join(', '), '/seller/inventory?filter=low', 'Restock'));
   if (m.certExpiringDays !== null && m.certExpiringDays <= 30)
-    alerts.push(alertItem(m.certExpiringDays <= 0 ? 'red' : 'amber', m.certExpiringDays <= 0 ? 'Organic certificate has expired' : `Organic certificate expires in ${m.certExpiringDays} days`, 'Organic labels are removed from listings when the certificate expires.', '/seller/documents', 'Upload renewal'));
+    alerts.push(alertItem(m.certExpiringDays <= 0 ? 'red' : 'amber', m.certExpiringDays <= 0 ? 'Organic document has expired' : `Organic document expires in ${m.certExpiringDays} days`, 'Organic labels are removed from listings when the document expires.', '/seller/documents', 'Upload renewal'));
 
   root.innerHTML = html`
     ${pageHeader(

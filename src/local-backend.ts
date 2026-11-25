@@ -404,7 +404,7 @@ export const localAdmin = {
   async reviewOrganic(decision: 'verified' | 'rejected', note: string) {
     const app = store.getApplicationByUser(currentUser().id);
     const org = app ? store.getOrganic(app.id) : null;
-    if (!org?.documentId) throw new ApiError(404, 'No organic certificate has been uploaded.');
+    if (!org?.documentId) throw new ApiError(404, 'No organic document has been uploaded.');
     service.adminReviewDocument(org.documentId, decision, 'Preview reviewer', note);
   },
   async status() {

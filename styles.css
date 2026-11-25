@@ -4686,3 +4686,46 @@ label.upload-btn:hover {
 button[aria-busy='true'] {
   cursor: wait;
 }
+
+/* ---------- category documents, categories and product details ---------- */
+.cat-doc {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: var(--surface-2);
+}
+.cat-doc > p:first-child {
+  margin-top: 0;
+}
+.cat-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cat-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+.cat-add select {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 0 16px;
+}
+.details-grid .field:has(textarea) {
+  grid-column: 1 / -1;
+}

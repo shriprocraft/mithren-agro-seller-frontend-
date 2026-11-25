@@ -8,9 +8,10 @@ test('the seller categories are the nine storefront categories', () => {
   assert.deepEqual(CATEGORIES, ['Spinach', 'Vegetables', 'Fruits', 'Organic Groceries', 'Oil', 'Cosmetics', 'Fancy Items', 'Women Apparels', 'Fertilizers']);
 });
 
-test('old category names in saved applications move to the new ones; unknown ones are dropped', () => {
-  const d = normaliseApplicationData({ ...emptyApplicationData(), productTypes: ['Women Apparel', 'Leafy Greens', 'Herbs', 'Exotic', 'Oil', 'Not a category'] });
-  assert.deepEqual(d.productTypes, ['Women Apparels', 'Spinach', 'Vegetables', 'Oil']);
+test('old category names in saved applications move to the new ones; new Super Admin categories are kept', () => {
+  // The Super Admin adds categories (e.g. Cattle Feed); the backend checks names against its list.
+  const d = normaliseApplicationData({ ...emptyApplicationData(), productTypes: ['Women Apparel', 'Leafy Greens', 'Herbs', 'Exotic', 'Oil', 'Cattle Feed'] });
+  assert.deepEqual(d.productTypes, ['Women Apparels', 'Spinach', 'Vegetables', 'Oil', 'Cattle Feed']);
 });
 
 test('every selectable state has a GST state code', () => {

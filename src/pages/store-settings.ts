@@ -24,6 +24,7 @@ const CHANNELS: [NotificationChannel, string][] = [
 
 const SECTIONS = [
   ['profile', 'Shop profile'],
+  ['categories', 'Categories'],
   ['pickup', 'Pickup & service areas'],
   ['hours', 'Hours & holidays'],
   ['fulfilment', 'Fulfilment'],
@@ -37,6 +38,37 @@ const page: Page = async ({ root, query, seller, refresh }) => {
   const staffPage = paginate(seller.staff, query, 'staff');
   let areas = [...seller.serviceAreas];
   let holidays = [...seller.holidays];
+  // The Super Admin's categories, with which ones this seller sells in and which are open.
+  let cats = await api.sellerCategories.list().catch(() => [] as api.SellerCategoryView[]);
+  const canChangeCategories = api.sellerSession.isSignedIn() && !readOnly;
+  const LOCK: Record<api.CategoryLock, string> = {
+    needs_document: 'Upload document',
+    document_pending: 'Document waiting for review',
+    document_rejected: 'Document rejected: upload again',
+    document_expired: 'Document expired: upload the renewed one',
+  };
+  const categoriesCard = () => {
+    const mine = cats.filter((c) => c.chosen);
+    const others = cats.filter((c) => !c.chosen);
+    return html`
+      <div class="card-head"><h2 class="card-title">Categories</h2></div>
+      <p class="muted small">Categories are set by Mithren Agro. Some need a document before you can sell in them; they open once Mithren Agro verifies it.</p>
+      ${mine.length
+        ? html`<ul class="cat-list">${mine.map(
+            (c) => html`<li>
+              <div><strong>${c.name}</strong>${c.required_document_label ? html`<span class="muted small block">Needs: ${c.required_document_label}</span>` : ''}</div>
+              ${c.open ? badge('Open', 'green') : c.lock === 'document_pending' ? badge(LOCK[c.lock], 'amber') : html`<a class="btn btn-sm" href="#/seller/documents">${LOCK[c.lock!]}</a>`}
+            </li>`,
+          )}</ul>`
+        : html`<p class="muted">You haven’t chosen categories yet. Add the ones you sell.</p>`}
+      ${canChangeCategories && others.length
+        ? html`<div class="row-wrap cat-add">
+            <label class="sr-only" for="f_addCategory">Add a category</label>
+            <select id="f_addCategory"><option value="">Add a category…</option>${others.map((c) => html`<option value="${c.slug}">${c.name}${c.required_document_label ? ` (needs ${c.required_document_label})` : ''}</option>`)}</select>
+            <button type="button" class="btn btn-sm btn-primary" data-action="add-category">${icon('plus', 14)} Add</button>
+          </div>`
+        : ''}`;
+  };
 
   root.innerHTML = html`
     ${pageHeader('Store settings', 'How your shop appears to customers and how you fulfil orders.')}
@@ -72,6 +104,8 @@ const page: Page = async ({ root, query, seller, refresh }) => {
           </div>
           ${saveRow(readOnly)}
         </form>
+
+        <section class="card" id="categories">${categoriesCard()}</section>
 
         <form class="card" id="pickup" data-section="pickup" novalidate>
           ${sectionHead('Pickup & service areas', readOnly)}
@@ -399,6 +433,22 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       status.className = 'save-status error-text';
       if (ae.fieldErrors) showFieldErrors(form, ae.fieldErrors);
     } finally {
+      btn.disabled = false;
+    }
+  });
+
+  on(root, 'click', '[data-action=add-category]', async (_e, el) => {
+    const slug = ($('#f_addCategory', root) as HTMLSelectElement | null)?.value;
+    if (!slug) return toast('Choose a category to add.', 'error');
+    const btn = el as HTMLButtonElement;
+    btn.disabled = true;
+    try {
+      cats = await api.sellerCategories.save([slug], true);
+      const added = cats.find((c) => c.slug === slug)!;
+      $('#categories', root)!.innerHTML = categoriesCard().value;
+      toast(added.open ? `${added.name} added. You can list products in it now.` : `${added.name} added. Upload your ${added.required_document_label} on the Documents page to open it.`);
+    } catch (e) {
+      toast((e as Error).message, 'error');
       btn.disabled = false;
     }
   });
