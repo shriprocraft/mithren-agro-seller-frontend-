@@ -451,8 +451,9 @@ const page: Page = async ({ root, account: initialAccount }) => {
           <button type="button" class="btn btn-sm" data-goto="6">Change</button>
         </div>`
       : html`<div id="f_bank" tabindex="-1"><p class="muted">No bank account added yet. <button type="button" class="link-btn" data-goto="6">Add it in Step 6</button>.</p><p class="field-error" id="f_bank_err" hidden></p></div>`}
-    <p class="muted small">Your payments are settled by bank transfer to this account.</p>
+    <p class="muted small">Your payments are settled by bank transfer to this account. To change this bank account later, go to Store settings.</p>
     <h3 class="sub-title">Bank proof</h3>
+    <p class="muted small">The name on your bank proof must match the account holder name. Our team checks your bank proof before your first payout.</p>
     ${docSlot('bank_proof', PAYOUT_DETAILS_REQUIRED, 'Upload one of these showing your name, account number and IFSC: a cancelled cheque, a bank statement or your passbook’s first page. PDF, JPG or PNG, up to 5 MB.')}`;
 
   const categoryDocBlock = (need: { kind: 'fssai' | 'fertilizer_licence'; label: string; categories: string[] }) => {
