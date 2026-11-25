@@ -235,7 +235,7 @@ const SHOTS = process.argv[3];
     await page.waitForTimeout(1200);
   });
 
-  await step('preview: sign out, register a new seller through all 8 steps and submit', async () => {
+  await step('preview: sign out, register a new seller through all 9 steps and submit', async () => {
     await page.click('[data-action=account]');
     await page.click('[data-action=sign-out]');
     await page.waitForFunction(() => location.hash.startsWith('#/seller/sign-in'));
@@ -284,6 +284,8 @@ const SHOTS = process.argv[3];
     await page.fill('#f_accountNumberConfirm', '123456789012');
     await page.fill('#f_ifsc', 'SBIN0001234');
     await page.click('[data-action=save-bank]');
+    await expectText('.bank-saved', /9012/);
+    await next();
     await expectText('.bank-saved', /9012/);
     await page.setInputFiles('[data-upload=bank_proof]', pdf('cheque.pdf'));
     await expectText('#f_doc_bank_proof', /cheque\.pdf/);

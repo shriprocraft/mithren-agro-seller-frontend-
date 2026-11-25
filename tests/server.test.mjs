@@ -107,11 +107,13 @@ async function completeApplication(c, data = goodData) {
   if (data.pan) assert.equal((await c.call('POST', '/api/application/documents?kind=pan&name=pan.pdf', undefined, { raw: PDF, type: 'application/pdf' })).status, 201);
   if (data.gstStatus === 'registered') assert.equal((await c.call('POST', '/api/application/documents?kind=gst&name=gst.pdf', undefined, { raw: PDF, type: 'application/pdf' })).status, 201);
   assert.equal((await c.call('PUT', '/api/application', { data, nextStep: 6, validateStep: 5 })).status, 200);
+  // Step 6: Bank. Step 7: Payout (the bank proof). Step 8: Documents.
   assert.equal((await c.call('PUT', '/api/application/bank', { holderName: 'Meera Joshi', accountNumber: '123456789012', accountNumberConfirm: '123456789012', ifsc: 'SBIN0001234', bankName: 'SBI' })).status, 200);
-  assert.equal((await c.call('POST', '/api/application/documents?kind=bank_proof&name=cheque.png', undefined, { raw: PNG, type: 'image/png' })).status, 201);
   assert.equal((await c.call('PUT', '/api/application', { data, nextStep: 7, validateStep: 6 })).status, 200);
+  assert.equal((await c.call('POST', '/api/application/documents?kind=bank_proof&name=cheque.png', undefined, { raw: PNG, type: 'image/png' })).status, 201);
+  assert.equal((await c.call('PUT', '/api/application', { data, nextStep: 8, validateStep: 7 })).status, 200);
   if (data.claimsOrganic) assert.equal((await c.call('POST', '/api/application/documents?kind=organic_cert&name=cert.pdf', undefined, { raw: PDF, type: 'application/pdf' })).status, 201);
-  const r = await c.call('PUT', '/api/application', { data, nextStep: 8, validateStep: 7 });
+  const r = await c.call('PUT', '/api/application', { data, nextStep: 9, validateStep: 8 });
   assert.equal(r.status, 200, JSON.stringify(r.json));
 }
 
@@ -201,7 +203,7 @@ test('required and conditional tax fields validate on the server', async () => {
   r = await v({ gstStatus: 'registered', pan: 'ABCDE1234F', gstin: '27ZZZZZ9999Z1Z5' }, 5);
   assert.match(r.json.error.fieldErrors.gstin, /match the PAN/);
   // Organic claim needs a certificate; expired dates are rejected.
-  r = await v({ claimsOrganic: true, certBody: 'Body', certExpiryDate: '2020-01-01' }, 7);
+  r = await v({ claimsOrganic: true, certBody: 'Body', certExpiryDate: '2020-01-01' }, 8);
   assert.ok(r.json.error.fieldErrors.certExpiryDate && r.json.error.fieldErrors.doc_organic_cert);
   // Saving a draft without validation is allowed and preserved.
   r = await c.call('PUT', '/api/application', { data: { ...goodData, shopName: 'Draft Name' }, nextStep: 3, validateStep: null });

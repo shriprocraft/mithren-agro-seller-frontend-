@@ -7,7 +7,7 @@ import { join } from 'node:path';
 const STATUSES = "'incomplete','pending','changes_requested','approved','rejected','suspended'";
 const DOC_KINDS = "'pan','gst','business_registration','address_proof','bank_proof','organic_cert','organic_evidence','logo','additional'";
 
-const MIGRATIONS = [
+export const MIGRATIONS = [
   {
     version: 1,
     sql: `
@@ -112,6 +112,25 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 2,
+    // The wizard has 9 steps: Bank & payout became Bank (6) and Payout (7). SQLite can't alter a CHECK
+    // constraint, so the table is rebuilt the way SQLite documents (foreign keys off, copy, swap, check),
+    // and saved progress moves on by one from Step 7.
+    noForeignKeys: true,
+    run(db) {
+      const { sql } = db.prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'seller_applications'").get();
+      const widened = sql.replace('current_step BETWEEN 1 AND 8', 'current_step BETWEEN 1 AND 9');
+      if (widened === sql) throw new Error('seller_applications has an unexpected step check.');
+      db.exec(widened.replace('CREATE TABLE seller_applications', 'CREATE TABLE seller_applications_new'));
+      db.exec('INSERT INTO seller_applications_new SELECT * FROM seller_applications');
+      db.exec('DROP TABLE seller_applications');
+      db.exec('ALTER TABLE seller_applications_new RENAME TO seller_applications');
+      db.exec('CREATE INDEX applications_status ON seller_applications(status)');
+      db.exec('UPDATE seller_applications SET current_step = current_step + 1 WHERE current_step >= 7');
+      if (db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Rebuilding seller_applications broke a foreign key.');
+    },
+  },
 ];
 
 export function openDatabase(dataDir) {
@@ -122,14 +141,19 @@ export function openDatabase(dataDir) {
   const applied = new Set(db.prepare('SELECT version FROM schema_migrations').all().map((r) => r.version));
   for (const m of MIGRATIONS) {
     if (applied.has(m.version)) continue;
+    // Foreign keys can only be switched off outside a transaction.
+    if (m.noForeignKeys) db.exec('PRAGMA foreign_keys = OFF');
     db.exec('BEGIN');
     try {
-      db.exec(m.sql);
+      if (m.sql) db.exec(m.sql);
+      if (m.run) m.run(db);
       db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(m.version, new Date().toISOString());
       db.exec('COMMIT');
     } catch (e) {
       db.exec('ROLLBACK');
       throw e;
+    } finally {
+      if (m.noForeignKeys) db.exec('PRAGMA foreign_keys = ON');
     }
   }
   return db;

@@ -20,7 +20,9 @@ import {
   type DocumentRecord,
   type OrganicRecord,
   emptyApplicationData,
+  fromEightSteps,
   sniffMime,
+  WIZARD_STEPS,
 } from './application.js';
 
 const KEY = 'mithren-seller-accounts';
@@ -40,6 +42,8 @@ interface LocalUser {
 
 interface LocalState {
   v: 1;
+  /** 9 once saved progress uses the 9-step wizard; missing in data saved by the 8-step wizard. */
+  steps?: 9;
   users: LocalUser[];
   sessionUserId: string | null;
   apps: ApplicationRecord[];
@@ -69,12 +73,19 @@ function load(): LocalState {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null;
     if (raw) {
       const s = JSON.parse(raw) as LocalState;
-      if (s.v === 1) return s;
+      if (s.v === 1) {
+        if (s.steps !== 9) {
+          for (const a of s.apps ?? []) a.currentStep = fromEightSteps(a.currentStep);
+          s.steps = 9;
+          localStorage.setItem(KEY, JSON.stringify(s));
+        }
+        return s;
+      }
     }
   } catch {
     /* unavailable or corrupt: start again */
   }
-  return { v: 1, users: [], sessionUserId: null, apps: [], docs: [], banks: {}, organic: {}, submitKeys: {}, seq: 0, codes: {}, audit: [] };
+  return { v: 1, steps: 9, users: [], sessionUserId: null, apps: [], docs: [], banks: {}, organic: {}, submitKeys: {}, seq: 0, codes: {}, audit: [] };
 }
 
 function save() {
@@ -178,7 +189,7 @@ async function ensureDemoAccount() {
     sellerId: SELLER_A,
     referenceId: `MA-${new Date(t).getFullYear()}-${String(state.seq).padStart(6, '0')}`,
     status: ws.status,
-    currentStep: 8,
+    currentStep: WIZARD_STEPS,
     data: {
       ...emptyApplicationData(),
       shopName: ws.shopName,

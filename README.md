@@ -64,9 +64,10 @@ The command refuses to run with `NODE_ENV=production`. It's safe to re-run: exis
    - GSTIN is required only when the seller is GST-registered, and must match the PAN.
    - A registration number and certificate are required for partnerships, LLPs, companies, FPOs and cooperatives.
    - An address proof is always required.
-6. **Bank and payout.** Sent only in the authenticated request body, encrypted at rest (AES-256-GCM, bound to the application row) and returned masked (last 4 digits). A cancelled cheque or statement is required.
-7. **Organic certification.** Optional. If claimed: issuing body, certificate number, dates and certificate upload, plus optional evidence. The status is *Not submitted → Submitted for review → Verified / Rejected*, and *Expired* is derived from the expiry date. Uploading never verifies anything.
-8. **Review and submit.** A declaration is required. Submission generates a reference ID (`MA-YYYY-NNNNNN`), records timestamps, and uses an idempotency key so duplicate submissions are impossible.
+6. **Bank.** Sent only in the authenticated request body, encrypted at rest (AES-256-GCM, bound to the application row) and returned masked (last 4 digits).
+7. **Payout.** Shows the saved account the payments go to. A bank proof is required: a cancelled cheque, a bank statement or the passbook's first page.
+8. **Documents.** Organic is optional. If claimed: issuing body, document number, dates and document upload, plus optional evidence. The status is *Not submitted → Submitted for review → Verified / Rejected*, and *Expired* is derived from the expiry date. Uploading never verifies anything.
+9. **Review and submit.** A declaration is required. Submission generates a reference ID (`MA-YYYY-NNNNNN`), records timestamps, and uses an idempotency key so duplicate submissions are impossible.
 
 Progress is saved server-side on every step ("Save draft" and "Next"), so sellers can sign out and resume.
 

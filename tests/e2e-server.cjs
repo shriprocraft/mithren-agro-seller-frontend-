@@ -184,9 +184,15 @@ const PNG = { name: 'cheque.png', mimeType: 'image/png', buffer: Buffer.from([0x
     await page.click('[data-action=save-bank]');
     await expectText('.bank-saved', /7890/);
     assert.ok(!(await page.content()).includes('50100234567890'), 'full number not in the page');
+    await shot('step6-bank');
+    await next();
+  });
+
+  await step('register: payout shows the saved account and takes the bank proof', async () => {
+    await expectText('.bank-saved', /7890/);
     await page.setInputFiles('[data-upload=bank_proof]', PNG);
     await expectText('#f_doc_bank_proof', /cheque\.png/);
-    await shot('step6-bank');
+    await shot('step7-payout');
     await next();
     await page.waitForSelector('[name=claimsOrganic]');
   });
@@ -197,14 +203,14 @@ const PNG = { name: 'cheque.png', mimeType: 'image/png', buffer: Buffer.from([0x
     await page.fill('#f_certNumber', 'NPOP/KA/2026/0042');
     await page.setInputFiles('[data-upload=organic_cert]', PDF);
     await expectText('#organic-wrap', /Submitted for review/);
-    await shot('step7-organic');
+    await shot('step8-documents');
     await next();
     await page.waitForSelector('[name=consent]');
   });
 
   let reference = '';
   await step('register: review, submit once, see pending status with reference ID', async () => {
-    await shot('step8-review');
+    await shot('step9-review');
     await next();
     await expectText('#f_consent_err', /confirm/);
     await page.check('[name=consent]');

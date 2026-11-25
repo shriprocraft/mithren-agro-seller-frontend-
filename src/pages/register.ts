@@ -1,4 +1,4 @@
-// /seller/register — account creation, verification and the 8-step seller application.
+// /seller/register — account creation, verification and the 9-step seller application.
 // Every step is validated in the browser for quick feedback and again by the
 // backend, which is the only place progress and status are recorded.
 
@@ -119,7 +119,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
   };
   const hasDoc = (kind: ApplicationDocKind) =>
     docsOf(kind).some((d) => d.status !== 'rejected') || serverDocs.some((d) => d.doc_type === api.SERVER_DOC_TYPE[kind] && d.status !== 'rejected');
-  /** Step 7 can't finish when every chosen category needs a document and none of them is uploaded. */
+  /** Step 8 can't finish when every chosen category needs a document and none of them is uploaded. */
   function categoryDocsMissing(): string | undefined {
     const chosen = categories.filter((c) => data.productTypes.includes(c.name));
     if (!chosen.length || chosen.some((c) => !c.required_document)) return undefined;
@@ -142,7 +142,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
           : ''}
         <nav aria-label="Application progress">
           <p class="sr-only" aria-live="polite">Step ${step} of ${STEPS.length}: ${STEPS[step - 1]!.title}</p>
-          <ol class="wizard-steps wizard-8">
+          <ol class="wizard-steps wizard-9">
             ${STEPS.map((s) => {
               const state = s.n < step ? 'done' : s.n === step ? 'current' : '';
               const reachable = account && s.n !== step && s.n <= furthest && (s.n === 1 || (account.emailVerified && account.phoneVerified));
@@ -171,7 +171,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       <div class="row-wrap">
         ${step > 1 ? html`<span class="muted small" data-autosave-status aria-live="polite"></span>` : ''}
         ${step > 1 ? html`<button type="button" class="btn btn-ghost" data-action="save">Save draft</button>` : ''}
-        <button type="submit" class="btn btn-primary">${step === 8 ? 'Submit application' : 'Next'}</button>
+        <button type="submit" class="btn btn-primary">${step === 9 ? 'Submit application' : 'Next'}</button>
       </div>
     </div>`;
   };
@@ -191,6 +191,8 @@ const page: Page = async ({ root, account: initialAccount }) => {
       case 6:
         return stepBank();
       case 7:
+        return stepPayout();
+      case 8:
         return stepOrganic();
       default:
         return stepReview();
@@ -384,7 +386,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
         ? html`<p class="hint">${categories
             .filter((c) => c.required_document)
             .map((c) => `${c.name}: ${c.required_document_label}`)
-            .join(' · ')} required. You can upload these in Step 7 (Documents) or later; these categories are activated once the document is verified.</p>`
+            .join(' · ')} required. You can upload these in Step 8 (Documents) or later; these categories are activated once the document is verified.</p>`
         : ''}
     </fieldset>
     <h3 class="sub-title">Pickup location</h3>
@@ -417,7 +419,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
   };
 
   const stepBank = () => html`
-    <p class="muted">${PAYOUT_DETAILS_REQUIRED ? 'Settlements are paid by bank transfer, so payout details are required before approval.' : 'Add payout details now or later.'}</p>
+    <p class="muted">${PAYOUT_DETAILS_REQUIRED ? 'Add the bank account where you want to receive your payments. It is required before approval.' : 'Add your bank account now or later.'}</p>
     ${view?.bank
       ? html`<div class="bank-saved" id="f_bank" tabindex="-1">
           ${icon('shield', 18)}
@@ -438,9 +440,20 @@ const page: Page = async ({ root, account: initialAccount }) => {
       </div>
       <div class="row-wrap"><button type="button" class="btn btn-primary btn-sm" data-action="save-bank">Save bank details</button></div>
     </div>
-    <p class="muted small">${icon('shield', 13)} Sent over an encrypted connection and stored encrypted. Only the last 4 digits are ever shown. We never ask for card PINs, banking passwords or OTPs.</p>
+    <p class="muted small">${icon('shield', 13)} Sent over an encrypted connection and stored encrypted. Only the last 4 digits are ever shown. We never ask for card PINs, banking passwords or OTPs.</p>`;
+
+  const stepPayout = () => html`
+    <h3 class="sub-title">Payout account</h3>
+    ${view?.bank
+      ? html`<div class="bank-saved" id="f_bank" tabindex="-1">
+          ${icon('shield', 18)}
+          <div><strong>${view.bank.holderName}</strong><span class="block mono">${maskAccount(view.bank.last4)}</span><span class="muted small block">${view.bank.ifsc}${view.bank.bankName ? ` · ${view.bank.bankName}` : ''}</span></div>
+          <button type="button" class="btn btn-sm" data-goto="6">Change</button>
+        </div>`
+      : html`<div id="f_bank" tabindex="-1"><p class="muted">No bank account added yet. <button type="button" class="link-btn" data-goto="6">Add it in Step 6</button>.</p><p class="field-error" id="f_bank_err" hidden></p></div>`}
+    <p class="muted small">Your payments are settled by bank transfer to this account.</p>
     <h3 class="sub-title">Bank proof</h3>
-    ${docSlot('bank_proof', PAYOUT_DETAILS_REQUIRED, 'Upload a cancelled cheque or bank statement: PDF, JPG or PNG, up to 5 MB.')}`;
+    ${docSlot('bank_proof', PAYOUT_DETAILS_REQUIRED, 'Upload one of these showing your name, account number and IFSC: a cancelled cheque, a bank statement or your passbook’s first page. PDF, JPG or PNG, up to 5 MB.')}`;
 
   const categoryDocBlock = (need: { kind: 'fssai' | 'fertilizer_licence'; label: string; categories: string[] }) => {
     const onServer = serverDocs.find((d) => d.doc_type === need.kind);
@@ -508,8 +521,9 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${section(3, 'Address and service area', html`${row('Address', [d.addressLine1, d.addressLine2, d.city, d.district, d.state, d.pincode, d.country].filter(Boolean).join(', '))}${row('Service area', d.serviceAreas.join(', '))}`)}
       ${section(4, 'Products and pickup', html`${row('Categories', d.productTypes.join(', '))}${row('Pickup', d.pickupSameAsBusiness ? 'Business address' : `${d.pickupAddress}, ${d.pickupPincode}`)}`)}
       ${section(5, 'Business and KYC', html`${row('Business type', BUSINESS_TYPES.find((b) => b[0] === d.businessType)?.[1] ?? '')}${row('GST', GST_STATUSES.find((g) => g[0] === d.gstStatus)?.[1] ?? '')}${row('GSTIN', d.gstin)}${row('PAN', d.pan ? `${d.pan.slice(0, 2)}•••••${d.pan.slice(-3)}` : '')}${row(kycRules(d).registrationLabel, d.registrationNumber)}`)}
-      ${section(6, 'Bank and payout', html`${row('Account', view?.bank ? `${view.bank.holderName} · ${maskAccount(view.bank.last4)} · ${view.bank.ifsc}` : 'Not added')}`)}
-      ${section(7, 'Documents', html`${categoryDocNeeds().map((n) => row(n.label, hasDoc(n.kind) ? `Uploaded for ${n.categories.join(', ')}` : `Not uploaded — ${n.categories.join(', ')} will be activated once it is uploaded and verified`))}${row('Organic', d.claimsOrganic ? `Yes — ${d.certBody}${d.certNumber ? `, ${d.certNumber}` : ''}` : 'No organic claim')}${d.claimsOrganic ? row('Status', 'Unverified until a reviewer checks your organic document') : ''}`)}
+      ${section(6, 'Bank details', html`${row('Account', view?.bank ? `${view.bank.holderName} · ${maskAccount(view.bank.last4)} · ${view.bank.ifsc}` : 'Not added')}`)}
+      ${section(7, 'Payout', html`${row('Bank proof', hasDoc('bank_proof') ? 'Uploaded' : 'Not uploaded')}`)}
+      ${section(8, 'Documents', html`${categoryDocNeeds().map((n) => row(n.label, hasDoc(n.kind) ? `Uploaded for ${n.categories.join(', ')}` : `Not uploaded — ${n.categories.join(', ')} will be activated once it is uploaded and verified`))}${row('Organic', d.claimsOrganic ? `Yes — ${d.certBody}${d.certNumber ? `, ${d.certNumber}` : ''}` : 'No organic claim')}${d.claimsOrganic ? row('Status', 'Unverified until a reviewer checks your organic document') : ''}`)}
       <section class="review-block">
         <h3 class="sub-title">Documents</h3>
         <ul class="doc-check">
@@ -580,7 +594,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     bankProvided: !!view?.bank,
     emailVerified: !!account?.emailVerified,
     phoneVerified: !!account?.phoneVerified,
-    categoryDocsMissing: step === 7 ? categoryDocsMissing() : undefined,
+    categoryDocsMissing: step === 8 ? categoryDocsMissing() : undefined,
   });
 
   async function guarded(btn: HTMLButtonElement | null, label: string, fn: () => Promise<void>) {
@@ -785,7 +799,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       });
     }
-    if (step === 8) {
+    if (step === 9) {
       if (!form().querySelector<HTMLInputElement>('[name=consent]')?.checked) return showError('Please confirm the declaration to submit.', { consent: 'Please confirm to submit.' });
       return guarded(btn, 'Submitting…', async () => {
         view = await api.application.submit(submitKey());

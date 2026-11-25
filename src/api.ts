@@ -6,7 +6,7 @@
 import * as core from './api-core.js';
 import { ApiError } from './errors.js';
 import { RPC_METHODS, DEMO_RPC_METHODS, type RpcName } from './rpc.js';
-import type { AccountView, AdminAction, ApplicationDocKind, ApplicationView, BankInput } from './application.js';
+import { fromEightSteps, WIZARD_STEPS, type AccountView, type AdminAction, type ApplicationDocKind, type ApplicationView, type BankInput } from './application.js';
 import type { AdjustmentReason, AppNotification, CommissionRule, InventoryAdjustment, LedgerEntry, OrderStatus, PayoutRequest, Review, Settlement, SubOrder } from './types.js';
 import { toReview, type BackendReview, type BackendReviewPage } from './backend-reviews.js';
 import { hasPortalMeta, portalMetaOf, type PortalMeta } from './portal-meta.js';
@@ -1437,6 +1437,9 @@ interface ServerDraft {
   updated_at: string;
 }
 
+/** Drafts saved by the 8-step wizard carry no `_steps` mark; their step moves to the 9-step numbering. */
+const serverDraftStep = (d: ServerDraft) => (d.data?._steps === WIZARD_STEPS ? d.current_step : fromEightSteps(d.current_step));
+
 /**
  * Browser mode: when the backend already has this seller approved (the application was completed
  * on another device or through the portal server), take over its approval and details instead of
@@ -1489,8 +1492,9 @@ async function adoptOnSignIn(): Promise<void> {
 /** Saves the wizard's progress on the backend too (best effort), so it survives cleared browser data. */
 async function saveServerDraft(view: ApplicationView, evenWhenLocked = false): Promise<void> {
   if (!sellerSession.isSignedIn() || (!view.editable && !evenWhenLocked)) return;
-  const step = Math.min(8, Math.max(1, view.currentStep));
-  await backendRequest('PUT', 'seller/registration-draft', { current_step: step, data: view.data }, () => undefined).catch(() => undefined);
+  const step = Math.min(WIZARD_STEPS, Math.max(1, view.currentStep));
+  const data = { ...(view.data as unknown as Record<string, unknown>), _steps: WIZARD_STEPS };
+  await backendRequest('PUT', 'seller/registration-draft', { current_step: step, data }, () => undefined).catch(() => undefined);
 }
 
 export const application = {
@@ -1509,11 +1513,12 @@ export const application = {
       const remote = await backendRequest<ServerDraft>('GET', 'seller/registration-draft', undefined, () => undefined);
       // A copy this browser has never saved (just recreated after its data was cleared) always yields to the server's.
       const pristine = Date.parse(view.updatedAt) <= Date.parse(view.createdAt);
-      const newer = pristine || Date.parse(remote.updated_at) > Date.parse(view.updatedAt) || remote.current_step > view.currentStep;
+      const remoteStep = serverDraftStep(remote);
+      const newer = pristine || Date.parse(remote.updated_at) > Date.parse(view.updatedAt) || remoteStep > view.currentStep;
       if (newer) {
         return await local.localApplication.saveDraft(
           { ...(view.data as unknown as Record<string, unknown>), ...remote.data },
-          Math.max(remote.current_step, view.currentStep),
+          Math.max(remoteStep, view.currentStep),
           null,
         );
       }

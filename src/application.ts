@@ -165,7 +165,7 @@ export const DOC_KIND_LABEL: Record<ApplicationDocKind, string> = {
   gst: 'GST registration document',
   business_registration: 'Business registration document',
   address_proof: 'Business address proof',
-  bank_proof: 'Bank proof (cancelled cheque or statement)',
+  bank_proof: 'Bank proof (cancelled cheque, statement or passbook)',
   organic_cert: 'Organic document',
   organic_evidence: 'Supporting organic document',
   fssai: 'FSSAI licence or registration',
@@ -193,6 +193,13 @@ export const GST_STATE_CODES: Record<string, string> = {
   Telangana: '36', 'Andhra Pradesh': '37', Ladakh: '38',
 };
 
+/**
+ * The wizard grew from 8 to 9 steps when Bank & payout became Bank (6) and Payout (7). Progress saved
+ * by the 8-step wizard moves on by one from Step 7: Documents was 7 and is now 8, Review was 8 and is now 9.
+ */
+export const WIZARD_STEPS = 9;
+export const fromEightSteps = (step: number) => (step >= 7 ? Math.min(WIZARD_STEPS, step + 1) : step);
+
 /** The state a GST state code belongs to, if any. */
 export const gstStateName = (code: string) => Object.keys(GST_STATE_CODES).find((s) => GST_STATE_CODES[s] === code);
 
@@ -203,9 +210,10 @@ export const STEPS = [
   { n: 3, key: 'address', label: 'Address', title: 'Address & service area' },
   { n: 4, key: 'products', label: 'Products', title: 'Products & pickup' },
   { n: 5, key: 'kyc', label: 'KYC', title: 'Business & KYC' },
-  { n: 6, key: 'bank', label: 'Bank', title: 'Bank & payout' },
-  { n: 7, key: 'organic', label: 'Documents', title: 'Documents' },
-  { n: 8, key: 'review', label: 'Review', title: 'Review & submit' },
+  { n: 6, key: 'bank', label: 'Bank', title: 'Bank details' },
+  { n: 7, key: 'payout', label: 'Payout', title: 'Payout' },
+  { n: 8, key: 'organic', label: 'Documents', title: 'Documents' },
+  { n: 9, key: 'review', label: 'Review', title: 'Review & submit' },
 ] as const;
 
 /** Payout details are needed before approval because settlements are paid by bank transfer. */
@@ -335,7 +343,7 @@ export interface ValidationContext {
   emailVerified: boolean;
   phoneVerified: boolean;
   today?: string;
-  /** Step 7: set when every chosen category needs a document and none of those documents is uploaded. */
+  /** Step 8: set when every chosen category needs a document and none of those documents is uploaded. */
   categoryDocsMissing?: string;
 }
 
@@ -402,10 +410,13 @@ export function validateStep(step: number, d: ApplicationData, ctx: ValidationCo
       break;
     }
     case 6:
-      if (PAYOUT_DETAILS_REQUIRED && !ctx.bankProvided) e.bank = 'Add your payout bank account.';
-      if (PAYOUT_DETAILS_REQUIRED && docMissing('bank_proof')) e.doc_bank_proof = 'Upload a cancelled cheque or bank statement.';
+      if (PAYOUT_DETAILS_REQUIRED && !ctx.bankProvided) e.bank = 'Add your bank account.';
       break;
     case 7:
+      if (PAYOUT_DETAILS_REQUIRED && !ctx.bankProvided) e.bank = 'Add your bank account in Step 6 first.';
+      if (PAYOUT_DETAILS_REQUIRED && docMissing('bank_proof')) e.doc_bank_proof = 'Upload a cancelled cheque, bank statement or passbook first page.';
+      break;
+    case 8:
       if (ctx.categoryDocsMissing) e.categoryDocs = ctx.categoryDocsMissing;
       if (d.claimsOrganic === null) e.claimsOrganic = 'Tell us whether you sell organic products with an organic document.';
       if (d.claimsOrganic) {
@@ -432,7 +443,7 @@ export function validateBank(b: BankInput): Errors {
 
 /** All steps that must pass before the application can be submitted. */
 export function validateApplication(d: ApplicationData, ctx: ValidationContext): { step: number; errors: Errors } | null {
-  for (let s = 1; s <= 7; s++) {
+  for (let s = 1; s < STEPS.length; s++) {
     const errors = validateStep(s, d, ctx);
     if (Object.keys(errors).length) return { step: s, errors };
   }

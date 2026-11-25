@@ -32,6 +32,7 @@ import {
   validateApplication,
   validateBank,
   validateStep,
+  WIZARD_STEPS,
 } from './application.js';
 
 export interface AccountInfo {
@@ -159,7 +160,7 @@ export class ApplicationService {
       }
       app.data = data;
       // Progress is the furthest step reached; going back to edit doesn't lose it.
-      app.currentStep = Math.max(app.currentStep, Math.min(8, Math.max(1, Math.trunc(nextStep) || app.currentStep)));
+      app.currentStep = Math.max(app.currentStep, Math.min(WIZARD_STEPS, Math.max(1, Math.trunc(nextStep) || app.currentStep)));
       app.updatedAt = now();
       this.store.updateApplication(app);
       if (data.claimsOrganic === false) {
@@ -276,7 +277,7 @@ export class ApplicationService {
       app.submittedAt ??= t;
       app.lastSubmittedAt = t;
       app.status = 'pending';
-      app.currentStep = 8;
+      app.currentStep = WIZARD_STEPS;
       app.requestedItems = [];
       app.updatedAt = t;
       this.store.updateApplication(app);
@@ -301,7 +302,7 @@ export class ApplicationService {
       const t = now();
       app.data = normaliseApplicationData({ ...(app.data as unknown as Record<string, unknown>), ...data });
       app.status = 'approved';
-      app.currentStep = 8;
+      app.currentStep = WIZARD_STEPS;
       app.requestedItems = [];
       app.referenceId ??= this.store.nextReferenceId();
       app.submittedAt ??= t;

@@ -3073,9 +3073,16 @@ td a:hover {
   margin: 8px 0 12px;
 }
 
-/* 8-step progress */
-.wizard-8 {
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+/* 9-step progress: the number sits above the name so every name fits in its column */
+.wizard-9 {
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  column-gap: 6px;
+}
+.wizard-9 li,
+.wizard-9 .step-link {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 .wizard-steps li {
   min-width: 0;
@@ -3291,15 +3298,17 @@ td a:hover {
 }
 
 @media (max-width: 720px) {
-  .wizard-8 {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+  .wizard-9 {
+    grid-template-columns: repeat(9, minmax(0, 1fr));
     gap: 4px;
   }
-  .wizard-8 li {
+  .wizard-9 li,
+  .wizard-9 .step-link {
     justify-content: center;
+    align-items: center;
   }
-  .wizard-steps.wizard-8 .wl,
-  .wizard-steps.wizard-8 li.current .wl {
+  .wizard-steps.wizard-9 .wl,
+  .wizard-steps.wizard-9 li.current .wl {
     display: none;
   }
   .verify-row {
