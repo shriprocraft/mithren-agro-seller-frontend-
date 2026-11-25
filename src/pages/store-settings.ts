@@ -24,7 +24,7 @@ const CHANNELS: [NotificationChannel, string][] = [
 
 const SECTIONS = [
   ['profile', 'Shop profile'],
-  ['categories', 'Selling categories'],
+  ['categories', 'Categories'],
   ['pickup', 'Pickup & service areas'],
   ['hours', 'Hours & holidays'],
   ['fulfilment', 'Fulfilment'],
@@ -48,33 +48,61 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     document_rejected: { status: 'Document not accepted', action: 'Re-upload document' },
     document_expired: { status: 'Document expired', action: 'Upload renewed document' },
   };
+  // A category's document is still to be given when it was never uploaded, or was rejected or expired.
+  const docToGive = (c: api.SellerCategoryView) => !!c.required_document && !c.open && c.lock !== 'document_pending';
+  const addDocFields = (c: api.SellerCategoryView | undefined) =>
+    c && docToGive(c)
+      ? html`<div class="cat-doc">
+          <p><strong>${c.required_document_label}</strong><span class="muted small block">${c.name} needs this document. Mithren Agro verifies it, and then you can list ${c.name} products.</span></p>
+          <div class="row-2">
+            ${field({ name: 'catDocNumber', label: c.required_document === 'fssai' ? 'FSSAI number' : 'Licence number', required: c.required_document === 'fssai', placeholder: c.required_document === 'fssai' ? 'Enter the 14-digit FSSAI number' : 'Enter the licence number', attrs: 'maxlength="60"' })}
+            ${field({ name: 'catDocExpires', label: 'Valid until', type: 'date', required: true, attrs: `min="${new Date().toISOString().slice(0, 10)}"` })}
+          </div>
+          <div class="field" id="f_catDocFile" tabindex="-1">
+            <label for="catDocFile">Document<span class="req" aria-hidden="true"> *</span></label>
+            <input id="catDocFile" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" />
+            <p class="hint">PDF, JPG or PNG, up to 5 MB.</p>
+            <p class="field-error" id="f_catDocFile_err" hidden></p>
+          </div>
+        </div>`
+      : c?.required_document && c.lock === 'document_pending'
+        ? html`<p class="hint">Your ${c.required_document_label} is already with Mithren Agro for verification.</p>`
+        : '';
   const categoriesCard = () => {
     const mine = cats.filter((c) => c.chosen);
     const others = cats.filter((c) => !c.chosen);
     return html`
-      <div class="card-head"><h2 class="card-title">Selling categories</h2></div>
-      <p class="muted small">The categories you are approved to list products in. Some categories require a document, such as an FSSAI licence, which Mithren Agro verifies before the category is activated.</p>
+      <div class="card-head"><h2 class="card-title">Categories</h2></div>
+      <p class="muted small">The categories you sell in. To start selling in another category, add it below.</p>
       ${mine.length
         ? html`<ul class="cat-list">${mine.map((c) => {
             const lock = c.lock ? LOCK[c.lock] : null;
             return html`<li>
-              <div><strong>${c.name}</strong>${c.required_document_label ? html`<span class="muted small block">Required document: ${c.required_document_label}</span>` : ''}</div>
+              <div><strong>${c.name}</strong>${c.required_document_label ? html`<span class="muted small block">Document: ${c.required_document_label}</span>` : ''}</div>
               <div class="row-wrap">
                 ${c.open ? badge('Active', 'green') : badge(lock!.status, c.lock === 'document_pending' ? 'amber' : 'red')}
                 ${!c.open && lock?.action ? html`<a class="btn btn-sm" href="#/seller/documents">${lock.action}</a>` : ''}
               </div>
             </li>`;
           })}</ul>`
-        : html`<p class="muted">You have no selling categories yet. Request the categories you want to list products in.</p>`}
+        : html`<p class="muted">No categories yet. Add the categories you sell in below.</p>`}
       ${canChangeCategories && others.length
-        ? html`<h3 class="sub-title">Request a new category</h3>
-          <div class="row-wrap cat-add">
-            <label class="sr-only" for="f_addCategory">Category</label>
-            <select id="f_addCategory"><option value="">Select a category</option>${others.map((c) => html`<option value="${c.slug}">${c.name}${c.required_document_label ? ` — ${c.required_document_label} required` : ''}</option>`)}</select>
-            <button type="button" class="btn btn-sm btn-primary" data-action="add-category">Request category</button>
+        ? html`<h3 class="sub-title">Add a category</h3>
+          <p class="muted small">Some categories need a document, such as an FSSAI licence for Oil. Add it here with the category; the category becomes active once Mithren Agro verifies it.</p>
+          <div class="cat-add">
+            ${(() => {
+              const picked = others.find((c) => c.slug === addPick);
+              return html`<div class="field">
+                  <label for="f_addCategory">Category</label>
+                  <select id="f_addCategory"><option value="">Select a category</option>${others.map((c) => html`<option value="${c.slug}" ${c.slug === addPick ? raw('selected') : ''}>${c.name}${c.required_document_label ? ` (needs ${c.required_document_label})` : ''}</option>`)}</select>
+                </div>
+                <div id="cat-doc-slot">${addDocFields(picked)}</div>
+                <div class="row-wrap"><button type="button" class="btn btn-sm btn-primary" data-action="add-category">${icon('plus', 14)} Add category</button></div>`;
+            })()}
           </div>`
         : ''}`;
   };
+  let addPick = '';
 
   root.innerHTML = html`
     ${pageHeader('Store settings', 'How your shop appears to customers and how you fulfil orders.')}
@@ -443,23 +471,52 @@ const page: Page = async ({ root, query, seller, refresh }) => {
     }
   });
 
+  on(root, 'change', '#f_addCategory', (_e, el) => {
+    addPick = (el as HTMLSelectElement).value;
+    $('#cat-doc-slot', root)!.innerHTML = html`${addDocFields(cats.find((c) => c.slug === addPick))}`.value;
+  });
   on(root, 'click', '[data-action=add-category]', async (_e, el) => {
+    const card = $('#categories', root)!;
     const slug = ($('#f_addCategory', root) as HTMLSelectElement | null)?.value;
-    if (!slug) return toast('Select a category to request.', 'error');
+    if (!slug) return toast('Select a category to add.', 'error');
+    const cat = cats.find((c) => c.slug === slug)!;
+    let upload: { file: File; docNumber: string; expiresOn: string } | null = null;
+    if (docToGive(cat)) {
+      const docNumber = (card.querySelector<HTMLInputElement>('[name=catDocNumber]')?.value ?? '').replace(/\s/g, '');
+      const expiresOn = card.querySelector<HTMLInputElement>('[name=catDocExpires]')?.value ?? '';
+      const file = card.querySelector<HTMLInputElement>('#catDocFile')?.files?.[0];
+      const errors: Record<string, string> = {};
+      if (cat.required_document === 'fssai' && !/^\d{14}$/.test(docNumber)) errors.catDocNumber = 'The FSSAI number has 14 digits.';
+      if (!expiresOn) errors.catDocExpires = 'Enter the date it is valid until.';
+      if (!file) errors.catDocFile = `Upload your ${cat.required_document_label}.`;
+      else if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.type)) errors.catDocFile = 'Upload a PDF, JPG or PNG file.';
+      else if (file.size > 5 * 1024 * 1024) errors.catDocFile = 'Files must be 5 MB or smaller.';
+      if (Object.keys(errors).length) return showFieldErrors(card, errors);
+      upload = { file: file!, docNumber, expiresOn };
+    }
     const btn = el as HTMLButtonElement;
     btn.disabled = true;
+    btn.textContent = upload ? 'Uploading…' : 'Adding…';
     try {
+      if (upload) await api.serverDocuments.upload(cat.required_document!, upload.file, { docNumber: upload.docNumber, expiresOn: upload.expiresOn });
       cats = await api.sellerCategories.save([slug], true);
+      addPick = '';
       const added = cats.find((c) => c.slug === slug)!;
-      $('#categories', root)!.innerHTML = categoriesCard().value;
+      card.innerHTML = categoriesCard().value;
       toast(
         added.open
-          ? `${added.name} is now active. You can list products in it.`
-          : `${added.name} requested. Upload your ${added.required_document_label} on the Documents page to activate it.`,
+          ? `${added.name} added. You can list ${added.name} products now.`
+          : `${added.name} added. You can list ${added.name} products once Mithren Agro verifies your ${added.required_document_label}.`,
       );
     } catch (e) {
-      toast((e as Error).message, 'error');
+      const ae = e as api.ApiError;
+      if (ae.fieldErrors) {
+        const f = ae.fieldErrors;
+        showFieldErrors(card, { ...(f.docNumber ? { catDocNumber: f.docNumber } : {}), ...(f.expiresOn ? { catDocExpires: f.expiresOn } : {}), ...(f.file ? { catDocFile: f.file } : {}) });
+      }
+      toast(ae.message, 'error');
       btn.disabled = false;
+      btn.innerHTML = `${icon('plus', 14).value} Add category`;
     }
   });
 

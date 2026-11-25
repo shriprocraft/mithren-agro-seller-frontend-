@@ -151,7 +151,7 @@ const page: Page = async ({ root, params, seller }) => {
       </select>
       ${locked.length
         ? html`<p class="hint" id="f_category_hint">${locked.map((c) => c.name).join(', ')} ${locked.length === 1 ? 'becomes' : 'become'} available once your ${[...new Set(locked.map((c) => c.required_document_label))].join(' / ')} is verified. <a href="#/seller/documents">Manage documents</a></p>`
-        : html`<p class="hint" id="f_category_hint">To sell in another category, request it in <a href="#/seller/store-settings">Store settings → Selling categories</a>.</p>`}
+        : html`<p class="hint" id="f_category_hint">To sell in another category, add it in <a href="#/seller/store-settings">Store settings → Categories</a>.</p>`}
       <p class="field-error" id="f_category_err" hidden></p>
     </div>`;
   };

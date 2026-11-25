@@ -4718,8 +4718,11 @@ button[aria-busy='true'] {
   font-size: 14px;
 }
 .cat-add select {
-  flex: 1 1 220px;
-  min-width: 0;
+  width: 100%;
+  max-width: 420px;
+}
+.cat-add .cat-doc {
+  margin-top: 12px;
 }
 .details-grid {
   display: grid;
