@@ -129,9 +129,9 @@ const page: Page = async ({ root, params, seller }) => {
   // Category: the seller's categories from the Super Admin's list (all of them if none is chosen yet).
   // Locked ones are shown but can't be picked until their document is verified.
   const LOCK_TEXT: Record<api.CategoryLock, string> = {
-    needs_document: 'needs a document',
-    document_pending: 'document waiting for review',
-    document_rejected: 'document rejected',
+    needs_document: 'document required',
+    document_pending: 'under review',
+    document_rejected: 'document not accepted',
     document_expired: 'document expired',
   };
   const categoryField = () => {
@@ -145,13 +145,13 @@ const page: Page = async ({ root, params, seller }) => {
         <option value="">Select category</option>
         ${mine.map((c) => {
           const off = !c.open && c.name !== product.category;
-          return html`<option value="${c.name}" ${product.category === c.name ? raw('selected') : ''} ${off ? raw('disabled') : ''}>${c.name}${off && c.lock ? ` (locked: ${LOCK_TEXT[c.lock]})` : ''}</option>`;
+          return html`<option value="${c.name}" ${product.category === c.name ? raw('selected') : ''} ${off ? raw('disabled') : ''}>${c.name}${off && c.lock ? ` — ${LOCK_TEXT[c.lock]}` : ''}</option>`;
         })}
         ${extra.map((c) => html`<option value="${c}" selected>${c}</option>`)}
       </select>
       ${locked.length
-        ? html`<p class="hint" id="f_category_hint">${locked.map((c) => c.name).join(', ')} ${locked.length === 1 ? 'opens' : 'open'} once your ${[...new Set(locked.map((c) => c.required_document_label))].join(' / ')} is verified. <a href="#/seller/documents">Documents</a></p>`
-        : html`<p class="hint" id="f_category_hint">More categories: <a href="#/seller/store-settings">Store settings → Categories</a>.</p>`}
+        ? html`<p class="hint" id="f_category_hint">${locked.map((c) => c.name).join(', ')} ${locked.length === 1 ? 'becomes' : 'become'} available once your ${[...new Set(locked.map((c) => c.required_document_label))].join(' / ')} is verified. <a href="#/seller/documents">Manage documents</a></p>`
+        : html`<p class="hint" id="f_category_hint">To sell in another category, request it in <a href="#/seller/store-settings">Store settings → Selling categories</a>.</p>`}
       <p class="field-error" id="f_category_err" hidden></p>
     </div>`;
   };

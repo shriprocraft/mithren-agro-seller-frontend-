@@ -125,7 +125,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     if (!chosen.length || chosen.some((c) => !c.required_document)) return undefined;
     const needs = categoryDocNeeds();
     if (needs.some((n) => hasDoc(n.kind))) return undefined;
-    return `Every category you chose needs a document (${needs.map((n) => n.label).join(' or ')}). Upload one, or choose another category in Step 4, so you can sell once approved.`;
+    return `All the categories you selected require a document (${needs.map((n) => n.label).join(' or ')}). Upload at least one, or select another category in Step 4, so you can start selling once approved.`;
   }
 
   // ---------- rendering ----------
@@ -384,7 +384,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
         ? html`<p class="hint">${categories
             .filter((c) => c.required_document)
             .map((c) => `${c.name}: ${c.required_document_label}`)
-            .join(' · ')}. You can upload these in Step 7 (Documents) or later; until then those categories stay locked.</p>`
+            .join(' · ')} required. You can upload these in Step 7 (Documents) or later; these categories are activated once the document is verified.</p>`
         : ''}
     </fieldset>
     <h3 class="sub-title">Pickup location</h3>
@@ -452,7 +452,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
           : badge('Waiting for review', 'amber')
       : '';
     return html`<div class="cat-doc">
-      <p><strong>${need.label}</strong> ${state} <span class="muted small block">For ${need.categories.join(', ')}. Optional now: without it, ${need.categories.length > 1 ? 'these categories stay' : 'this category stays'} locked until you upload it and Mithren Agro verifies it.</span></p>
+      <p><strong>${need.label}</strong> ${state} <span class="muted small block">Required to sell ${need.categories.join(', ')}. Optional for now: ${need.categories.length > 1 ? 'these categories are' : 'this category is'} activated once Mithren Agro verifies this document.</span></p>
       ${onServer?.status === 'rejected' && onServer.review_note ? html`<p class="small error-text">${onServer.review_note}</p>` : ''}
       <div class="row-2">
         ${field({ name: `docnum_${need.kind}`, label: need.kind === 'fssai' ? 'FSSAI number' : 'Licence number', value: onServer?.doc_number ?? '', required: need.kind === 'fssai', placeholder: need.kind === 'fssai' ? 'Enter the 14-digit FSSAI number' : 'Enter the licence number', attrs: need.kind === 'fssai' ? 'inputmode="numeric" maxlength="17"' : 'maxlength="60"' })}
@@ -509,7 +509,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${section(4, 'Products and pickup', html`${row('Categories', d.productTypes.join(', '))}${row('Pickup', d.pickupSameAsBusiness ? 'Business address' : `${d.pickupAddress}, ${d.pickupPincode}`)}`)}
       ${section(5, 'Business and KYC', html`${row('Business type', BUSINESS_TYPES.find((b) => b[0] === d.businessType)?.[1] ?? '')}${row('GST', GST_STATUSES.find((g) => g[0] === d.gstStatus)?.[1] ?? '')}${row('GSTIN', d.gstin)}${row('PAN', d.pan ? `${d.pan.slice(0, 2)}•••••${d.pan.slice(-3)}` : '')}${row(kycRules(d).registrationLabel, d.registrationNumber)}`)}
       ${section(6, 'Bank and payout', html`${row('Account', view?.bank ? `${view.bank.holderName} · ${maskAccount(view.bank.last4)} · ${view.bank.ifsc}` : 'Not added')}`)}
-      ${section(7, 'Documents', html`${categoryDocNeeds().map((n) => row(n.label, hasDoc(n.kind) ? `Uploaded, for ${n.categories.join(', ')}` : `Not uploaded: ${n.categories.join(', ')} stay locked until it is`))}${row('Organic', d.claimsOrganic ? `Yes — ${d.certBody}${d.certNumber ? `, ${d.certNumber}` : ''}` : 'No organic claim')}${d.claimsOrganic ? row('Status', 'Unverified until a reviewer checks your organic document') : ''}`)}
+      ${section(7, 'Documents', html`${categoryDocNeeds().map((n) => row(n.label, hasDoc(n.kind) ? `Uploaded for ${n.categories.join(', ')}` : `Not uploaded — ${n.categories.join(', ')} will be activated once it is uploaded and verified`))}${row('Organic', d.claimsOrganic ? `Yes — ${d.certBody}${d.certNumber ? `, ${d.certNumber}` : ''}` : 'No organic claim')}${d.claimsOrganic ? row('Status', 'Unverified until a reviewer checks your organic document') : ''}`)}
       <section class="review-block">
         <h3 class="sub-title">Documents</h3>
         <ul class="doc-check">
