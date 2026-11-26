@@ -8,9 +8,18 @@ import * as api from '../api.js';
 import { money2, fmtDate } from '../lib.js';
 import { round2 } from '../data/seed.js';
 import type { Settlement } from '../types.js';
+import { PAYOUT_FREQUENCIES } from '../application.js';
 
 const page: Page = async ({ root, query, seller, refresh }) => {
-  const [settlements, ledger, payouts] = await Promise.all([api.listSettlements(), api.getLedger(), api.getPayoutRequests()]);
+  const [settlements, ledger, payouts, application] = await Promise.all([
+    api.listSettlements(),
+    api.getLedger(),
+    api.getPayoutRequests(),
+    api.application.get().catch(() => null),
+  ]);
+  // The cycle the seller chose in registration Step 7. Sellers who registered before the choice existed stay weekly.
+  const cycle = application?.data.payoutFrequency === 'fortnightly' ? 'fortnightly' : 'weekly';
+  const cycleLabel = cycle === 'weekly' ? 'Weekly, for entries eligible by Sunday' : PAYOUT_FREQUENCIES.find((f) => f[0] === cycle)![1];
   const requests = payouts.items;
   const payoutsOn = payouts.enabled;
   const stPage = paginate(settlements, query, 'st');
@@ -41,7 +50,7 @@ const page: Page = async ({ root, query, seller, refresh }) => {
       <div class="card-head"><h2 class="card-title">Payout schedule</h2></div>
       <dl class="kv kv-inline">
         <div><dt>Bank account</dt><dd>${seller.bank.accountName} · ••••${seller.bank.last4} · ${seller.bank.ifsc} ${seller.bank.verified ? badge('Verified', 'green') : badge('Verification pending', 'amber')}</dd></div>
-        <div><dt>Cycle</dt><dd>Weekly, for entries eligible by Sunday</dd></div>
+        <div><dt>Cycle</dt><dd>${cycleLabel}</dd></div>
         <div><dt>Method</dt><dd>Manual bank transfer with UTR reference <span class="muted small">(automated payouts need a configured payout provider)</span></dd></div>
         <div><dt>Payout requests</dt><dd>${payoutsOn ? 'Enabled — minimum ₹500, reviewed by the platform' : 'Not enabled for your account'}</dd></div>
       </dl>
