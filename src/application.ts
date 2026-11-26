@@ -59,7 +59,15 @@ export interface ApplicationData {
   certNumber: string;
   certIssueDate: string;
   certExpiryDate: string;
+  /** Step 7: how often the seller wants to be paid. */
+  payoutFrequency: PayoutFrequency | '';
 }
+
+export type PayoutFrequency = 'weekly' | 'fortnightly';
+export const PAYOUT_FREQUENCIES: [PayoutFrequency, string, string][] = [
+  ['weekly', 'Weekly', 'Your payments are sent once a week.'],
+  ['fortnightly', 'Every 15 days', 'Your payments are sent once every 15 days.'],
+];
 
 export interface BankInput {
   holderName: string;
@@ -233,6 +241,7 @@ export function emptyApplicationData(): ApplicationData {
     productTypes: [], pickupSameAsBusiness: true, pickupAddress: '', pickupPincode: '',
     businessType: '', gstStatus: '', gstin: '', pan: '', registrationNumber: '',
     claimsOrganic: null, certBody: '', certNumber: '', certIssueDate: '', certExpiryDate: '',
+    payoutFrequency: '',
   };
 }
 
@@ -276,6 +285,7 @@ export function normaliseApplicationData(input: unknown): ApplicationData {
     certNumber: str(i.certNumber, 60),
     certIssueDate: /^\d{4}-\d{2}-\d{2}$/.test(str(i.certIssueDate)) ? str(i.certIssueDate) : '',
     certExpiryDate: /^\d{4}-\d{2}-\d{2}$/.test(str(i.certExpiryDate)) ? str(i.certExpiryDate) : '',
+    payoutFrequency: pick(i.payoutFrequency, PAYOUT_FREQUENCIES.map((f) => f[0])),
   };
 }
 
@@ -414,6 +424,7 @@ export function validateStep(step: number, d: ApplicationData, ctx: ValidationCo
       break;
     case 7:
       if (PAYOUT_DETAILS_REQUIRED && !ctx.bankProvided) e.bank = 'Add your bank account in Step 6 first.';
+      if (!d.payoutFrequency) e.payoutFrequency = 'Choose how often you want to be paid.';
       if (PAYOUT_DETAILS_REQUIRED && docMissing('bank_proof')) e.doc_bank_proof = 'Upload a cancelled cheque, bank statement or passbook first page.';
       break;
     case 8:

@@ -190,6 +190,7 @@ const PNG = { name: 'cheque.png', mimeType: 'image/png', buffer: Buffer.from([0x
 
   await step('register: payout shows the saved account and takes the bank proof', async () => {
     await expectText('.bank-saved', /7890/);
+    await page.check('[name=payoutFrequency][value=fortnightly]');
     await page.setInputFiles('[data-upload=bank_proof]', PNG);
     await expectText('#f_doc_bank_proof', /cheque\.png/);
     await shot('step7-payout');

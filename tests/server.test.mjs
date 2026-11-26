@@ -98,7 +98,7 @@ const goodData = {
   addressLine1: 'Gat 12, Old Highway', addressLine2: '', country: 'India', state: 'Maharashtra', district: 'Pune', city: 'Lonavala', pincode: '410401',
   serviceAreas: ['Lonavala', '410401'], productTypes: ['Leafy Greens', 'Herbs'], pickupSameAsBusiness: true, pickupAddress: '', pickupPincode: '',
   businessType: 'individual_farmer', gstStatus: 'exempt', gstin: '', pan: '', registrationNumber: '', claimsOrganic: false,
-  certBody: '', certNumber: '', certIssueDate: '', certExpiryDate: '',
+  certBody: '', certNumber: '', certIssueDate: '', certExpiryDate: '', payoutFrequency: 'weekly',
 };
 
 async function completeApplication(c, data = goodData) {

@@ -287,6 +287,7 @@ const SHOTS = process.argv[3];
     await expectText('.bank-saved', /9012/);
     await next();
     await expectText('.bank-saved', /9012/);
+    await page.check('[name=payoutFrequency][value=weekly]');
     await page.setInputFiles('[data-upload=bank_proof]', pdf('cheque.pdf'));
     await expectText('#f_doc_bank_proof', /cheque\.pdf/);
     await next();

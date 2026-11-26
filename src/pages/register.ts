@@ -11,6 +11,7 @@ import * as api from '../api.js';
 import { fmtDate, fileSize } from '../lib.js';
 import {
   STEPS,
+  PAYOUT_FREQUENCIES,
   BUSINESS_TYPES,
   GST_STATUSES,
   INDIAN_STATES,
@@ -452,6 +453,14 @@ const page: Page = async ({ root, account: initialAccount }) => {
         </div>`
       : html`<div id="f_bank" tabindex="-1"><p class="muted">No bank account added yet. <button type="button" class="link-btn" data-goto="6">Add it in Step 6</button>.</p><p class="field-error" id="f_bank_err" hidden></p></div>`}
     <p class="muted small">Your payments are settled by bank transfer to this account. To change this bank account later, go to Store settings.</p>
+    <h3 class="sub-title">Payout frequency</h3>
+    <fieldset class="field" id="f_payoutFrequency" tabindex="-1">
+      <legend>How often do you want to be paid?<span class="req" aria-hidden="true"> *</span></legend>
+      <div class="radio-stack">
+        ${PAYOUT_FREQUENCIES.map(([value, label, help]) => html`<label class="radio-card"><input type="radio" name="payoutFrequency" value="${value}" ${data.payoutFrequency === value ? raw('checked') : ''}/><span><strong>${label}</strong><span class="muted small">${help}</span></span></label>`)}
+      </div>
+      <p class="field-error" id="f_payoutFrequency_err" hidden></p>
+    </fieldset>
     <h3 class="sub-title">Bank proof</h3>
     <p class="muted small">The name on your bank proof must match the account holder name. Our team checks your bank proof before your first payout.</p>
     ${docSlot('bank_proof', PAYOUT_DETAILS_REQUIRED, 'Upload one of these showing your name, account number and IFSC: a cancelled cheque, a bank statement or your passbook’s first page. PDF, JPG or PNG, up to 5 MB.')}`;
@@ -523,7 +532,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${section(4, 'Products and pickup', html`${row('Categories', d.productTypes.join(', '))}${row('Pickup', d.pickupSameAsBusiness ? 'Business address' : `${d.pickupAddress}, ${d.pickupPincode}`)}`)}
       ${section(5, 'Business and KYC', html`${row('Business type', BUSINESS_TYPES.find((b) => b[0] === d.businessType)?.[1] ?? '')}${row('GST', GST_STATUSES.find((g) => g[0] === d.gstStatus)?.[1] ?? '')}${row('GSTIN', d.gstin)}${row('PAN', d.pan ? `${d.pan.slice(0, 2)}•••••${d.pan.slice(-3)}` : '')}${row(kycRules(d).registrationLabel, d.registrationNumber)}`)}
       ${section(6, 'Bank details', html`${row('Account', view?.bank ? `${view.bank.holderName} · ${maskAccount(view.bank.last4)} · ${view.bank.ifsc}` : 'Not added')}`)}
-      ${section(7, 'Payout', html`${row('Bank proof', hasDoc('bank_proof') ? 'Uploaded' : 'Not uploaded')}`)}
+      ${section(7, 'Payout', html`${row('Payout frequency', PAYOUT_FREQUENCIES.find((f) => f[0] === d.payoutFrequency)?.[1] ?? '')}${row('Bank proof', hasDoc('bank_proof') ? 'Uploaded' : 'Not uploaded')}`)}
       ${section(8, 'Documents', html`${categoryDocNeeds().map((n) => row(n.label, hasDoc(n.kind) ? `Uploaded for ${n.categories.join(', ')}` : `Not uploaded — ${n.categories.join(', ')} will be activated once it is uploaded and verified`))}${row('Organic', d.claimsOrganic ? `Yes — ${d.certBody}${d.certNumber ? `, ${d.certNumber}` : ''}` : 'No organic claim')}${d.claimsOrganic ? row('Status', 'Unverified until a reviewer checks your organic document') : ''}`)}
       <section class="review-block">
         <h3 class="sub-title">Documents</h3>
@@ -576,6 +585,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     if (has('serviceAreas')) next.serviceAreas = (f.serviceAreas ?? '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
     if (has('productTypes')) next.productTypes = $$<HTMLInputElement>('[name=productTypes]:checked', form()).map((c) => c.value);
     if (has('pickupSameAsBusiness')) next.pickupSameAsBusiness = !!form().querySelector<HTMLInputElement>('[name=pickupSameAsBusiness]')?.checked;
+    if (has('payoutFrequency')) next.payoutFrequency = form().querySelector<HTMLInputElement>('[name=payoutFrequency]:checked')?.value ?? '';
     if (has('claimsOrganic')) {
       const v = form().querySelector<HTMLInputElement>('[name=claimsOrganic]:checked')?.value;
       next.claimsOrganic = v === 'yes' ? true : v === 'no' ? false : null;

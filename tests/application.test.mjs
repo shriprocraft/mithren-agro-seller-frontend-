@@ -56,12 +56,12 @@ test('the seller application has 9 steps: Bank and Payout are separate', () => {
   assert.deepEqual(STEPS.map((s) => s.n), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });
 
-test('Step 6 asks for the bank account, Step 7 for the bank proof, Step 8 for the organic answer', () => {
+test('Step 6 asks for the bank account, Step 7 for the payout frequency and bank proof, Step 8 for the organic answer', () => {
   const d = emptyApplicationData();
   assert.deepEqual(Object.keys(validateStep(6, d, ctx)), ['bank']);
   assert.equal(validateStep(6, d, { ...ctx, bankProvided: true }).bank, undefined);
-  assert.deepEqual(Object.keys(validateStep(7, d, { ...ctx, bankProvided: true })), ['doc_bank_proof']);
-  assert.deepEqual(validateStep(7, d, { ...ctx, bankProvided: true, documentKinds: ['bank_proof'] }), {});
+  assert.deepEqual(Object.keys(validateStep(7, d, { ...ctx, bankProvided: true })).sort(), ['doc_bank_proof', 'payoutFrequency']);
+  assert.deepEqual(validateStep(7, { ...d, payoutFrequency: 'fortnightly' }, { ...ctx, bankProvided: true, documentKinds: ['bank_proof'] }), {});
   assert.deepEqual(Object.keys(validateStep(8, d, ctx)), ['claimsOrganic']);
   assert.deepEqual(validateStep(9, d, ctx), {});
 });
@@ -95,4 +95,11 @@ test('the portal server database moves saved progress to 9 steps and keeps bank 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('the payout frequency is weekly or every 15 days; anything else is cleared', () => {
+  assert.equal(normaliseApplicationData({ payoutFrequency: 'weekly' }).payoutFrequency, 'weekly');
+  assert.equal(normaliseApplicationData({ payoutFrequency: 'fortnightly' }).payoutFrequency, 'fortnightly');
+  assert.equal(normaliseApplicationData({ payoutFrequency: 'monthly' }).payoutFrequency, '');
+  assert.equal(normaliseApplicationData({}).payoutFrequency, '');
 });
