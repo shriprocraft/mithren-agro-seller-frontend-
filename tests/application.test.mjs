@@ -103,3 +103,9 @@ test('the payout frequency is weekly or every 15 days; anything else is cleared'
   assert.equal(normaliseApplicationData({ payoutFrequency: 'monthly' }).payoutFrequency, '');
   assert.equal(normaliseApplicationData({}).payoutFrequency, '');
 });
+
+test('the business address step no longer asks for a service area', () => {
+  const d = { ...emptyApplicationData(), addressLine1: '12 Market Road', state: 'Tamil Nadu', district: 'Coimbatore', city: 'Coimbatore', pincode: '641008' };
+  assert.deepEqual(validateStep(3, d, ctx), {});
+  assert.equal(STEPS[2].title, 'Business address');
+});

@@ -130,13 +130,12 @@ const PNG = { name: 'cheque.png', mimeType: 'image/png', buffer: Buffer.from([0x
     await next();
   });
 
-  await step('register: address and service area', async () => {
+  await step('register: business address', async () => {
     await page.fill('#f_addressLine1', 'Survey 88, Gubbi Road');
     await page.selectOption('#f_state', 'Karnataka');
     await page.fill('#f_district', 'Tumakuru');
     await page.fill('#f_city', 'Gubbi');
     await page.fill('#f_pincode', '572216');
-    await page.fill('#f_serviceAreas', 'Tumakuru, Gubbi, 572216');
     await next();
     await page.waitForSelector('[name=productTypes]');
   });

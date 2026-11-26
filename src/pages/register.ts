@@ -375,8 +375,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
       ${field({ name: 'district', label: 'District', value: data.district, required: true, placeholder: 'Enter your district', attrs: 'maxlength="60"' })}
       ${field({ name: 'city', label: 'City, town or village', value: data.city, required: true, placeholder: 'Enter your city, town or village', attrs: 'maxlength="60" autocomplete="address-level2"' })}
       ${field({ name: 'pincode', label: 'PIN code', value: data.pincode, required: true, placeholder: 'Enter your 6-digit PIN code', attrs: 'inputmode="numeric" maxlength="6" autocomplete="postal-code"' })}
-    </div>
-    ${textarea({ name: 'serviceAreas', label: 'Service area', value: data.serviceAreas.join(', '), required: true, rows: 2, placeholder: 'e.g. Kothrud, Baner, 411038 (separate with commas)', hint: 'Localities or PIN codes you can deliver to, separated by commas.', attrs: 'maxlength="1500"' })}`;
+    </div>`;
 
   const stepProducts = () => html`
     <fieldset class="field" id="f_productTypes" tabindex="-1">
@@ -528,7 +527,7 @@ const page: Page = async ({ root, account: initialAccount }) => {
     const needed = requiredDocuments(d);
     return html`
       ${section(2, 'Shop and owner', html`${row('Shop name', d.shopName)}${row('Owner', d.ownerName)}${row('Contact person', d.contactName)}${row('Business email', d.businessEmail)}${row('Phone', [d.primaryPhone, d.altPhone].filter(Boolean).join(', '))}${row('Description', d.description)}`)}
-      ${section(3, 'Address and service area', html`${row('Address', [d.addressLine1, d.addressLine2, d.city, d.district, d.state, d.pincode, d.country].filter(Boolean).join(', '))}${row('Service area', d.serviceAreas.join(', '))}`)}
+      ${section(3, 'Business address', html`${row('Address', [d.addressLine1, d.addressLine2, d.city, d.district, d.state, d.pincode, d.country].filter(Boolean).join(', '))}`)}
       ${section(4, 'Products and pickup', html`${row('Categories', d.productTypes.join(', '))}${row('Pickup', d.pickupSameAsBusiness ? 'Business address' : `${d.pickupAddress}, ${d.pickupPincode}`)}`)}
       ${section(5, 'Business and KYC', html`${row('Business type', BUSINESS_TYPES.find((b) => b[0] === d.businessType)?.[1] ?? '')}${row('GST', GST_STATUSES.find((g) => g[0] === d.gstStatus)?.[1] ?? '')}${row('GSTIN', d.gstin)}${row('PAN', d.pan ? `${d.pan.slice(0, 2)}•••••${d.pan.slice(-3)}` : '')}${row(kycRules(d).registrationLabel, d.registrationNumber)}`)}
       ${section(6, 'Bank details', html`${row('Account', view?.bank ? `${view.bank.holderName} · ${maskAccount(view.bank.last4)} · ${view.bank.ifsc}` : 'Not added')}`)}
@@ -582,7 +581,6 @@ const page: Page = async ({ root, account: initialAccount }) => {
     const next: Record<string, unknown> = { ...data };
     for (const k of ['shopName', 'ownerName', 'contactName', 'businessEmail', 'primaryPhone', 'altPhone', 'description', 'addressLine1', 'addressLine2', 'state', 'district', 'city', 'pincode', 'pickupAddress', 'pickupPincode', 'businessType', 'gstStatus', 'gstin', 'pan', 'registrationNumber', 'certBody', 'certNumber', 'certIssueDate', 'certExpiryDate'])
       if (has(k)) next[k] = f[k] ?? '';
-    if (has('serviceAreas')) next.serviceAreas = (f.serviceAreas ?? '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
     if (has('productTypes')) next.productTypes = $$<HTMLInputElement>('[name=productTypes]:checked', form()).map((c) => c.value);
     if (has('pickupSameAsBusiness')) next.pickupSameAsBusiness = !!form().querySelector<HTMLInputElement>('[name=pickupSameAsBusiness]')?.checked;
     if (has('payoutFrequency')) next.payoutFrequency = form().querySelector<HTMLInputElement>('[name=payoutFrequency]:checked')?.value ?? '';

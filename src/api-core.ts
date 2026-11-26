@@ -175,7 +175,6 @@ export function updateSeller(patch: Partial<EditableSeller>) {
     const errors: Record<string, string> = {};
     if (patch.shopName !== undefined && patch.shopName.trim().length < 3) errors.shopName = 'Shop name must be at least 3 characters.';
     if (patch.pickupAddress !== undefined && patch.pickupAddress.trim().length < 10) errors.pickupAddress = 'Enter a complete pickup address.';
-    if (patch.serviceAreas !== undefined && patch.serviceAreas.length === 0) errors.serviceAreas = 'Add at least one service area.';
     if (patch.fulfilment && (patch.fulfilment.acceptWindowMins < 5 || patch.fulfilment.acceptWindowMins > 120))
       errors.acceptWindowMins = 'Acceptance window must be between 5 and 120 minutes.';
     if (Object.keys(errors).length) throw new ApiError(422, 'Please fix the highlighted fields.', errors);

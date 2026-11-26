@@ -57,7 +57,7 @@ The command refuses to run with `NODE_ENV=production`. It's safe to re-run: exis
 
 1. **Account verification.** Sign up (seller role only), then verify email and mobile with 6-digit codes. Codes are hashed, expire after 10 minutes, allow 5 attempts, and have a 30-second resend cooldown and an hourly cap.
 2. **Shop and owner details**, including an optional logo (PNG/JPG, 2 MB).
-3. **Address and service area.** India only; state is chosen from a list; PIN codes are validated.
+3. **Business address.** India only; state is chosen from a list; PIN codes are validated.
 4. **Product categories and pickup location.**
 5. **Business and KYC.** Conditional rules in `src/application.ts` (`kycRules`):
    - PAN is required unless the seller is an individual farmer who isn't GST-registered.

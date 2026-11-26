@@ -265,7 +265,6 @@ const SHOTS = process.argv[3];
     await page.fill('#f_district', 'Pune');
     await page.fill('#f_city', 'Lonavala');
     await page.fill('#f_pincode', '410401');
-    await page.fill('#f_serviceAreas', 'Lonavala, Khandala');
     await next();
     await page.click('label.chip:has-text("Herbs")');
     await next();

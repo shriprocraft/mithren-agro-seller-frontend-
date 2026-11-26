@@ -25,7 +25,7 @@ const CHANNELS: [NotificationChannel, string][] = [
 const SECTIONS = [
   ['profile', 'Shop profile'],
   ['categories', 'Categories'],
-  ['pickup', 'Pickup & service areas'],
+  ['pickup', 'Pickup'],
   ['hours', 'Hours & holidays'],
   ['fulfilment', 'Fulfilment'],
   ['notifications', 'Notifications'],
@@ -36,7 +36,6 @@ const SECTIONS = [
 const page: Page = async ({ root, query, seller, refresh }) => {
   const readOnly = seller.status === 'suspended';
   const staffPage = paginate(seller.staff, query, 'staff');
-  let areas = [...seller.serviceAreas];
   let holidays = [...seller.holidays];
   // The Super Admin's categories, with which ones this seller sells in and which are open.
   let cats = await api.sellerCategories.list().catch(() => [] as api.SellerCategoryView[]);
@@ -142,19 +141,10 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
         <section class="card" id="categories">${categoriesCard()}</section>
 
         <form class="card" id="pickup" data-section="pickup" novalidate>
-          ${sectionHead('Pickup & service areas', readOnly)}
+          ${sectionHead('Pickup', readOnly)}
           <div class="section-fields" inert>
           ${textarea({ name: 'pickupAddress', label: 'Pickup address', value: seller.pickupAddress, rows: 2, required: true, placeholder: 'Enter the complete address where orders are collected', hint: 'Where the delivery partner collects orders.' })}
           ${field({ name: 'pickupPincode', label: 'Pickup PIN code', value: '', placeholder: 'e.g. 641008', hint: 'Delivery partners who serve this PIN code are offered your orders. Leave empty to use your business PIN code.', attrs: 'inputmode="numeric" maxlength="6" pattern="[1-9][0-9]{5}"' })}
-          <div class="field" id="f_serviceAreas" tabindex="-1">
-            <label for="area-input">Service areas</label>
-            <div class="chip-row" id="area-chips"></div>
-            <div class="row-wrap">
-              <input id="area-input" type="text" placeholder="Add a locality or PIN code, e.g. Baner or 411045" maxlength="40" />
-              <button type="button" class="btn btn-sm" data-action="add-area">Add</button>
-            </div>
-            <p class="field-error" id="f_serviceAreas_err" hidden></p>
-          </div>
           </div>
           ${saveRow(readOnly)}
         </form>
@@ -242,15 +232,11 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
       </div>
     </div>`.value;
 
-  const renderAreas = () => {
-    $('#area-chips', root)!.innerHTML = html`${areas.map((a, i) => html`<span class="chip chip-static">${a}${readOnly ? '' : html`<button type="button" class="chip-x" data-action="rm-area" data-i="${i}" aria-label="Remove ${a}">${icon('close', 12)}</button>`}</span>`)}`.value;
-  };
   const renderHolidays = () => {
     $('#holidays', root)!.innerHTML = holidays.length
       ? html`${holidays.map((h, i) => html`<li><span>${fmtDate(h.date)}${h.note ? html` — <span class="muted">${h.note}</span>` : ''}</span>${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-ghost" data-action="rm-holiday" data-i="${i}">Remove</button>`}</li>`)}`.value
       : html`<li class="muted">No upcoming holidays.</li>`.value;
   };
-  renderAreas();
   renderHolidays();
   if (readOnly) $$('input,select,textarea', root).forEach((el) => ((el as HTMLInputElement).disabled = true));
 
@@ -320,25 +306,6 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
     $('[data-preview=tagline]', root)!.textContent = f.bannerTagline ?? '';
     $('#banner-preview', root)!.style.setProperty('--brand', f.brandColor ?? '#2e7d32');
   });
-  const addArea = () => {
-    const input = $('#area-input', root) as HTMLInputElement;
-    const v = input.value.trim();
-    if (v && !areas.some((a) => a.toLowerCase() === v.toLowerCase())) areas.push(v);
-    input.value = '';
-    renderAreas();
-    input.focus();
-  };
-  on(root, 'click', '[data-action=add-area]', addArea);
-  on(root, 'keydown', '#area-input', (e) => {
-    if ((e as KeyboardEvent).key === 'Enter') {
-      e.preventDefault();
-      addArea();
-    }
-  });
-  on(root, 'click', '[data-action=rm-area]', (_e, el) => {
-    areas.splice(Number(el.dataset.i), 1);
-    renderAreas();
-  });
   on(root, 'click', '[data-action=add-holiday]', () => {
     const d = ($('#hol-date', root) as HTMLInputElement).value;
     const note = ($('#hol-note', root) as HTMLInputElement).value.trim();
@@ -355,7 +322,7 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
 
   // ---------- view / edit mode ----------
   // What a section held when editing started, so Cancel can put it back.
-  const editStart = new Map<string, { areas: string[]; holidays: typeof holidays }>();
+  const editStart = new Map<string, { holidays: typeof holidays }>();
   const controls = (form: HTMLFormElement) => $$<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select', form);
   const setEditing = (form: HTMLFormElement, editing: boolean) => {
     for (const box of $$<HTMLElement>('.section-fields', form)) box.inert = !editing;
@@ -373,7 +340,7 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
   };
   on(root, 'click', '[data-action=edit-section]', (_e, el) => {
     const form = el.closest('form') as HTMLFormElement;
-    editStart.set(form.id, { areas: [...areas], holidays: holidays.map((h) => ({ ...h })) });
+    editStart.set(form.id, { holidays: holidays.map((h) => ({ ...h })) });
     setEditing(form, true);
     const status = form.querySelector('.save-status') as HTMLElement;
     status.textContent = '';
@@ -384,10 +351,6 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
     const form = el.closest('form') as HTMLFormElement;
     form.reset();
     const start = editStart.get(form.id);
-    if (start && form.id === 'pickup') {
-      areas = start.areas;
-      renderAreas();
-    }
     if (start && form.id === 'hours') {
       holidays = start.holidays;
       renderHolidays();
@@ -410,7 +373,7 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
         patch = { shopName: f.shopName ?? '', bannerTagline: f.bannerTagline ?? '', brandColor: f.brandColor ?? seller.brandColor, description: f.description ?? '' };
         break;
       case 'pickup':
-        patch = { pickupAddress: f.pickupAddress ?? '', serviceAreas: areas };
+        patch = { pickupAddress: f.pickupAddress ?? '' };
         break;
       case 'hours':
         patch = {
@@ -603,7 +566,6 @@ function glanceCard(seller: Parameters<Page>[0]['seller']) {
     <dl class="kv kv-compact">
       <div><dt>Account</dt><dd>${sellerBadge(seller.status)}</dd></div>
       <div><dt>Today</dt><dd>${today}</dd></div>
-      <div><dt>Delivery areas</dt><dd>${seller.serviceAreas.length ? `${seller.serviceAreas.length} area${seller.serviceAreas.length === 1 ? '' : 's'}` : 'None yet'}</dd></div>
       <div><dt>Holidays</dt><dd>${upcoming ? `${upcoming} upcoming` : 'None planned'}</dd></div>
       <div><dt>New orders</dt><dd>${seller.fulfilment.autoAccept ? 'Accepted automatically' : 'You confirm each'}</dd></div>
     </dl>

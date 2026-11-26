@@ -215,7 +215,7 @@ export const gstStateName = (code: string) => Object.keys(GST_STATE_CODES).find(
 export const STEPS = [
   { n: 1, key: 'account', label: 'Account', title: 'Account verification' },
   { n: 2, key: 'shop', label: 'Shop', title: 'Shop & owner details' },
-  { n: 3, key: 'address', label: 'Address', title: 'Address & service area' },
+  { n: 3, key: 'address', label: 'Address', title: 'Business address' },
   { n: 4, key: 'products', label: 'Products', title: 'Products & pickup' },
   { n: 5, key: 'kyc', label: 'KYC', title: 'Business & KYC' },
   { n: 6, key: 'bank', label: 'Bank', title: 'Bank details' },
@@ -384,8 +384,6 @@ export function validateStep(step: number, d: ApplicationData, ctx: ValidationCo
       if (d.district.length < 2) e.district = 'Enter the district.';
       if (d.city.length < 2) e.city = 'Enter the city, town or village.';
       if (!RE.pincode.test(d.pincode)) e.pincode = 'Enter a valid 6-digit PIN code.';
-      if (!d.serviceAreas.length) e.serviceAreas = 'Add at least one locality or PIN code you deliver to.';
-      else if (d.serviceAreas.some((a) => a.length < 2)) e.serviceAreas = 'Each service area must be at least 2 characters.';
       break;
     case 4:
       if (!d.productTypes.length) e.productTypes = 'Choose at least one product category.';
@@ -672,7 +670,7 @@ export function toWorkspaceSeller(existing: Seller | undefined, app: Application
     payoutRequestsEnabled: false,
     joinedAt: app.createdAt,
   };
-  // Approved sellers manage shop name, description, pickup and service areas in
+  // Approved sellers manage shop name, description and pickup in
   // Store settings; until then the application drives them.
   const appDriven = app.status !== 'approved' && app.status !== 'suspended';
   const next: Seller = {
