@@ -7,6 +7,7 @@
 // status or reviewer identity.
 
 import { ApiError } from './errors.js';
+import { SELLER_SUPPORT_EMAIL } from './lib.js';
 import { _internal } from './api-core.js';
 import {
   type AccountView,
@@ -87,7 +88,7 @@ export interface UploadMeta {
 }
 
 const now = () => new Date().toISOString();
-const SUPPORT_EMAIL = 'seller-support@mithrenagro.example';
+const SUPPORT_EMAIL = SELLER_SUPPORT_EMAIL;
 
 /** Who approves applications while there is no admin review (SELLER_AUTO_APPROVE). */
 export const AUTO_REVIEWER = 'Automatic approval';

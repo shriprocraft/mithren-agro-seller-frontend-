@@ -6,7 +6,7 @@ import { navigate } from '../router.js';
 import { html, type Raw } from '../ui/dom.js';
 import { icon, callout, pageHeader, badge } from '../ui/components.js';
 import * as api from '../api.js';
-import { fmtDate } from '../lib.js';
+import { fmtDate, SELLER_SUPPORT_EMAIL } from '../lib.js';
 import {
   APPLICATION_STATUS_LABEL,
   CERTIFICATION_STATUS_LABEL,
@@ -35,7 +35,7 @@ const TONE: Record<ApplicationStatus, 'neutral' | 'amber' | 'green' | 'red'> = {
   suspended: 'red',
 };
 
-const page: Page = async ({ root, seller, query }) => {
+const page: Page = async ({ root, query }) => {
   const view = await api.application.get();
   // Approved sellers land on the dashboard; the account menu links here with ?view=status.
   if (view.status === 'approved' && query.get('view') !== 'status') return navigate('/seller/dashboard', true);
@@ -44,7 +44,7 @@ const page: Page = async ({ root, seller, query }) => {
 
   root.innerHTML = html`
     ${pageHeader('Seller application', view.data.shopName || 'Your seller account', badge(APPLICATION_STATUS_LABEL[view.status], TONE[view.status]))}
-    ${callout(m.tone, m.title, m.body, nextAction(view, seller.supportEmail))}
+    ${callout(m.tone, m.title, m.body, nextAction(view, SELLER_SUPPORT_EMAIL))}
 
     <div class="grid-main">
       <section class="card" aria-labelledby="app-details">
@@ -107,7 +107,7 @@ function nextAction(v: ApplicationView, supportEmail: string): Raw {
     case 'approved':
       return html`<a class="btn btn-primary btn-sm" href="#/seller/dashboard">Go to dashboard</a>`;
     default:
-      return html`<span class="support-contact small">Seller support: <span class="mono">${supportEmail}</span></span>`;
+      return html`<span class="support-contact small">Seller support: <a class="mono" href="mailto:${supportEmail}">${supportEmail}</a></span>`;
   }
 }
 

@@ -5,7 +5,7 @@ import { route, match, currentLocation, navigate, type PageContext } from './rou
 import { html, raw, $, on } from './ui/dom.js';
 import { icon, sellerBadge, callout, errorState, loadingState, emptyState } from './ui/components.js';
 import { modal, toast, initTooltips } from './ui/overlay.js';
-import { timeAgo, SELLER_STATUS_LABEL } from './lib.js';
+import { timeAgo, SELLER_STATUS_LABEL, SELLER_SUPPORT_EMAIL } from './lib.js';
 import type { Seller } from './types.js';
 import type { AccountView } from './application.js';
 
@@ -68,7 +68,7 @@ let renderToken = 0;
 const PUBLIC_PATHS = ['/seller/sign-in', '/seller/login', '/seller/register', '/seller/forgot-password'];
 
 /** Placeholder for the shell while nobody is signed in (no seller data is shown). */
-const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2e7d32', status: 'incomplete', supportEmail: 'seller-support@mithrenagro.example' } as Seller;
+const GUEST: Seller = { shopName: '', ownerName: '', brandColor: '#2e7d32', status: 'incomplete', supportEmail: SELLER_SUPPORT_EMAIL } as Seller;
 
 /** Map backend approval_status to frontend seller status. */
 function mapSellerStatus(profile: any): Partial<Seller> {
@@ -111,7 +111,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
               )}
             </nav>
             <div class="sidebar-foot">
-              <a href="mailto:${seller.supportEmail}" class="nav-link">${icon('external', 18)}<span>Seller support</span></a>
+              <a href="mailto:${SELLER_SUPPORT_EMAIL}" class="nav-link">${icon('external', 18)}<span>Seller support</span></a>
             </div>
           </aside>
           <div class="scrim" data-action="close-nav" hidden></div>`}
@@ -160,7 +160,7 @@ function shell(seller: Seller, navKey: string | undefined, bare: boolean, accoun
 function statusBanner(s: Seller) {
   if (s.status === 'approved') return '';
   if (s.status === 'suspended')
-    return callout('error', 'Your account is suspended', s.reviewMessage ?? 'Listings are hidden from customers and the portal is read-only.', html`<a class="btn btn-sm" href="mailto:${s.supportEmail}">Contact support</a>`);
+    return callout('error', 'Your account is suspended', s.reviewMessage ?? 'Listings are hidden from customers and the portal is read-only.', html`<a class="btn btn-sm" href="mailto:${SELLER_SUPPORT_EMAIL}">Contact support</a>`);
   return callout(
     s.status === 'rejected' ? 'error' : 'warn',
     `Application status: ${SELLER_STATUS_LABEL[s.status]}`,

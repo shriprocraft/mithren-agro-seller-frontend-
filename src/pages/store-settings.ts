@@ -1,12 +1,12 @@
-// /seller/store-settings — shop profile, pickup, hours, fulfilment, notifications, staff.
+// /seller/store-settings — shop profile, pickup, hours, fulfilment, notifications.
 
 import type { Page } from '../router.js';
 import { html, raw, on, $, $$, formValues } from '../ui/dom.js';
-import { pageHeader, field, textarea, callout, icon, showFieldErrors, badge, paginate, pager, bindPager, sellerBadge } from '../ui/components.js';
-import { toast, modal, confirmDialog } from '../ui/overlay.js';
+import { pageHeader, field, textarea, callout, icon, showFieldErrors, badge, sellerBadge } from '../ui/components.js';
+import { toast } from '../ui/overlay.js';
 import * as api from '../api.js';
-import { fmtDate, EMAIL_RE } from '../lib.js';
-import type { NotificationTopic, NotificationChannel, Seller, StaffMember } from '../types.js';
+import { fmtDate, SELLER_SUPPORT_EMAIL } from '../lib.js';
+import type { NotificationTopic, NotificationChannel, Seller } from '../types.js';
 
 const TOPICS: [NotificationTopic, string, string][] = [
   ['new_order', 'New orders', 'When a customer places an order with you'],
@@ -14,7 +14,6 @@ const TOPICS: [NotificationTopic, string, string][] = [
   ['moderation', 'Account & listings', 'Approval decisions and listing moderation'],
   ['settlement', 'Settlements & refunds', 'Payouts, failures and refunds'],
   ['low_stock', 'Low stock', 'When a variant drops below its threshold'],
-  ['support', 'Support replies', 'Replies to your support tickets'],
 ];
 const CHANNELS: [NotificationChannel, string][] = [
   ['email', 'Email'],
@@ -29,13 +28,11 @@ const SECTIONS = [
   ['hours', 'Hours & holidays'],
   ['fulfilment', 'Fulfilment'],
   ['notifications', 'Notifications'],
-  ['staff', 'Staff'],
   ['account', 'Account details'],
 ];
 
-const page: Page = async ({ root, query, seller, refresh }) => {
+const page: Page = async ({ root, seller, refresh }) => {
   const readOnly = seller.status === 'suspended';
-  const staffPage = paginate(seller.staff, query, 'staff');
   let holidays = [...seller.holidays];
   // The Super Admin's categories, with which ones this seller sells in and which are open.
   let cats = await api.sellerCategories.list().catch(() => [] as api.SellerCategoryView[]);
@@ -203,18 +200,6 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
           ${saveRow(readOnly)}
         </form>
 
-        <section class="card" id="staff">
-          <div class="card-head"><h2 class="card-title">Staff accounts</h2>${readOnly ? '' : html`<button type="button" class="btn btn-sm" data-action="invite">${icon('plus', 14)} Invite</button>`}</div>
-          <p class="muted small">Packers can view and fulfil orders and adjust stock. Managers can also edit products. Only you can see earnings, bank details and settings.</p>
-          ${seller.staff.length
-            ? html`<div class="table-block"><ul class="staff-list">${staffPage.rows.map(
-                (s) => html`<li><div><strong>${s.name}</strong><span class="muted small block">${s.email} · invited ${fmtDate(s.invitedAt)}</span></div>
-                  ${badge(s.role === 'manager' ? 'Manager' : 'Packer', 'blue')} ${s.active ? '' : badge('Deactivated')}
-                  ${readOnly ? '' : html`<button type="button" class="btn btn-sm btn-ghost" data-action="toggle-staff" data-id="${s.id}">${s.active ? 'Deactivate' : 'Reactivate'}</button>`}</li>`,
-              )}</ul>${pager(staffPage.info, 'staff members')}</div>`
-            : html`<p class="muted">No staff yet.</p>`}
-        </section>
-
         <section class="card" id="account">
           <h2 class="card-title">Account details</h2>
           <dl class="kv">
@@ -226,7 +211,7 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
             <div><dt>Bank</dt><dd>••••${seller.bank.last4} · ${seller.bank.ifsc} ${seller.bank.verified ? badge('Verified', 'green') : badge('Verification pending', 'amber')}</dd></div>
           </dl>
           <p class="muted small">${seller.bank.verified
-            ? html`Legal and bank details are verified, so changes go through <a href="mailto:${seller.supportEmail}">seller support</a> with updated documents.`
+            ? html`Legal and bank details are verified, so changes go through <a href="mailto:${SELLER_SUPPORT_EMAIL}">seller support</a> with updated documents.`
             : html`Bank details are awaiting verification by our team. To change them, upload new bank proof on <a href="#/seller/documents">Documents</a>.`}</p>
         </section>
       </div>
@@ -240,7 +225,6 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
   renderHolidays();
   if (readOnly) $$('input,select,textarea', root).forEach((el) => ((el as HTMLInputElement).disabled = true));
 
-  bindPager(root, refresh);
   // The pickup PIN code lives on the server only (it routes pickups to delivery partners).
   void api.shopDetails.current().then((shop) => {
     const input = root.querySelector<HTMLInputElement>('[name=pickupPincode]');
@@ -482,56 +466,6 @@ ${cats.some((c) => c.required_document) ? html`<p class="muted small">Some categ
       btn.innerHTML = `${icon('plus', 14).value} Add category`;
     }
   });
-
-  on(root, 'click', '[data-action=invite]', () => {
-    modal({
-      title: 'Invite a staff member',
-      body: html`<form class="stack" novalidate>
-        ${field({ name: 'name', label: 'Name', required: true, placeholder: 'Enter the staff member’s full name', attrs: 'autofocus maxlength="60"' })}
-        ${field({ name: 'email', label: 'Email', type: 'email', required: true, placeholder: 'Enter the staff member’s email address' })}
-        <fieldset class="field"><legend>Role</legend>
-          <div class="radio-row"><label><input type="radio" name="role" value="packer" checked /> Packer</label><label><input type="radio" name="role" value="manager" /> Manager</label></div>
-        </fieldset>
-        <p class="muted small">In production, an invitation email with a secure sign-up link is sent. Not sent in this prototype.</p>
-        <div class="modal-actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Add staff member</button></div>
-      </form>`,
-      onMount(el, close) {
-        const form = el.querySelector('form')!;
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const f = formValues(form);
-          const errs: Record<string, string> = {};
-          if (!f.name?.trim()) errs.name = 'Name is required.';
-          if (!EMAIL_RE.test(f.email ?? '')) errs.email = 'Enter a valid email address.';
-          else if (seller.staff.some((s) => s.email.toLowerCase() === f.email!.toLowerCase())) errs.email = 'This person is already on your staff list.';
-          if (Object.keys(errs).length) return showFieldErrors(form, errs);
-          const member: StaffMember = { id: `st${Date.now()}`, name: f.name!.trim(), email: f.email!.trim(), role: f.role === 'manager' ? 'manager' : 'packer', invitedAt: new Date().toISOString(), active: true };
-          try {
-            await api.updateSeller({ staff: [...seller.staff, member] });
-            toast(`${member.name} added`);
-            close();
-            refresh();
-          } catch (ex) {
-            toast((ex as Error).message, 'error');
-          }
-        });
-      },
-    });
-  });
-  on(root, 'click', '[data-action=toggle-staff]', async (_e, el) => {
-    const s = seller.staff.find((x) => x.id === el.dataset.id)!;
-    if (s.active) {
-      const c = await confirmDialog({ title: `Deactivate ${s.name}?`, message: 'They will be signed out and lose access immediately. You can reactivate them later.', confirmLabel: 'Deactivate', danger: true });
-      if (!c.ok) return;
-    }
-    try {
-      await api.updateSeller({ staff: seller.staff.map((x) => (x.id === s.id ? { ...x, active: !x.active } : x)) });
-      toast(s.active ? `${s.name} deactivated` : `${s.name} reactivated`);
-      refresh();
-    } catch (ex) {
-      toast((ex as Error).message, 'error');
-    }
-  });
 };
 
 function saveRow(readOnly: boolean) {
@@ -569,7 +503,7 @@ function glanceCard(seller: Parameters<Page>[0]['seller']) {
       <div><dt>Holidays</dt><dd>${upcoming ? `${upcoming} upcoming` : 'None planned'}</dd></div>
       <div><dt>New orders</dt><dd>${seller.fulfilment.autoAccept ? 'Accepted automatically' : 'You confirm each'}</dd></div>
     </dl>
-    <p class="settings-glance-help small">${icon('info', 13)} Questions about your settings? <a href="mailto:${seller.supportEmail}">Contact seller support</a></p>
+    <p class="settings-glance-help small">${icon('info', 13)} Questions about your settings? <a href="mailto:${SELLER_SUPPORT_EMAIL}">Contact seller support</a></p>
   </section>`;
 }
 

@@ -3,6 +3,11 @@
 
 import type { OrderStatus, SettlementState, ProductStatus, Unit } from './types.js';
 
+// ---------- seller support ----------
+// Sellers ask questions by email; every "Seller support" link opens a new email to this address.
+// TEMPORARY address until the confirmed support email is decided: change it here only.
+export const SELLER_SUPPORT_EMAIL = 'mithranagrosupport@gmail.com';
+
 // ---------- formatting ----------
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2, minimumFractionDigits: 0 });
 const inr2 = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
